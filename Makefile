@@ -19,7 +19,7 @@ lint: .venv
 	.venv/bin/ruff check modernpackage tests
 
 fixlint: .venv
-	.venv/bin/ruff --fix modernpackage tests
+	.venv/bin/ruff check --fix modernpackage tests --unsafe-fixes
 	.venv/bin/deadcode --fix modernpackage tests
 
 format: .venv
