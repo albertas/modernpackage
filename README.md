@@ -1,6 +1,6 @@
 # modernpackage
-This package is configured using bleeding edge toolset and serves as an
-example/starting point for another new packages.
+This is a boilerplate with bleeding edge linters for a new python package, just run:
+- `make init <your-package-name>` - to start your package.
 
 ## Development
 Commonly used commands for package development:
@@ -24,7 +24,5 @@ This package uses these cutting edge tools:
 - Makefile - aliases for commonly used command line commands
 
 ## Feature requests:
-- Improve versioning by having single place to define a version like /__init__.py - pyproject should use version from there and it should be possible to import module and print its __version__.
-- Add Makefile command to bootstrap the package (to override  name with a placeholder provided to the make file).
 - codspeed.io could be considered for Continuous integration pipeline
 
