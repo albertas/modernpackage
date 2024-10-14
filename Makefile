@@ -1,5 +1,6 @@
 
 .PHONY: compile publish check fix lint fixlint format mypy deadcode audit test
+args = $(filter-out $@,$(MAKECMDGOALS))
 
 check: test lint mypy audit deadcode
 fix: format fixlint
@@ -35,7 +36,7 @@ deadcode: .venv
 	.venv/bin/deadcode modernpackage tests
 
 test: .venv
-	.venv/bin/pytest $(PYTEST_ME_PLEASE)
+	.venv/bin/pytest $(TEST_NAME)
 
 sync: .venv
 	uv pip sync requirements-dev.txt
@@ -44,3 +45,9 @@ sync: .venv
 compile:
 	uv pip compile -U -q pyproject.toml -o requirements.txt
 	uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt
+
+init:
+	@echo "Initializing" $(args)
+
+%:
+	@:
