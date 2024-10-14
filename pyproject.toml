@@ -1,6 +1,5 @@
 [project]
 name = "modernpackage"
-version = "0.0.1"
 authors = [
     {name = "Name Surname", email = "email@example.com"},
 ]
@@ -41,6 +40,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = ["**/*.py"]
 exclude = ["tests/**"]
+
+[tool.hatch.version]
+path = "modernpackage/__init__.py"
 
 [tool.ruff]  # https://docs.astral.sh/ruff/settings/
 line-length = 88
