@@ -1,6 +1,5 @@
-
-.PHONY: compile publish check fix lint fixlint format mypy deadcode audit test
-args = $(filter-out $@,$(MAKECMDGOALS))
+.PHONY: compile publish check fix lint fixlint format mypy deadcode audit test init
+args = $(or $(filter-out $@,$(MAKECMDGOALS)), "modernpackage")
 
 check: test lint mypy audit deadcode
 fix: format fixlint
@@ -47,7 +46,9 @@ compile:
 	uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt
 
 init:
-	@echo "Initializing" $(args)
+	@echo "Initializing" ${args}
+	git grep -l 'modernpackage' | xargs sed -i 's/modernpackage/$(args)/g'
+	mv modernpackage $(args)
 
 %:
 	@:

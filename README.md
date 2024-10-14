@@ -24,7 +24,7 @@ This package uses these cutting edge tools:
 - Makefile - aliases for commonly used command line commands
 
 ## Feature requests:
-- Improve versioning by having single place to define a version like modernpackage/__init__.py - pyproject should use version from there and it should be possible to import module and print its __version__.
-- Add Makefile command to bootstrap the package (to override modernpackage name with a placeholder provided to the make file).
+- Improve versioning by having single place to define a version like /__init__.py - pyproject should use version from there and it should be possible to import module and print its __version__.
+- Add Makefile command to bootstrap the package (to override  name with a placeholder provided to the make file).
 - codspeed.io could be considered for Continuous integration pipeline
 
