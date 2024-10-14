@@ -45,10 +45,12 @@ compile:
 	uv pip compile -U -q pyproject.toml -o requirements.txt
 	uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt
 
+MAKEFLAGS += --quiet
 init:
-	@echo "Initializing" ${args}
+	@echo "Initializing ${args}..."
 	git grep -l 'modernpackage' | xargs sed -i 's/modernpackage/$(args)/g'
 	mv modernpackage $(args)
+	@echo "Finished initializing ${args}."
 
 %:
 	@:
