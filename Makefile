@@ -50,6 +50,10 @@ init:
 	@echo "Initializing ${args}..."
 	git grep -l 'modernpackage' | xargs sed -i 's/modernpackage/$(args)/g'
 	mv modernpackage $(args)
+	rm -fr .git/
+	git init .
+	git add .
+	git commit -m "Initial modern $(args) package setup"
 	@echo "Finished initializing ${args}."
 
 %:

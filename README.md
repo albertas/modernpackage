@@ -1,6 +1,8 @@
 # modernpackage
 This is a boilerplate with bleeding edge linters for a new python package, just run:
-- `make init <your-package-name>` - to start your package.
+- `git clone git@github.com:albertas/modernpackage.git <your-package-name>`
+- `cd <your-package-name>`
+- `make init <your-package-name>` - to start your modern package.
 
 ## Development
 Commonly used commands for package development:
@@ -25,4 +27,5 @@ This package uses these cutting edge tools:
 
 ## Feature requests:
 - codspeed.io could be considered for Continuous integration pipeline
+- CLI command example: commented out line could be added?
 
