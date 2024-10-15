@@ -27,5 +27,3 @@ This package uses these cutting edge tools:
 
 ## Feature requests:
 - codspeed.io could be considered for Continuous integration pipeline
-- CLI command example: commented out line could be added?
-

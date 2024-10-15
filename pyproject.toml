@@ -16,8 +16,11 @@ classifiers = [
 ]
 dependencies = []
 
-[project.urls]
-homepage = "https://github.com/albertas/modernpackage"
+# [project.urls]
+# homepage = "https://github.com/?/modernpackage"
+
+# [project.scripts]
+# modernpackage = "modernpackage.main:main"
 
 [project.optional-dependencies]
 test = [
