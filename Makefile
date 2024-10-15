@@ -29,7 +29,7 @@ mypy: .venv
 	.venv/bin/mypy modernpackage tests
 
 audit: .venv
-	.venv/bin/pip-audit
+	.venv/bin/pip-audit --skip-editable
 
 deadcode: .venv
 	.venv/bin/deadcode modernpackage tests
@@ -48,7 +48,7 @@ compile:
 MAKEFLAGS += --quiet
 init:
 	@echo "Initializing ${args}..."
-	git grep -l 'modernpackage' | xargs sed -i 's/modernpackage/$(args)/g'
+	git grep -l 'modernpackage' | xargs sed -i '' -e s/modernpackage/$(args)/g'
 	mv modernpackage $(args)
 	rm -fr .git/
 	git init -b main .
