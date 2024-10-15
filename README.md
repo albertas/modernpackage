@@ -26,4 +26,6 @@ This package uses these cutting edge tools:
 - Makefile - aliases for commonly used command line commands
 
 ## Feature requests:
+- Enable github and gitlab pipeline files to run `make check` in the pipeline.
+- Add pre-commit hooks with all the tools enabled.
 - codspeed.io could be considered for Continuous integration pipeline

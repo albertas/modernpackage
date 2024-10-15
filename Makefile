@@ -48,7 +48,7 @@ compile:
 MAKEFLAGS += --quiet
 init:
 	@echo "Initializing ${args}..."
-	git grep -l 'modernpackage' | xargs sed -i '' -e s/modernpackage/$(args)/g'
+	git grep -l 'modernpackage' | xargs sed -i '' -e 's/modernpackage/$(args)/g'
 	mv modernpackage $(args)
 	rm -fr .git/
 	git init -b main .
