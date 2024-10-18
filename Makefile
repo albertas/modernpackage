@@ -1,11 +1,17 @@
 .PHONY: compile publish check fix lint fixlint format mypy deadcode audit test init
 args = $(or $(filter-out $@,$(MAKECMDGOALS)), "modernpackage")
+UV := $(shell uv --version 2>/dev/null)
 
 check: test lint mypy audit deadcode
 fix: format fixlint
 
-.venv:
+uv:
+ifndef UV
+	@echo "uv not found. Installing uv.."
 	pip install uv
+endif
+
+.venv: uv
 	uv venv -p 3.11
 	uv pip sync requirements-dev.txt
 	uv pip install -e .[test]
@@ -45,7 +51,9 @@ compile:
 	uv pip compile -U -q pyproject.toml -o requirements.txt
 	uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt
 
-MAKEFLAGS += --quiet
+## NOTE: --quiet removes some useful output from commonly used targets.
+# Another workaround should be found to suppress init error for target up to date rule.
+# MAKEFLAGS += --quiet
 init:
 	@echo "Initializing ${args}..."
 	git grep -l 'modernpackage' | xargs sed -i '' -e 's/modernpackage/$(args)/g'
