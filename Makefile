@@ -1,6 +1,7 @@
 .PHONY: compile publish check fix lint fixlint format mypy deadcode audit test init
 args = $(or $(filter-out $@,$(MAKECMDGOALS)), "modernpackage")
 UV := $(shell uv --version 2>/dev/null)
+OS := $(shell uname)
 
 check: test lint mypy audit deadcode
 fix: format fixlint
@@ -56,7 +57,12 @@ compile:
 # MAKEFLAGS += --quiet
 init:
 	@echo "Initializing ${args}..."
-	git grep -l 'modernpackage' | xargs sed -i '' -e 's/modernpackage/$(args)/g'
+	if [ $(OS) = "Linux" ]; then\
+		git grep -l 'modernpackage' | xargs sed -i 's/modernpackage/$(args)/g';\
+	fi
+	@if [ $(OS) = "Darwin" ]; then\
+		git grep -l 'modernpackage' | xargs sed -i '' -e 's/modernpackage/$(args)/g';\
+	fi
 	mv modernpackage $(args)
 	rm -fr .git/
 	git init -b main .
