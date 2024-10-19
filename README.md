@@ -26,6 +26,8 @@ This package uses these cutting edge tools:
 - Makefile - aliases for commonly used command line commands
 
 ## Feature requests:
+- Check if `git` is available before trying to initialise the repository.
+- Update package version to 0.0.1 during `make init`.
 - make a cli command: this package should be installable. Ideally this flow should work:
   - `pip install modernpackage`
   - `modernpackage mynewpackage`
