@@ -1,5 +1,14 @@
 # modernpackage
-This is a boilerplate with bleeding edge linters for a new python package, just run:
+This package allows to quickly initialise new Python package using bleeding edge tools like linters, just run:
+- `pip install modernpackage`
+- `modernpackage <your-package-name>`
+
+Now you are able to:
+- `cd <your-package-name>`
+- `make check    # To run tests and linters`
+- `make publish  # To publish your new package to PyPi.org to make it accessable to everyone`
+
+This is also a boilerplate for a new python package, so you can create a new package this way as well:
 - `git clone git@github.com:albertas/modernpackage.git <your-package-name>`
 - `cd <your-package-name>`
 - `make init <your-package-name>` - to start your modern package.
