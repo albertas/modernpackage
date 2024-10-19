@@ -16,13 +16,11 @@ def parse_args() -> Namespace:
 
 
 def init_new_package(package_name: str) -> None:
-    """Copy this package file to current dir as `package_name` and run `make init` in it."""
-
-    from_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    """Clone modernpackage files to `package_name` and run `make init` in it."""
     new_package_path = os.path.join(os.getcwd(), package_name)
 
-    print("Copying files from", from_path, "to", new_package_path, "..")
-    pipe = Popen(["cp", "-r", from_path, new_package_path], stdin=PIPE, stdout=PIPE)
+    print("Cloning modernpackage files to", new_package_path)
+    pipe = Popen(["git", "clone", "https://github.com/albertas/modernpackage", new_package_path], stdin=PIPE, stdout=PIPE)
     pipe.communicate()[0]
 
     pipe = Popen(["make", "init", package_name], stdin=PIPE, stdout=PIPE, cwd=new_package_path)
