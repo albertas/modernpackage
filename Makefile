@@ -65,7 +65,7 @@ init:
 	fi
 	# TODO: version should be initialised to be v0.0.1
 	mv modernpackage $(args)
-	rm -fr .git/
+	rm -fr .git/ .venv
 	git init -b main .
 	git add .
 	git commit -m "Initial modern $(args) package setup"
