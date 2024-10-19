@@ -63,11 +63,13 @@ init:
 	@if [ $(OS) = "Darwin" ]; then\
 		git grep -l 'modernpackage' | xargs sed -i '' -e 's/modernpackage/$(args)/g';\
 	fi
+	# TODO: version should be initialised to be v0.0.1
 	mv modernpackage $(args)
 	rm -fr .git/
 	git init -b main .
 	git add .
 	git commit -m "Initial modern $(args) package setup"
+	# TODO: remove init Makefile alias and cli.py command python files.
 	@echo "Finished initializing ${args}."
 
 %:
