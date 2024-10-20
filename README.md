@@ -35,7 +35,6 @@ This package uses these cutting edge tools:
 - Makefile - aliases for commonly used command line commands
 
 ## Feature requests:
-- Enable github and gitlab pipeline files to run `make check` in the pipeline.
 - Newly installed package could have virtualenv initialised.
 - Check if `git` is available before trying to initialise the repository.
 - remove init Makefile alias and cli.py command python files.

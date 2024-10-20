@@ -1,0 +1,18 @@
+image: python:latest
+
+# Change ruff's cache directory to be inside the project directory since we can
+# only cache local items: https://docs.astral.sh/ruff/settings/#cache-dir
+variables:
+  RUFF_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+
+# https://pip.pypa.io/en/stable/topics/caching/
+cache:
+  paths:
+    - .cache/pip
+
+before_script:
+  - make .venv
+
+test:
+  script:
+    - make check
