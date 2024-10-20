@@ -24,7 +24,7 @@ def init_new_package(package_name: str) -> None:
     pipe.communicate()[0]
 
     pipe = Popen(["make", "init", package_name], stdin=PIPE, stdout=PIPE, cwd=new_package_path)
-    output = pipe.communicate()[0].decode()
+    output = pipe.communicate()[0].decode().split("make:")[0]
     print(output)
 
 
