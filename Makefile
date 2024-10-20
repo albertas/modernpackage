@@ -68,8 +68,8 @@ init:
 	@git init -b main .
 	@git add .
 	@git commit -m "Initial modern $(args) package setup"
-	@echo "Finished initializing ${args}. You can now run \x1b[6;30;42mcd ${args} && make check\x1b[0m"
-	@exit 0
+	@echo "Finished initializing ${args}. You can now run \030[0;42mcd ${args} && make check\033[0m"
+	@-exit 0
 
 %:
 	@:
