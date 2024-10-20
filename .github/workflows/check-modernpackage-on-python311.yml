@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  run-linters-and-tests:
 
     runs-on: ubuntu-latest
 
