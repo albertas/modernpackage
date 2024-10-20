@@ -6,13 +6,11 @@ OS := $(shell uname)
 check: test lint mypy audit deadcode
 fix: format fixlint
 
-uv:
+.venv:
 ifndef UV
 	@echo "uv not found. Installing uv.."
 	pip install uv
 endif
-
-.venv: uv
 	uv venv -p 3.11
 	uv pip sync requirements-dev.txt
 	uv pip install -e .[test]
