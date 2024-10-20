@@ -35,6 +35,8 @@ This package uses these cutting edge tools:
 - Makefile - aliases for commonly used command line commands
 
 ## Feature requests:
+- `check` should pass in the modernpackage.
+- Enable github and gitlab pipeline files to run `make check` in the pipeline.
 - Newly installed package could have virtualenv initialised.
 - Check if `git` is available before trying to initialise the repository.
 - remove init Makefile alias and cli.py command python files.
@@ -43,6 +45,5 @@ This package uses these cutting edge tools:
   - `pip install modernpackage`
   - `modernpackage mynewpackage`
   - `cd mynewpackage` && `make check` && `make publish`
-- Enable github and gitlab pipeline files to run `make check` in the pipeline.
 - Add pre-commit hooks with all the tools enabled.
 - codspeed.io could be considered for Continuous integration pipeline
