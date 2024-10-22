@@ -38,7 +38,6 @@ This package uses these cutting edge tools:
 - Newly installed package could have virtualenv initialised.
 - Check if `git` is available before trying to initialise the repository.
 - remove init Makefile alias and cli.py command python files.
-- Update package version to 0.0.1 during `make init`. Version should be initialised to be v0.0.1
 - make a cli command: this package should be installable. Ideally this flow should work:
   - `pip install modernpackage`
   - `modernpackage mynewpackage`

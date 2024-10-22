@@ -61,6 +61,7 @@ init:
 	@if [ $(OS) = "Darwin" ]; then\
 		git grep -l 'modernpackage' | xargs sed -i '' -e 's/modernpackage/$(args)/g';\
 	fi
+	@sed -i -e 's/[[:digit:]]\+\.[[:digit:]]\+\.[[:digit:]]\+/0.0.1/g' modernpackage/__init__.py
 	@mv modernpackage $(args)
 	@rm -fr .git/ .venv
 	@git init -b main .
