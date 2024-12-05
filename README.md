@@ -44,3 +44,34 @@ This package uses these cutting edge tools:
   - `cd mynewpackage` && `make check` && `make publish`
 - Add pre-commit hooks with all the tools enabled.
 - codspeed.io could be considered for Continuous integration pipeline
+
+- Provide Python version for modernpackage CLI command.
+- Add modernpackage abreviation CLI alias not to type so much
+- make compile and make sync does not work when virtual environment is activated
+- enable async test execution by default:
+    +    "pytest-asyncio",
+    [tool.pytest.ini_options]
+    addopts = "--cov=. --no-cov-on-fail --cov-fail-under=90.0"
+    +asyncio_mode = "auto"
+- Clean up the <package>/main.py file after initialization: that logic is overwhelming.
+- Clean up README and descriptions in pyproject.toml and <package>/__init__.py.
+- Package should display proper messages when internet connection or git is not available. Now it crashes without internet connection with this Traceback:
+```
+Cloning modernpackage files to /home/niekas/tools/gitruff
+Cloning into '/home/niekas/tools/gitruff'...
+fatal: unable to access 'https://github.com/albertas/modernpackage/': Could not resolve host: github.com
+Traceback (most recent call last):
+  File "/home/niekas/venv/bin/modernpackage", line 8, in <module>
+    sys.exit(main())
+             ^^^^^^
+  File "/home/niekas/venv/lib/python3.12/site-packages/modernpackage/main.py", line 40, in main
+    init_new_package(package_name=parsed_args.package_name)
+  File "/home/niekas/venv/lib/python3.12/site-packages/modernpackage/main.py", line 26, in init_new_package
+    pipe = Popen(["make", "init", package_name], stdin=PIPE, stdout=PIPE, cwd=new_package_path)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "/usr/lib/python3.12/subprocess.py", line 1955, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+FileNotFoundError: [Errno 2] No such file or directory: '/home/niekas/tools/gitruff'
+```
