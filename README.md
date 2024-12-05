@@ -8,11 +8,6 @@ Now you are able to:
 - `make check    # To run tests and linters`
 - `make publish  # To publish your new package to PyPi.org to make it accessable to everyone`
 
-This is also a boilerplate for a new python package, so you can create a new package this way as well:
-- `git clone git@github.com:albertas/modernpackage.git <your-package-name>`
-- `cd <your-package-name>`
-- `make init <your-package-name>` - to start your modern package.
-
 ## Development
 Commonly used commands for package development:
 - `make check` - run unit tests and linters.
@@ -77,4 +72,3 @@ FileNotFoundError: [Errno 2] No such file or directory: '/home/niekas/tools/gitr
 ```
 - --django --fastapi or other options to add some kind of dependencies and initial project stub to get started with those projects easily.
 - Should create package tags during publishing. Each version should a commit tagged in main branch.
-
