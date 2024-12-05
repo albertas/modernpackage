@@ -75,3 +75,5 @@ Traceback (most recent call last):
     raise child_exception_type(errno_num, err_msg, err_filename)
 FileNotFoundError: [Errno 2] No such file or directory: '/home/niekas/tools/gitruff'
 ```
+- --django --fastapi or other options to add some kind of dependencies and initial project stub to get started with those projects easily.
+
