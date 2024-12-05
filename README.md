@@ -76,4 +76,5 @@ Traceback (most recent call last):
 FileNotFoundError: [Errno 2] No such file or directory: '/home/niekas/tools/gitruff'
 ```
 - --django --fastapi or other options to add some kind of dependencies and initial project stub to get started with those projects easily.
+- Should create package tags during publishing. Each version should a commit tagged in main branch.
 
