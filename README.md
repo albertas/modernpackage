@@ -1,7 +1,7 @@
 # modernpackage
 This package allows to quickly initialise new Python package using bleeding edge tools like linters, just run:
 - `pip install modernpackage`
-- `modernpackage <your-package-name>`
+- `modernpackage <your-package-name>`     # or `$ mp <your-package-name>`
 
 Now you are able to:
 - `cd <your-package-name>`
