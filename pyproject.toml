@@ -22,6 +22,7 @@ homepage = "https://github.com/albertas/modernpackage"
 
 [project.scripts]
 modernpackage = "modernpackage.main:main"
+mp = "modernpackage.main:main"
 
 [project.optional-dependencies]
 test = [
