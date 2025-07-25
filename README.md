@@ -8,6 +8,10 @@ Now you are able to:
 - `make check    # To run tests and linters`
 - `make publish  # To publish your new package to PyPi.org to make it accessable to everyone`
 
+Add Git remote repository (first create this project on Gitlab) to be able to push changes:
+- `git remote add origin git@gitlab.com:<your-username>/<your-package-name>.git`
+- `git push`
+
 ## Development
 Commonly used commands for package development:
 - `make check` - run unit tests and linters.
