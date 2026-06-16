@@ -168,6 +168,10 @@ Single unified configuration file for all tools:
   - Quote style: single quotes
   - Linting: select ALL with targeted per-file ignores (ruff, docstrings, comments, type hints)
   - Tests allow `assert` and skip docstring requirements
+- **`[tool.ruff.lint.mccabe]`**: cyclomatic complexity enforcement
+  - `max-complexity = 8` — enforces that no function exceeds a cyclomatic complexity of 8
+  - Ruff's `C901` rule (checked via `just check-complexity`) fails on any function that exceeds this threshold
+  - Ensures code remains understandable and maintainable; functions with complexity > 8 are difficult to reason about
 - **`[tool.mypy]`**: type checker config
   - `strict = true` — enforces full type annotations
   - `python_version = "3.14"`
@@ -204,9 +208,9 @@ Provides equivalent `just` targets:
 - **`sync`**: syncs dependencies from requirements files
 - **`test`**: runs pytest in parallel across `nproc --ignore=1` workers (mocked unit tests only, excludes e2e)
 - **`test-e2e`**: runs pytest with only `e2e` marked tests (overrides the default `-m 'not e2e'` behavior)
-- **`check`**: combined quality check (format, lint, complexity, typecheck, test)
+- **`check`**: combined quality check (format, lint, complexity, typecheck, test) — enforces all quality gates including complexity threshold of 8
 - **`format`**, **`lint`**, **`typecheck`**: individual checks
-- **`check-format`**, **`check-lint`**, **`check-complexity`**, **`check-typecheck`**: check-only (no auto-fix)
+- **`check-format`**, **`check-lint`**, **`check-complexity`**, **`check-typecheck`**: check-only (no auto-fix) — `check-complexity` fails if any function exceeds McCabe complexity of 8
 - **`lifecycle`**: runs `uv run lifecycle` for CI/CD integration
 
 ### Tool Coordination
