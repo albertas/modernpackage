@@ -310,4 +310,4 @@ The source declares `__version__ = '0.0.9'`, but published wheels may differ. Se
 Both the `Justfile` and `Makefile` now define equivalent targets with parallel test execution:
 - `just test` and `make test` both run in parallel across `nproc --ignore=1` workers
 - `just test-e2e` and `make test-e2e` both select only `e2e` marked tests
-- Future work: `BACKLOG.md:34` plans to merge the Makefile into the Justfile, making `just` the canonical runner
+- Future work: `BACKLOG.md` plans to merge the Makefile into the Justfile, making `just` the canonical runner

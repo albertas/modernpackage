@@ -126,7 +126,7 @@ init_new_package(name)            (main.py:37-51)
   - `requirements-dev.txt` — pinned dev and test dependencies.
   - `uv.lock` — lock file for `uv`.
 - **CI/CD**:
-  - `.github/workflows/check-modernpackage-on-python311.yml` — GitHub Actions workflow.
+  - `.github/workflows/check-modernpackage-on-python314.yml` — GitHub Actions workflow.
   - `.gitlab-ci.yml` — GitLab CI configuration.
   - Both run `make check` as the primary gate.
 - **Documentation & metadata**:

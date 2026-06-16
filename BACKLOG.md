@@ -28,7 +28,7 @@
   - [x] [T8] [cq:typecheck] Audit `mypy app/` passes. Add type hints in the code where possible. Run `just check-typecheck`.
   - [x] [T9] [cq:complexity] Audit cyclomatic complexity stays <= 8 across `app/` and `tests/`. Run `just check-complexity`.
   - [x] [T10] [cq:check] Ensure that just check command exist, it combines all the checks from Justfile and this `check` target passes.
-  - [ ] [cq:python] Ensure that latest stable python version is used.
+  - [x] [T11] [cq:python] Ensure that latest stable python version is used.
   - [ ] [cq:versions] Ensure that latest dependency versions are used.
 - [ ] Use uv for publishing package instead of hatch
 - [ ] Merge Makefile and Justfiles: move Makefile capabilities to Justfile and remove Makefile.
