@@ -8,7 +8,10 @@ sync:
   @uv pip install -e .[test]
 
 test *args: sync
-  uv run pytest {{args}}
+  uv run pytest -n "$(nproc --ignore=1)" {{args}}
+
+test-e2e *args: sync
+  uv run pytest -m e2e {{args}}
 
 format: sync
   uv run ruff format modernpackage tests

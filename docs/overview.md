@@ -6,10 +6,10 @@
 
 `modernpackage` is a standalone package that, when invoked as `modernpackage <name>` or `mp <name>`, clones itself to a new directory and rewrites all occurrences of "modernpackage" to the given package name. The result is a ready-to-build Python package with:
 
-- Modern tooling: **ruff** (linting, formatting), **mypy** (type checking), **pytest** (testing), **pip-audit** (vulnerability scanning)
+- Modern tooling: **ruff** (linting, formatting), **mypy** (type checking), **pytest** (testing with parallel execution), **pip-audit** (vulnerability scanning)
 - Single configuration hub via `pyproject.toml` with strict settings (line-length 88, strict mypy, 95% test coverage minimum)
-- Comprehensive test coverage (95%) ensuring all code paths are exercised deterministically with mocked dependencies
-- Development workflow via `Makefile` and `Justfile` for common tasks: `check`, `fix`, `test`, `lint`, `format`, `publish`
+- Comprehensive test coverage (95%) ensuring all code paths are exercised deterministically and in parallel across all-but-one CPU cores with fully mocked dependencies
+- Development workflow via `Makefile` and `Justfile` for common tasks: `check`, `fix`, `test`, `test-e2e`, `lint`, `format`, `publish`
 - GitHub Actions and GitLab CI integration that enforce quality gates
 
 ## Documentation Files
@@ -29,7 +29,8 @@ After cloning and `cd`-ing into the created package directory, developers use:
 
 - **`make check`** — run all code quality gates in sequence: unit tests, ruff lint, ruff format check, mypy, pip-audit, deadcode detection. Primary quality gate; used in CI/CD.
 - **`make fix`** — format code and auto-fix linting issues.
-- **`make test`** — run pytest unit tests.
+- **`make test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
+- **`make test-e2e`** — run only tests marked `@pytest.mark.e2e` (reserved for real external calls).
 - **`make lint`** — check for linting violations.
 - **`make format`** — reformat code with ruff.
 - **`make mypy`** — run type checker.
@@ -39,7 +40,8 @@ After cloning and `cd`-ing into the created package directory, developers use:
 Alternatively, use equivalent **`just` targets** (Justfile) for the same commands:
 
 - **`just check`** — runs `check-format check-lint check-complexity check-typecheck test`
-- **`just test`** — runs `uv run pytest`
+- **`just test`** — runs parallel tests (mocked-only, excludes e2e) across all-but-one CPU cores
+- **`just test-e2e`** — runs only tests marked `@pytest.mark.e2e`
 - **`just format`** — runs `uv run ruff format modernpackage tests`
 - **`just lint`** — runs `uv run ruff check modernpackage tests`
 - **`just typecheck`** — runs `uv run mypy modernpackage tests`

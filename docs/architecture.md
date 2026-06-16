@@ -87,7 +87,7 @@ The CLI entry point (orchestrator):
 - **Version source**: dynamic, read from `modernpackage/__init__.py` at build time (no hard-coded version in `pyproject.toml`)
 - **Python requirement**: `>= 3.14`
 - **Runtime dependencies**: none (empty list)
-- **Test dependencies**: hatch, ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, vupi
+- **Test dependencies**: hatch, ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, pytest-xdist, vupi
 
 ### Publishing
 
@@ -101,9 +101,11 @@ Single unified configuration file for all tools:
 
 - **`[project]`**: package metadata, entry points (`modernpackage` and `mp`), optional test dependencies
 - **`[tool.pytest.ini_options]`**: test runner config
-  - `addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0"`
+  - `addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0 -m 'not e2e'"`
   - Measures coverage against the `modernpackage` package only (excludes `tests/`)
   - Fails if coverage is below 95%
+  - Default run excludes `e2e` marked tests (mocked unit tests only)
+  - `markers` lists registered markers: `e2e` (tests that perform real external calls)
 - **`[tool.ruff]`**: linter & formatter config
   - Line length: 88 characters
   - Quote style: single quotes
@@ -131,18 +133,20 @@ The primary command hub. Targets include:
 - **`.venv`**: creates Python 3.14 virtualenv, installs dev and test dependencies
 - **`check`**: runs all quality gates in sequence (`test lint mypy audit deadcode`)
 - **`fix`**: runs auto-fix tools (`format fixlint`)
-- **`test`**: runs pytest with coverage
+- **`test`**: runs pytest in parallel across `nproc --ignore=1` workers with coverage (mocked unit tests only, excludes e2e)
+- **`test-e2e`**: runs pytest with only `e2e` marked tests
 - **`lint`**, **`format`**, **`mypy`**, **`audit`**, **`deadcode`**: individual quality checks
 - **`publish`**: builds and publishes to PyPI
 
-All targets depend on `.venv` and use `uv run` to invoke tools in the managed virtualenv.
+All targets depend on `.venv` and use the virtualenv to invoke tools.
 
 #### Justfile
 
 Provides equivalent `just` targets:
 
 - **`sync`**: syncs dependencies from requirements files
-- **`test`**: runs pytest
+- **`test`**: runs pytest in parallel across `nproc --ignore=1` workers (mocked unit tests only, excludes e2e)
+- **`test-e2e`**: runs pytest with only `e2e` marked tests (overrides the default `-m 'not e2e'` behavior)
 - **`check`**: combined quality check (format, lint, complexity, typecheck, test)
 - **`format`**, **`lint`**, **`typecheck`**: individual checks
 - **`check-format`**, **`check-lint`**, **`check-complexity`**, **`check-typecheck`**: check-only (no auto-fix)
@@ -156,7 +160,14 @@ All tools read their configuration from `pyproject.toml`. The Makefile and Justf
 
 ### Test Coverage Goal
 
-**95% coverage of `modernpackage/` source** — all code paths must be exercised with deterministic, mocked tests.
+**95% coverage of `modernpackage/` source** — all code paths must be exercised with deterministic, mocked, parallel tests.
+
+### Parallelism & Determinism
+
+Tests run in parallel across `nproc --ignore=1` CPU cores using `pytest-xdist`. All tests are:
+- **Independent**: no shared state or ordering dependencies between tests
+- **Mocked**: all external effects (subprocess, network, filesystem) are mocked at the seam
+- **Deterministic**: coverage aggregates transparently across workers; final coverage measurement is deterministic despite parallel execution
 
 ### Test Organization
 
@@ -166,6 +177,14 @@ Tests live in `tests/test_main.py` using:
 - `unittest.mock.patch` for dependency injection (mocking `ArgumentParser`, `print`, `Popen`, etc.)
 - `pytest.raises` for exception testing
 - No real subprocess/network calls; all external dependencies mocked
+- Unit tests are unmarked (default, included in `just test`)
+- End-to-end tests use `@pytest.mark.e2e` (excluded from default run, included only in `just test-e2e`)
+
+### Test Markers
+
+The `e2e` marker is registered in `pyproject.toml` to categorize tests:
+
+- **`e2e`**: marks tests that perform real external calls (network, subprocess, filesystem). These are excluded from the default `just test` run (which runs only mocked unit tests) and are reserved for an explicit `just test-e2e` invocation. Pre-registering the marker prevents future `filterwarnings = error` strictness from breaking on unregistered marker usage.
 
 ### Coverage Measurement
 
@@ -173,21 +192,31 @@ Tests live in `tests/test_main.py` using:
 
 ```ini
 [tool.pytest.ini_options]
-addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0"
+addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0 -m 'not e2e'"
+markers = [
+    "e2e: tests that perform real external calls (network/subprocess/fs)",
+]
 ```
 
 - `--cov=modernpackage`: measures coverage only for the package (excludes `tests/`)
 - `--cov-fail-under=95.0`: test suite fails if coverage drops below 95%
 - `--no-cov-on-fail`: skips coverage reporting if tests fail (speeds up failure diagnosis)
+- `-m 'not e2e'`: default run excludes `e2e` marked tests (mocked unit tests only)
 
 ### Test Execution
 
+Tests run in parallel across all-but-one CPU cores (via `nproc --ignore=1`) using `pytest-xdist`. The default run excludes `e2e` marked tests, running only mocked unit tests. Coverage is aggregated transparently across parallel workers.
+
 ```bash
-just test              # run pytest with coverage
-make test              # equivalent Makefile target
-make check             # run all quality gates (including tests)
+just test              # run parallel unit tests (mocked, excludes e2e) with coverage
+just test-e2e         # run only e2e marked tests (real external calls)
+make test              # equivalent Makefile target (parallel)
+make test-e2e         # equivalent Makefile target for e2e tests
+make check             # run all quality gates (including parallel tests)
 just check             # equivalent just target
 ```
+
+On a 1-core machine, `nproc --ignore=1` yields 0; `pytest-xdist` treats `-n 0` as single-process (acceptable fallback).
 
 ## Self-Replication Flow
 
@@ -215,6 +244,9 @@ Both `git clone` and `make init` subprocess calls discard output with no error c
 
 The source declares `__version__ = '0.0.9'`, but published wheels may differ. See `specification.md` for details.
 
-### Justfile incompleteness
+### Justfile and Makefile alignment
 
-`BACKLOG.md` references `just` commands that did not exist in earlier phases. The present `Justfile` now defines all required targets, and the Makefile and Justfile are equivalent.
+Both the `Justfile` and `Makefile` now define equivalent targets with parallel test execution:
+- `just test` and `make test` both run in parallel across `nproc --ignore=1` workers
+- `just test-e2e` and `make test-e2e` both select only `e2e` marked tests
+- Future work: `BACKLOG.md:34` plans to merge the Makefile into the Justfile, making `just` the canonical runner

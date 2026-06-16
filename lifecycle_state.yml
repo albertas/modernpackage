@@ -1,5 +1,5 @@
 code_quality_is_good: false
-heart_beat: 2026-06-16 09:38:08
+heart_beat: 2026-06-16 09:55:56
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T4-2026-06-16-cq-coverage-add-test-coverage-measurement-and-reac
-    heart_beat: 2026-06-16 09:38:08
+  - artifact_dir: T5-2026-06-16-cq-reliabletests-ensure-that-tests-are-determinist
+    heart_beat: 2026-06-16 09:55:56

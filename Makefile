@@ -44,7 +44,7 @@ deadcode: .venv
 	.venv/bin/deadcode modernpackage tests
 
 test: .venv
-	.venv/bin/pytest $(TEST_NAME)
+	.venv/bin/pytest -n "$$(nproc --ignore=1)" $(TEST_NAME)
 
 sync: .venv
 	uv pip sync requirements-dev.txt

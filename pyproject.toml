@@ -33,11 +33,15 @@ test = [
     "deadcode",
     "pytest",
     "pytest-cov",
+    "pytest-xdist",
     "vupi>=0.0.6",
 ]
 
 [tool.pytest.ini_options]
-addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0"
+addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0 -m 'not e2e'"
+markers = [
+    "e2e: tests that perform real external calls (network/subprocess/fs)",
+]
 
 [build-system]
 requires = ["hatchling"]

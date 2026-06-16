@@ -52,6 +52,8 @@ distlib==0.4.3
     # via virtualenv
 distro==1.9.0
     # via hatch
+execnet==2.1.2
+    # via pytest-xdist
 filelock==3.29.4
     # via
     #   cachecontrol
@@ -188,7 +190,10 @@ pytest==9.1.0
     # via
     #   modernpackage (pyproject.toml)
     #   pytest-cov
+    #   pytest-xdist
 pytest-cov==7.1.0
+    # via modernpackage (pyproject.toml)
+pytest-xdist==3.8.0
     # via modernpackage (pyproject.toml)
 python-discovery==1.4.2
     # via
