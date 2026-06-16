@@ -28,8 +28,7 @@ This package uses these cutting edge tools:
 - deadcode - for unused code detection
 - pytest - for collecting and running unit tests
 - coverage - for code coverage by unit tests
-- hatch - for publishing package to pypi.org
-- uv - for Python virtual environment and dependency management
+- uv - for building & publishing package to pypi.org, Python virtual environment and dependency management
 - pyproject.toml - configuration file for all tools
 - Makefile - aliases for commonly used command line commands
 

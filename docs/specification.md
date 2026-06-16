@@ -73,8 +73,8 @@ init_new_package(name)            (main.py:37-51)
 - **Version management** (`pyproject.toml:50-51`, `[tool.hatch.version]`): dynamic version read from `modernpackage/__init__.py`, currently `'0.0.9'` (`__init__.py:3`).
 - **Python requirement**: `>= 3.14` (`pyproject.toml:8`).
 - **Runtime dependencies**: empty list (`pyproject.toml:18`, `dependencies = []`).
-- **Optional test group** (`pyproject.toml:27-37`): hatch, ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, vupi>=0.0.6.
-- **Publishing** (`Makefile:22-25`): `make publish` clears `dist/*`, runs `hatch build`, then `hatch -v publish`.
+- **Optional test group** (`pyproject.toml:27-37`): ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, vupi>=0.0.6.
+- **Publishing** (`Makefile:22-25`): `make publish` clears `dist/*`, runs `uv build`, then `uv publish`.
 - **Dependency pinning** (`Makefile:53-55`): `make compile` uses `uv pip compile` to generate `requirements.txt` (runtime, empty) and `requirements-dev.txt` (full dev pins).
 - **Private index** (`pyproject.toml:92-94`): `[[tool.uv.index]]` defines a private GitLab uv index at `https://gitlab.com/api/v4/projects/niekas%2Fpackages/packages/pypi/simple`.
 

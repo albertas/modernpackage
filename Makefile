@@ -21,8 +21,8 @@ endif
 
 publish: .venv
 	rm -fr dist/*
-	.venv/bin/hatch build
-	.venv/bin/hatch -v publish
+	uv build
+	uv publish
 
 lint: .venv
 	.venv/bin/ruff check modernpackage tests

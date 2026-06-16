@@ -26,7 +26,6 @@ mp = "modernpackage.main:main"
 
 [project.optional-dependencies]
 test = [
-    "hatch",
     "ruff",
     "mypy",
     "pip-audit",

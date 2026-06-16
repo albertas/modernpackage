@@ -37,7 +37,7 @@ After cloning and `cd`-ing into the created package directory, developers use:
 - **`make format`** — reformat code with ruff.
 - **`make mypy`** — run type checker.
 - **`make audit`** / **`make deadcode`** — run security and dead-code scanners.
-- **`make publish`** — build and publish to PyPI.
+- **`make publish`** — build and publish to PyPI via `uv build` + `uv publish`.
 
 Alternatively, use equivalent **`just` targets** (Justfile) for the same commands:
 

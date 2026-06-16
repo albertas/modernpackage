@@ -1,5 +1,9 @@
 # ToDo
-- [ ] Ensure code quality [cq:ensure]
+- [ ] Merge Makefile and Justfiles: move Makefile capabilities to Justfile and remove Makefile.
+
+# Done
+- [x] [T13] Use uv for publishing package instead of hatch
+- [x] Ensure code quality [cq:ensure]
   - [x] [T2] [cq:spec] Write a codebase specification under `docs/` describing the package goals, architecture and key code parts.
   - [x] [T3] [cq:aliases] Add Justfile with targets to run tests, ruff format, ruff lint, typecheck, code complexity check and all these checks combined via `check` target. Also, add dev dependencies needed for these targets. Use a Justfile consistent with this project's, e.g.:
     ```
@@ -30,7 +34,3 @@
   - [x] [T10] [cq:check] Ensure that just check command exist, it combines all the checks from Justfile and this `check` target passes.
   - [x] [T11] [cq:python] Ensure that latest stable python version is used.
   - [x] [T12] [cq:versions] Ensure that latest dependency versions are used.
-- [ ] Use uv for publishing package instead of hatch
-- [ ] Merge Makefile and Justfiles: move Makefile capabilities to Justfile and remove Makefile.
-
-# Done

@@ -1,0 +1,150 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 72649
+    cost_usd: 0.4378595
+    input_tokens: 3142
+    output_tokens: 3774
+    cache_read_tokens: 160309
+    cache_creation_tokens: 24354
+    model: Haiku 4.5, opus 4.8
+    context_used: 27496
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 319082
+    cost_usd: 1.4489797999999996
+    input_tokens: 3146
+    output_tokens: 8040
+    cache_read_tokens: 246686
+    cache_creation_tokens: 36183
+    model: Haiku 4.5, opus 4.8, sonnet 4.6
+    context_used: 39329
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 79632
+    cost_usd: 0.4210515
+    input_tokens: 3009
+    output_tokens: 5959
+    cache_read_tokens: 93747
+    cache_creation_tokens: 20702
+    model: Haiku 4.5, opus 4.8
+    context_used: 23711
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 61865
+    cost_usd: 0.42259
+    input_tokens: 3011
+    output_tokens: 4091
+    cache_read_tokens: 135282
+    cache_creation_tokens: 23435
+    model: Haiku 4.5, opus 4.8
+    context_used: 26446
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 106837
+    cost_usd: 0.6450814999999999
+    input_tokens: 3140
+    output_tokens: 8726
+    cache_read_tokens: 149015
+    cache_creation_tokens: 33335
+    model: Haiku 4.5, opus 4.8
+    context_used: 36475
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 46823
+    cost_usd: 0.12012810000000002
+    input_tokens: 3444
+    output_tokens: 4478
+    cache_read_tokens: 251671
+    cache_creation_tokens: 32457
+    model: Haiku 4.5
+    context_used: 35901
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 78044
+    cost_usd: 0.3049734
+    input_tokens: 8
+    output_tokens: 3515
+    cache_read_tokens: 242458
+    cache_creation_tokens: 27567
+    model: Haiku 4.5, sonnet 4.6
+    context_used: 27575
+    context_max: 200000
+    lines_of_code: 26
+  sub_phases:
+  - num: 1
+    title: '`make publish` builds & uploads via uv'
+    done: true
+    metrics:
+      duration_ms: 139360
+      cost_usd: 0.3341504
+      input_tokens: 12
+      output_tokens: 3297
+      cache_read_tokens: 384218
+      cache_creation_tokens: 25883
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 25895
+      context_max: 200000
+      lines_of_code: 20
+  - num: 2
+    title: Drop the `hatch` CLI dependency
+    done: true
+    metrics:
+      duration_ms: 113557
+      cost_usd: 0.33382249999999997
+      input_tokens: 12
+      output_tokens: 3016
+      cache_read_tokens: 389475
+      cache_creation_tokens: 26270
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 26282
+      context_max: 200000
+      lines_of_code: 26
+  - num: 3
+    title: Update README & docs to describe uv publishing
+    done: true
+    metrics:
+      duration_ms: 78044
+      cost_usd: 0.3049734
+      input_tokens: 8
+      output_tokens: 3515
+      cache_read_tokens: 242458
+      cache_creation_tokens: 27567
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 27575
+      context_max: 200000
+      lines_of_code: 26
+cumulative:
+  total_cost: 3.8006637999999997
+  total_ms: 764932
+  total_cache_read: 1279168
+  total_cache_write: 198033
+  total_loc: 26
+  total_input_tokens: 18900
+  total_output_tokens: 38583
+  version: 0.0.7
+  completed_at: 2026-06-16 11:26:47.378445

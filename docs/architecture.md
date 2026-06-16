@@ -144,11 +144,11 @@ This ensures all code paths are covered by type hints and comply with strict typ
 - **Version source**: dynamic, read from `modernpackage/__init__.py` at build time (no hard-coded version in `pyproject.toml`)
 - **Python requirement**: `>= 3.14`
 - **Runtime dependencies**: none (empty list)
-- **Test dependencies**: hatch, ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, pytest-xdist, vupi (with a minimum version floor for the constrained package)
+- **Test dependencies**: ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, pytest-xdist, vupi (with a minimum version floor for the constrained package)
 
 ### Publishing
 
-`make publish` clears `dist/`, builds via `hatch build`, and publishes via `hatch publish`.
+`make publish` clears `dist/`, builds via `uv build`, and publishes via `uv publish`.
 
 ### Dependency Compilation & Locking
 
