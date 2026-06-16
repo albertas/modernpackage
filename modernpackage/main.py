@@ -29,7 +29,7 @@ def parse_args() -> Namespace:
         'package_name',
         help='Name of a new package to initialise in a local directory.',
         nargs='?',
-        type=check_alpha_numeric
+        type=check_alpha_numeric,
     )
     return parser.parse_args()
 
@@ -46,7 +46,10 @@ def init_new_package(package_name: str) -> None:
     pipe.communicate()[0]
 
     pipe = Popen(  # noqa: S603
-        ['make', 'init', package_name], stdin=PIPE, stdout=PIPE, cwd=new_package_path  # noqa: S607
+        ['make', 'init', package_name],  # noqa: S607
+        stdin=PIPE,
+        stdout=PIPE,
+        cwd=new_package_path,
     )
     pipe.communicate()[0].decode().split('make:')[0].strip()
 
