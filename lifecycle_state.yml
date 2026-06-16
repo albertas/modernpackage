@@ -1,5 +1,5 @@
 code_quality_is_good: false
-heart_beat: 2026-06-16 10:00:25
+heart_beat: 2026-06-16 10:04:09
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T6-2026-06-16-cq-ruff-format-audit-ruff-format-is-clean-across-t
-    heart_beat: 2026-06-16 10:00:25
+  - artifact_dir: T7-2026-06-16-cq-ruff-lint-audit-ruff-check-is-clean-across-the
+    heart_beat: 2026-06-16 10:04:09
