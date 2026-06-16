@@ -1,0 +1,37 @@
+code_quality_is_good: false
+heart_beat: 2026-06-16 09:28:30
+phases:
+  - [x] 1_question
+      in:  <task input> (ticket / issue / description)
+      out: task.md, questions.md; plan.md (conditional, simple-task); subtasks.yml (conditional, split)
+  - [x] 2_research
+      in:  questions.md
+      out: research.md
+  - [x] 3_design
+      in:  task.md, questions.md, research.md
+      out: design.md
+  - [x] 4_structure
+      in:  design.md, research.md
+      out: structure.md
+  - [x] 5_plan
+      in:  structure.md, design.md, research.md
+      out: plan.md
+  - [x] 6_document
+      in:  design.md, plan.md; repo-root lifecycle.py, README.md, sub-modules, docs/
+      out: repo-root docs/*.md
+  - [x] 7_implement
+      in:  plan.md
+      out: code edits; plan.md checkboxes
+  - [ ] 8_review
+      in:  plan.md, task.md, cumulative git diff
+      out: review_findings.yml (conditional, >=1 finding)
+  - [ ] 9_harden
+      in:  plan.md; repo-root source modules, claude/commands/auto/*.md, errors/
+      out: repo-root hardening/H<n>-YYYY-MM-DD-<slug>.md (one per finding)
+  - [~] fixer
+      depends_on: 8_review — runs only on review restart when review_findings.yml has >=1 open finding
+      in:  review_findings.yml (from 8_review)
+      out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
+lifecycles_in_progress:
+  - artifact_dir: T3-2026-06-16-cq-aliases-add-justfile-with-targets-to-run-tests
+    heart_beat: 2026-06-16 09:28:30

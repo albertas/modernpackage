@@ -1,0 +1,116 @@
+pass_summaries:
+- review_pass: 1
+  major: 0
+  medium: 2
+  minor: 2
+- review_pass: 2
+  major: 0
+  medium: 1
+  minor: 2
+- review_pass: 3
+  major: 0
+  medium: 0
+  minor: 1
+findings:
+- review_pass: 1
+  severity: Medium
+  problem: "The spec documents a help-text typo \"pacakge\" at `main.py:30` in two\
+    \ places (the CLI section and the Known gaps section), but the current working-tree\
+    \ `modernpackage/main.py:30` reads \"Name of a new package to initialise...\"\
+    \ \u2014 the typo was corrected (only HEAD still has \"pacakge\"). The doc claims\
+    \ to be an \"accurate ... reference re-verified against the working tree on 2026-06-16\"\
+    \ (plan Conventions), yet states a false current-state fact. Both occurrences\
+    \ should be removed/corrected."
+  path: docs/specification.md
+  resolved: true
+  wont_do: false
+- review_pass: 1
+  severity: Medium
+  problem: The spec cites `research.md` eight times (e.g. `research.md:143-144`, `research.md:160-161`,
+    `research.md:159-166`, `research.md:171-173`, `research.md:174-175`, `research.md:110-113`,
+    `research.md:155-157`). `research.md` lives only in the workspace artifact directory
+    and is not part of the repository, so these citations are unresolvable for the
+    doc's stated audience (contributors). A shipped reference under `docs/` should
+    cite in-repo sources; the plan acknowledged this but it remains a navigability
+    defect.
+  path: docs/specification.md
+  resolved: true
+  wont_do: false
+- review_pass: 1
+  severity: Minor
+  problem: 'Citation `README.md:36-79` (Known gaps, README "Feature requests") points
+    past the end of the file: `README.md` is only 78 lines, so line 79 does not exist.
+    The plan''s convention requires every citation to resolve.'
+  path: docs/specification.md
+  resolved: true
+  wont_do: false
+- review_pass: 1
+  severity: Minor
+  problem: The ruff bullet cites `pyproject.toml:53-61` but then describes `select
+    = ["ALL"]` and the ignore list (D203, D213, COM812, ISC001, ANN101) and per-file
+    ignores, which actually live at `pyproject.toml:63-74`. The cited range covers
+    only `[tool.ruff]`, flake8-quotes, and format settings, so the described claims
+    fall outside the citation.
+  path: docs/specification.md
+  resolved: true
+  wont_do: false
+- review_pass: 2
+  severity: Medium
+  problem: "The \"Justfile vs. README divergence\" gap (Developer tooling line 97\
+    \ and Known gaps line 146) is mischaracterized. README (`README.md:15-21`) documents\
+    \ the development commands as `make check` / `make fix` and never references `just`\
+    \ at all, so there is no actual contradiction between README and the `Justfile`\
+    \ \u2014 calling it a \"Justfile vs. README divergence\" is a misnomer. The genuine\
+    \ `just`-referencing source in this repo is `BACKLOG.md:26-30` (e.g. \"Run `just\
+    \ check-format`\", \"Ensure that just check command exist\"), which the spec omits.\
+    \ As written, the documented divergence is logically empty (README correctly uses\
+    \ `make`) and misattributes the conflicting source, undermining the spec's purpose\
+    \ as an accurate reference."
+  path: docs/specification.md
+  resolved: true
+  wont_do: false
+- review_pass: 2
+  severity: Minor
+  problem: Two config-block citations overshoot by one line (include a trailing blank
+    line). mypy is cited `pyproject.toml:76-85` (line 87) but `[tool.mypy]` ends at
+    line 84 (line 85 is blank); deadcode is cited `pyproject.toml:86-91` (line 88)
+    but `[tool.deadcode]` ends at line 90 (line 91 is blank). The plan convention
+    requires precise `file:line` citations.
+  path: docs/specification.md
+  resolved: true
+  wont_do: false
+- review_pass: 2
+  severity: Minor
+  problem: 'Line 90 states "pip-audit: configured implicitly, invoked via `make audit`."
+    There is no pip-audit configuration anywhere in `pyproject.toml`; "configured
+    implicitly" implies a configuration that does not exist. It should state that
+    pip-audit has no project configuration and is simply invoked via `make audit`.'
+  path: docs/specification.md
+  resolved: true
+  wont_do: false
+- review_pass: 3
+  severity: Minor
+  problem: 'The "Architecture overview" module-map bullets for `modernpackage/__init__.py`
+
+    and `modernpackage/main.py` (lines 14-15) carry no `file:line` citation, whereas
+
+    the sibling bullets for `pyproject.toml` (`pyproject.toml:1-94`) and `Makefile`
+
+    (`Makefile:1-78`) on lines 16-17 do. This deviates from the plan''s per-phase
+
+    convention that "Every architectural claim carries a `file:line` citation in
+
+    backticks" (plan.md:16-18). The `main.py` bullet in particular asserts four
+
+    distinct facts (main/parse_args/check_alpha_numeric/init_new_package) with no
+
+    citation; those facts are cited in later sections (`main.py:54-62`,
+
+    `main.py:10-15`, `main.py:37-51`) but not in the overview where they are first
+
+    claimed, and `__init__.py:3` is likewise omitted from line 14.
+
+    '
+  path: docs/specification.md
+  resolved: false
+  wont_do: false

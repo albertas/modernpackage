@@ -1,0 +1,20 @@
+months:
+- year_month: 2026-06
+  total:
+    total_cost_usd: 0.8489906
+    total_duration_ms: 321151
+    max_context_pct: 21.845
+    total_lines_of_code: 274
+    total_cache_read_tokens: 852426
+    total_cache_write_tokens: 79379
+    max_tasks: 1
+  days:
+  - date: 2026-06-16
+    stats:
+      total_cost_usd: 0.8489906
+      total_duration_ms: 321151
+      max_context_pct: 21.845
+      total_lines_of_code: 274
+      total_cache_read_tokens: 852426
+      total_cache_write_tokens: 79379
+      max_tasks: 1

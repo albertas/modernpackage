@@ -1,7 +1,11 @@
-.PHONY: compile publish check fix lint fixlint format mypy deadcode audit test init
+.PHONY: lifecycle compile publish check fix lint fixlint format mypy deadcode audit test init
 args = $(or $(filter-out $@,$(MAKECMDGOALS)), "modernpackage")
 UV := $(shell uv --version 2>/dev/null)
 OS := $(shell uname)
+
+lifecycle:
+	@uv sync --group dev  >/dev/null 2>&1 < /dev/null
+	@count=0; while uv run lifecycle --max-tasks 1 --prior-tasks "$$count"; do count=$$((count + 1)); done
 
 check: test lint mypy audit deadcode
 fix: format fixlint

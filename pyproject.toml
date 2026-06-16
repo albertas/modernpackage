@@ -33,6 +33,7 @@ test = [
     "deadcode",
     "pytest",
     "pytest-cov",
+    "vupi>=0.0.6",
 ]
 
 [tool.pytest.ini_options]
@@ -87,3 +88,7 @@ ignore_names = [
     "main",
 ]
 exclude = ["tests"]
+
+[[tool.uv.index]]
+name = "gitlab"
+url = "https://gitlab.com/api/v4/projects/niekas%2Fpackages/packages/pypi/simple"

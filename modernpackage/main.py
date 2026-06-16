@@ -27,7 +27,7 @@ def parse_args() -> Namespace:
     )
     parser.add_argument(
         'package_name',
-        help='Name of a new pacakge to initialise in a local directory.',
+        help='Name of a new package to initialise in a local directory.',
         nargs='?',
         type=check_alpha_numeric
     )
