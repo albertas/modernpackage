@@ -7,7 +7,8 @@
 `modernpackage` is a standalone package that, when invoked as `modernpackage <name>` or `mp <name>`, clones itself to a new directory and rewrites all occurrences of "modernpackage" to the given package name. The result is a ready-to-build Python package with:
 
 - Modern tooling: **ruff** (linting, formatting), **mypy** (type checking), **pytest** (testing), **pip-audit** (vulnerability scanning)
-- Single configuration hub via `pyproject.toml` with strict settings (line-length 88, strict mypy, 50% test coverage minimum)
+- Single configuration hub via `pyproject.toml` with strict settings (line-length 88, strict mypy, 95% test coverage minimum)
+- Comprehensive test coverage (95%) ensuring all code paths are exercised deterministically with mocked dependencies
 - Development workflow via `Makefile` and `Justfile` for common tasks: `check`, `fix`, `test`, `lint`, `format`, `publish`
 - GitHub Actions and GitLab CI integration that enforce quality gates
 
@@ -15,6 +16,9 @@
 
 | File | Purpose |
 |------|---------|
+| [invocation.md](invocation.md) | **CLI usage**: entry points, command-line flags, argument validation, examples. |
+| [architecture.md](architecture.md) | **Design & modules**: package structure, module responsibilities, init flow, build & versioning, developer tooling, test strategy. |
+| [backlog_formats.md](backlog_formats.md) | **Task tracking format**: BACKLOG.md structure, progress markers, category tags. |
 | [specification.md](specification.md) | **Complete architectural reference**: package goals, modules, CLI entry point, initialization flow, build/versioning, developer tooling, tests, repository structure, known gaps. Start here for deep understanding. |
 | [README.md](../README.md) | User-facing usage guide and feature-request backlog. |
 | [BACKLOG.md](../BACKLOG.md) | Task tracking with progress markers (`[x]` complete, `[~]` in-progress, `[ ]` pending). |
