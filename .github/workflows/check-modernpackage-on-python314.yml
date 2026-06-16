@@ -25,7 +25,10 @@ jobs:
         python-version: "3.14"
     - name: Install dependencies
       run: |
-        make .venv
+        pip install uv
+        uv tool install rust-just
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+        just sync
     - name: Run checks
       run: |
-        make check
+        just check

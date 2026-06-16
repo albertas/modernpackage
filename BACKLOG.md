@@ -1,7 +1,6 @@
 # ToDo
-- [ ] Merge Makefile and Justfiles: move Makefile capabilities to Justfile and remove Makefile.
-
 # Done
+- [x] [T14] Merge Makefile and Justfiles: move Makefile capabilities to Justfile and remove Makefile.
 - [x] [T13] Use uv for publishing package instead of hatch
 - [x] Ensure code quality [cq:ensure]
   - [x] [T2] [cq:spec] Write a codebase specification under `docs/` describing the package goals, architecture and key code parts.

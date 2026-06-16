@@ -15,8 +15,7 @@ tests/
 
 Configuration & Build:
 ├── pyproject.toml       # unified config hub (build, deps, tool settings)
-├── Makefile             # canonical command hub
-└── Justfile             # just-based command shortcuts
+└── Justfile             # canonical command hub
 ```
 
 ## Modules
@@ -63,11 +62,11 @@ Orchestrates the package initialization flow by cloning and rewriting:
 3. **Process**:
    - Resolves target path: `Path.cwd() / package_name`
    - Spawns `git clone https://github.com/albertas/modernpackage <path>`
-   - Spawns `make init <package_name>` (cwd: the cloned directory)
+   - Spawns `just init <package_name>` (cwd: the cloned directory)
    - Both subprocess calls use `Popen` with `communicate()` to capture output (discarded)
    - No error handling or explicit return — silent on failure (current state)
 
-The `Makefile init` target (in the cloned repo) performs the actual transformation:
+The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Renames all "modernpackage" occurrences to the new package name
 - Resets the version to `0.0.1`
 - Renames the package directory (`modernpackage/` → `<name>/`)
@@ -148,7 +147,7 @@ This ensures all code paths are covered by type hints and comply with strict typ
 
 ### Publishing
 
-`make publish` clears `dist/`, builds via `uv build`, and publishes via `uv publish`.
+`just publish` clears `dist/`, builds via `uv build`, and publishes via `uv publish`.
 
 ### Dependency Compilation & Locking
 
@@ -157,7 +156,7 @@ The project uses two mechanisms to pin and regenerate dependencies:
 1. **`requirements.txt` and `requirements-dev.txt`**: generated via `uv pip compile -U` to freeze all transitive dependencies
 2. **`uv.lock`**: generated via `uv lock --upgrade` to create a uv-native lock file
 
-Both `Makefile` and `Justfile` define a `compile` recipe that regenerates all three artifacts in lockstep:
+The `Justfile` defines a `compile` recipe that regenerates all three artifacts in lockstep:
 - `uv pip compile -U -q pyproject.toml -o requirements.txt` (regenerates runtime pins; currently empty since `dependencies = []`)
 - `uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt` (regenerates dev/test pins including the `test` extra)
 - `uv lock --upgrade` (regenerates the native uv lock file to match the same versions)
@@ -197,41 +196,25 @@ Single unified configuration file for all tools:
 
 ## Developer Tooling
 
-### Command Hubs
+### Command Hub
 
-Two command hubs provide development workflows:
+The `Justfile` is the canonical command hub providing development workflows via `just` recipes:
 
-#### Makefile (canonical)
-
-The primary command hub. Targets include:
-
-- **`.venv`**: creates Python 3.14 virtualenv, installs dev and test dependencies
-- **`check`**: runs all quality gates in sequence (`test lint mypy audit deadcode`)
-- **`fix`**: runs auto-fix tools (`format fixlint`)
+- **`sync`**: syncs dependencies from requirements files (required by most recipes as a prerequisite)
 - **`compile`**: upgrades and regenerates all dependency artifacts (`uv pip compile -U` for both requirements files, then `uv lock --upgrade` for the lock file)
 - **`test`**: runs pytest in parallel across `nproc --ignore=1` workers with coverage (mocked unit tests only, excludes e2e)
-- **`test-e2e`**: runs pytest with only `e2e` marked tests
-- **`lint`**, **`format`**, **`mypy`**, **`audit`**, **`deadcode`**: individual quality checks
-- **`publish`**: builds and publishes to PyPI
-
-All targets depend on `.venv` and use the virtualenv to invoke tools (except `compile`, which runs without a venv dependency to allow regenerating pinned dependencies).
-
-#### Justfile
-
-Provides equivalent `just` targets:
-
-- **`sync`**: syncs dependencies from requirements files
-- **`compile`**: upgrades and regenerates all dependency artifacts (same as Makefile: `uv pip compile -U` for both requirements files, then `uv lock --upgrade` for the lock file)
-- **`test`**: runs pytest in parallel across `nproc --ignore=1` workers (mocked unit tests only, excludes e2e)
 - **`test-e2e`**: runs pytest with only `e2e` marked tests (overrides the default `-m 'not e2e'` behavior)
-- **`check`**: combined quality check (format, lint, complexity, typecheck, test) — enforces all quality gates including complexity threshold of 8
-- **`format`**, **`lint`**, **`typecheck`**: individual checks
-- **`check-format`**, **`check-lint`**, **`check-complexity`**, **`check-typecheck`**: check-only (no auto-fix) — `check-complexity` fails if any function exceeds McCabe complexity of 8
-- **`lifecycle`**: runs `uv run lifecycle` for CI/CD integration
+- **`check`**: combined quality gate (format, lint, complexity, typecheck, test, audit, deadcode) — enforces all quality gates including complexity threshold of 8
+- **`fix`**: auto-fix tools (format, then fix-lint)
+- **`fix-lint`**: auto-fix linting and deadcode issues
+- **`format`**, **`lint`**, **`typecheck`**, **`audit`**, **`deadcode`**: individual tools
+- **`check-format`**, **`check-lint`**, **`check-complexity`**, **`check-typecheck`**: check-only variants (no auto-fix) — `check-complexity` fails if any function exceeds McCabe complexity of 8
+- **`publish`**: builds and publishes to PyPI (no `sync` prerequisite; build does not require the editable install)
+- **`init`**: self-replication recipe with named parameter `package_name` (default: `"modernpackage"`)
 
 ### Tool Coordination
 
-All tools read their configuration from `pyproject.toml`. The Makefile and Justfile delegate to them via `uv run`, which manages the virtual environment and dependency versions (pinned in `requirements-dev.txt` and `uv.lock`).
+All tools read their configuration from `pyproject.toml`. The Justfile delegates to them via `uv run`, which manages the virtual environment and dependency versions (pinned in `requirements-dev.txt` and `uv.lock`).
 
 ## Test Strategy
 
@@ -287,10 +270,7 @@ Tests run in parallel across all-but-one CPU cores (via `nproc --ignore=1`) usin
 ```bash
 just test              # run parallel unit tests (mocked, excludes e2e) with coverage
 just test-e2e         # run only e2e marked tests (real external calls)
-make test              # equivalent Makefile target (parallel)
-make test-e2e         # equivalent Makefile target for e2e tests
-make check             # run all quality gates (including parallel tests)
-just check             # equivalent just target
+just check             # run all quality gates (including parallel tests)
 ```
 
 On a 1-core machine, `nproc --ignore=1` yields 0; `pytest-xdist` treats `-n 0` as single-process (acceptable fallback).
@@ -301,7 +281,7 @@ When a user runs `modernpackage mypackage`:
 
 1. `main()` parses arguments and calls `init_new_package('mypackage')`
 2. `init_new_package()` clones the official repo to `./mypackage`
-3. The Makefile `init` target (in the clone) transforms it:
+3. The `just init` recipe (in the clone) transforms it:
    - Renames all "modernpackage" → "mypackage"
    - Resets version to `0.0.1`
    - Reinitializes git
@@ -313,7 +293,7 @@ This self-replication pattern allows the package to be both a tool and a templat
 
 ### No error handling in `init_new_package()`
 
-Both `git clone` and `make init` subprocess calls discard output with no error checks. Failures (e.g., network errors, missing `make` command) are silent. The user sees no error message and the process continues.
+Both `git clone` and `just init` subprocess calls discard output with no error checks. Failures (e.g., network errors, missing `just` command) are silent. The user sees no error message and the process continues.
 
 **Plan**: future phases may add error handling and user feedback, but it is not in scope for the current coverage goal.
 
@@ -321,9 +301,11 @@ Both `git clone` and `make init` subprocess calls discard output with no error c
 
 The source declares `__version__ = '0.0.9'`, but published wheels may differ. See `specification.md` for details.
 
-### Justfile and Makefile alignment
+### Justfile command surface
 
-Both the `Justfile` and `Makefile` now define equivalent targets with parallel test execution:
-- `just test` and `make test` both run in parallel across `nproc --ignore=1` workers
-- `just test-e2e` and `make test-e2e` both select only `e2e` marked tests
-- Future work: `BACKLOG.md` plans to merge the Makefile into the Justfile, making `just` the canonical runner
+The `Justfile` provides a comprehensive command surface for all development, testing, and publishing workflows:
+- **`just test`** and **`just test-e2e`** run in parallel across `nproc --ignore=1` workers with full test discovery and coverage measurement
+- **`just check`** enforces the full gate (format, lint, complexity, typecheck, test, audit, deadcode) as the primary quality gate
+- **`just fix`** auto-fixes all correctable violations (format + lint + deadcode)
+- **`just publish`** builds and publishes to PyPI; **`just compile`** upgrades all locked dependencies
+- **`just init <name>`** replicates the package with a new name (named parameter, default `"modernpackage"`)

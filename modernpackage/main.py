@@ -35,7 +35,7 @@ def parse_args() -> Namespace:
 
 
 def init_new_package(package_name: str) -> None:
-    """Clone modernpackage files into `package_name` and run `make init` in it."""
+    """Clone modernpackage files into `package_name` and run `just init` in it."""
     new_package_path = Path.cwd() / package_name
 
     pipe = Popen(  # noqa: S603
@@ -46,12 +46,12 @@ def init_new_package(package_name: str) -> None:
     pipe.communicate()[0]
 
     pipe = Popen(  # noqa: S603
-        ['make', 'init', package_name],  # noqa: S607
+        ['just', 'init', package_name],  # noqa: S607
         stdin=PIPE,
         stdout=PIPE,
         cwd=new_package_path,
     )
-    pipe.communicate()[0].decode().split('make:')[0].strip()
+    pipe.communicate()[0].decode().strip()
 
 
 def main() -> None:

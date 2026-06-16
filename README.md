@@ -5,8 +5,8 @@ This package allows to quickly initialise new Python package using bleeding edge
 
 Now you are able to:
 - `cd <your-package-name>`
-- `make check    # To run tests and linters`
-- `make publish  # To publish your new package to PyPi.org to make it accessable to everyone`
+- `just check    # To run tests and linters`
+- `just publish  # To publish your new package to PyPi.org to make it accessable to everyone`
 
 Add Git remote repository (first create this project on Gitlab) to be able to push changes:
 - `git remote add origin git@gitlab.com:<your-username>/<your-package-name>.git`
@@ -14,11 +14,11 @@ Add Git remote repository (first create this project on Gitlab) to be able to pu
 
 ## Development
 Commonly used commands for package development:
-- `make check` - run unit tests and linters.
-- `make fix` - format code and fix detected fixable issues.
-- `make publish` - publishes current package version to pypi.org.
-- `make compile` - bump and freeze dependency versions in requirements*.txt files
-- `make sync` - upgrade installed dependencies in Virtual Environment (executed after `make compile`)
+- `just check` - run unit tests and linters.
+- `just fix` - format code and fix detected fixable issues.
+- `just publish` - publishes current package version to pypi.org.
+- `just compile` - bump and freeze dependency versions in requirements*.txt files
+- `just sync` - upgrade installed dependencies in Virtual Environment (executed after `just compile`)
 
 ## Toolset
 This package uses these cutting edge tools:
@@ -30,7 +30,7 @@ This package uses these cutting edge tools:
 - coverage - for code coverage by unit tests
 - uv - for building & publishing package to pypi.org, Python virtual environment and dependency management
 - pyproject.toml - configuration file for all tools
-- Makefile - aliases for commonly used command line commands
+- Justfile - aliases for commonly used command line commands
 
 ## Feature requests:
 - Newly installed package could have virtualenv initialised.

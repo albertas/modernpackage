@@ -9,7 +9,7 @@
 - **Modern tooling**: **ruff** (linting, formatting, complexity auditing), **mypy** (strict type checking), **pytest** (testing with parallel execution), **pip-audit** (vulnerability scanning), **deadcode** (unused code detection)
 - **Single configuration hub** via `pyproject.toml` with strict settings (line-length 88, strict mypy with full type annotations verified, 95% test coverage minimum, cyclomatic complexity ≤ 8)
 - **Comprehensive test coverage** (95% minimum) ensuring all code paths are exercised deterministically and in parallel across all-but-one CPU cores with fully mocked dependencies
-- **Development workflow** via `Makefile` and `Justfile` for common tasks: `check`, `fix`, `test`, `test-e2e`, `lint`, `format`, `typecheck`, `publish`
+- **Development workflow** via `Justfile` for common tasks: `check`, `fix`, `test`, `test-e2e`, `lint`, `format`, `typecheck`, `publish`, `audit`, `deadcode`
 - **GitHub Actions and GitLab CI integration** that enforce quality gates
 - **Full type hints** on all public functions with mypy strict mode enabled and passing
 
@@ -26,38 +26,33 @@
 
 ## Development Workflow
 
-After cloning and `cd`-ing into the created package directory, developers use:
+After cloning and `cd`-ing into the created package directory, developers use `just` commands via the canonical `Justfile`:
 
-- **`make check`** — run all code quality gates in sequence: unit tests, ruff lint, mypy, pip-audit, deadcode detection. Primary quality gate; used in CI/CD.
-- **`make fix`** — format code and auto-fix linting issues.
-- **`make compile`** — regenerate and upgrade all dependency artifacts: `requirements.txt`, `requirements-dev.txt`, and `uv.lock` to the latest versions available.
-- **`make test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
-- **`make test-e2e`** — run only tests marked `@pytest.mark.e2e` (reserved for real external calls).
-- **`make lint`** — check for linting violations.
-- **`make format`** — reformat code with ruff.
-- **`make mypy`** — run type checker.
-- **`make audit`** / **`make deadcode`** — run security and dead-code scanners.
-- **`make publish`** — build and publish to PyPI via `uv build` + `uv publish`.
+- **`just check`** — run all code quality gates in sequence: format check, ruff lint, complexity audit, mypy type check, unit tests, pip-audit security scan, deadcode detection. Primary quality gate; used in CI/CD.
+- **`just fix`** — format code and auto-fix linting issues.
+- **`just compile`** — regenerate and upgrade all dependency artifacts: `requirements.txt`, `requirements-dev.txt`, and `uv.lock` to the latest versions available.
+- **`just test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
+- **`just test-e2e`** — run only tests marked `@pytest.mark.e2e` (reserved for real external calls).
+- **`just lint`** — check for linting violations.
+- **`just format`** — reformat code with ruff.
+- **`just typecheck`** — run type checker (mypy in strict mode).
+- **`just audit`** — run security vulnerability scanner (pip-audit).
+- **`just deadcode`** — detect unused code.
+- **`just publish`** — build and publish to PyPI via `uv build` + `uv publish`.
 
-Alternatively, use equivalent **`just` targets** (Justfile) for the same commands:
+Individual check sub-steps are also available:
 
-- **`just check`** — runs `check-format check-lint check-complexity check-typecheck test`
-- **`just compile`** — regenerate and upgrade all dependency artifacts (same as `make compile`)
-- **`just test`** — runs parallel tests (mocked-only, excludes e2e) across all-but-one CPU cores
-- **`just test-e2e`** — runs only tests marked `@pytest.mark.e2e`
-- **`just format`** — runs `uv run ruff format modernpackage tests`
-- **`just lint`** — runs `uv run ruff check modernpackage tests`
-- **`just typecheck`** — runs `uv run mypy modernpackage tests`
-- **`just check-format`**, **`just check-lint`**, **`just check-complexity`**, **`just check-typecheck`** — individual check sub-steps
+- **`just check-format`**, **`just check-lint`**, **`just check-complexity`**, **`just check-typecheck`** — individual check-only steps (no auto-fix)
+- **`just fix-lint`** — auto-fix linting and deadcode issues
 
-Both `Makefile` and `Justfile` targets depend on synced dependencies (dev and test extras).
+`Justfile` recipes depend on synced dependencies (dev and test extras) via the `just sync` prerequisite.
 
 ## Key Implementation Details
 
-- **Single-file CLI**: `modernpackage/main.py` handles argument parsing and orchestrates `git clone` + `make init`.
-- **Package replication**: the `Makefile init` target uses `git grep + sed` to rename all "modernpackage" occurrences to the new package name, resets version to `0.0.1`, and reinitializes git.
-- **Configuration-as-code**: all tool settings live in `pyproject.toml` (ruff, mypy, pytest, deadcode, pip-audit); the Makefile and Justfile delegate to them via `uv run`.
-- **Dependency compilation workflow**: `make compile` and `just compile` regenerate all three dependency artifacts in lockstep (`requirements.txt`, `requirements-dev.txt`, `uv.lock`) to ensure they always agree on shared package versions and are upgraded to the latest versions available in the GitLab index.
+- **Single-file CLI**: `modernpackage/main.py` handles argument parsing and orchestrates `git clone` + `just init`.
+- **Package replication**: the `just init` recipe uses `git grep + sed` to rename all "modernpackage" occurrences to the new package name, resets version to `0.0.1`, and reinitializes git.
+- **Configuration-as-code**: all tool settings live in `pyproject.toml` (ruff, mypy, pytest, deadcode, pip-audit); the Justfile delegates to them via `uv run`.
+- **Dependency compilation workflow**: `just compile` regenerates all three dependency artifacts in lockstep (`requirements.txt`, `requirements-dev.txt`, `uv.lock`) to ensure they always agree on shared package versions and are upgraded to the latest versions available in the GitLab index.
 - **Private index**: GitLab private package index configured for pulling internal dependencies; dependency resolution is capped by what this index serves, which may lag behind PyPI.
 
 ## Known Gaps & Future Work
@@ -66,10 +61,10 @@ See [specification.md § Known gaps & divergences](specification.md#known-gaps--
 - No error handling in `init_new_package()` — cloning/initialization failures are silently discarded.
 - Version drift between `__init__.py` and published wheels.
 
-See [BACKLOG.md](../BACKLOG.md) for planned improvements: coverage measurement, deterministic tests with pytest-xdist, latest Python/dependency versions, merge Makefile and Justfile, uv-based publishing.
+See [BACKLOG.md](../BACKLOG.md) for planned improvements: coverage measurement, deterministic tests with pytest-xdist, latest Python/dependency versions, uv-based publishing.
 
 ## Next Steps
 
 - To understand the codebase in detail, read [specification.md](specification.md).
 - To report issues or request features, see [BACKLOG.md](../BACKLOG.md) and [README.md § Feature requests](../README.md#feature-requests).
-- To contribute, ensure `just check` (or `make check`) passes before opening a pull request.
+- To contribute, ensure `just check` passes before opening a pull request.

@@ -14,7 +14,7 @@ A small, two-module package with a single self-replication entrypoint:
 - **`modernpackage/__init__.py`**: defines version constant (`__version__ = '0.0.9'`).
 - **`modernpackage/main.py`**: CLI logic — `main()` orchestrates, `parse_args()` parses arguments, `check_alpha_numeric()` validates, `init_new_package()` clones and initializes.
 - **`pyproject.toml`**: single configuration hub (dependencies, build backend, tool settings) (`pyproject.toml:1-94`).
-- **`Makefile`**: canonical command hub — all development and publishing commands route through it (`Makefile:1-78`).
+- **`Justfile`**: canonical command hub — all development and publishing commands route through it.
 
 The self-replication path (one fenced ASCII diagram):
 
@@ -26,7 +26,7 @@ init_new_package(name)            (main.py:37-51)
         │
         ├─▶ git clone albertas/modernpackage  ./<name>
         │
-        └─▶ make init <name>   (cwd=./<name>)  (Makefile:60-75)
+        └─▶ just init <name>   (cwd=./<name>)
                   │
                   ├─ git grep + sed: rename every "modernpackage" → <name>
                   ├─ sed: reset __init__ version → 0.0.1
@@ -53,18 +53,16 @@ init_new_package(name)            (main.py:37-51)
   1. Resolves target path: `Path.cwd() / package_name`.
   2. Spawns first `subprocess.Popen`: `git clone https://github.com/albertas/modernpackage <cwd>/<name>` to target path.
   3. Captures output via `.communicate()[0]` (discarded).
-  4. Spawns second `subprocess.Popen`: `make init <name>` with `cwd=<new_package_path>`.
-  5. Captures output, decodes, splits on `'make:'`, and **discards the result** — no return value, no error handling.
+  4. Spawns second `subprocess.Popen`: `just init <name>` with `cwd=<new_package_path>`.
+  5. Captures output, decodes, and **discards the result** — no return value, no error handling.
   6. Both Popen calls flagged `# noqa: S603/S607` to suppress subprocess security lints.
   - **Known gap**: no error handling, no output logging, discarded results (current state).
-- **`Makefile init` target** (`Makefile:60-75`) transforms the cloned repository:
+- **`just init` recipe** transforms the cloned repository:
   - **Rename**: `git grep -l 'modernpackage' | xargs sed -i` (Linux) or `sed -i ''` (Darwin) to replace all occurrences of token "modernpackage" with the new package name.
   - **Version reset**: `sed` to replace the version string (e.g., `0.0.9`) with `0.0.1`.
   - **Directory rename**: `mv modernpackage <name>` to rename the package directory.
   - **Git reinitialization**: `rm -fr .git/ .venv`, then `git init -b main`, `git add .`, `git commit` with message "Initial modern <name> package setup".
-- **Make argument handling** (`Makefile:2`, `Makefile:77-78`):
-  - Default value for `args` variable: `"modernpackage"` — used as fallback if no CLI argument provided.
-  - Catch-all rule `%:` and `@:` allows any unrecognized make goal to silently pass (no error if `make init mypackage` is called).
+- **Named parameter handling**: the `just init` recipe accepts a named parameter `package_name` with default `"modernpackage"`, interpolated as `{{package_name}}` in the recipe body.
 
 ## Build, versioning & dependencies
 
@@ -74,26 +72,27 @@ init_new_package(name)            (main.py:37-51)
 - **Python requirement**: `>= 3.14` (`pyproject.toml:8`).
 - **Runtime dependencies**: empty list (`pyproject.toml:18`, `dependencies = []`).
 - **Optional test group** (`pyproject.toml:27-37`): ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, vupi>=0.0.6.
-- **Publishing** (`Makefile:22-25`): `make publish` clears `dist/*`, runs `uv build`, then `uv publish`.
-- **Dependency pinning** (`Makefile:53-55`): `make compile` uses `uv pip compile` to generate `requirements.txt` (runtime, empty) and `requirements-dev.txt` (full dev pins).
+- **Publishing**: `just publish` clears `dist/*`, runs `uv build`, then `uv publish`.
+- **Dependency pinning**: `just compile` uses `uv pip compile` to generate `requirements.txt` (runtime, empty) and `requirements-dev.txt` (full dev pins).
 - **Private index** (`pyproject.toml:92-94`): `[[tool.uv.index]]` defines a private GitLab uv index at `https://gitlab.com/api/v4/projects/niekas%2Fpackages/packages/pypi/simple`.
 
 ## Developer tooling
 
-**Narrative**: `pyproject.toml` is the single configuration hub; `Makefile` is the canonical command hub (`pyproject.toml:1-94`, `Makefile:1-78`). All development commands are invoked through the Makefile, which manages virtual environment setup (`.venv` target) and delegates to installed tools.
+**Narrative**: `pyproject.toml` is the single configuration hub; `Justfile` is the canonical command hub (`pyproject.toml:1-94`). All development commands are invoked through the Justfile, which delegates to tools via `uv run` with a `sync` prerequisite.
 
 - **Tool configuration** (`pyproject.toml:53-90`):
   - **ruff** (`pyproject.toml:53-74`): line-length 88, single quotes (`quote-style = "single"`), select ALL with targeted ignores (D203, D213, COM812, ISC001, ANN101; tests allow S101 and no docs).
   - **mypy** (`pyproject.toml:76-84`): `strict = true`, `python_version = "3.14"`, color output enabled.
   - **deadcode** (`pyproject.toml:86-90`): ignores `main` function, excludes tests.
-  - **pytest** (`pyproject.toml:39-40`): `addopts = "--cov=. --no-cov-on-fail --cov-fail-under=50.0"`.
-  - **pip-audit**: no project configuration in `pyproject.toml`; simply invoked via `make audit`.
-- **Makefile command hub** (`Makefile:1-50`):
-  - `.venv` target: creates Python 3.14 virtual environment, installs dev requirements and test extras.
-  - `check` (`Makefile:10`): runs `test lint mypy audit deadcode` in sequence — the primary quality gate.
-  - `fix` (`Makefile:11`): runs `format fixlint`.
-  - Individual targets: `format`, `lint`, `fixlint`, `mypy`, `audit`, `deadcode`, `test` — all depend on `.venv`.
-  - Other targets: `publish` (`Makefile:22-25`), `compile` (`Makefile:53-55`), `sync` (`Makefile:49-51`).
+  - **pytest** (`pyproject.toml:39-40`): `addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0 -m 'not e2e'"` — measures coverage on package only, fails below 95%, and excludes e2e tests by default.
+  - **pip-audit**: no project configuration in `pyproject.toml`; simply invoked via `just audit`.
+- **Justfile command hub**:
+  - `sync`: syncs dependencies from requirements files (prerequisite for recipes that need the editable install).
+  - `check`: runs `check-format check-lint check-complexity check-typecheck test audit deadcode` in sequence — the primary quality gate.
+  - `fix`: runs `format fix-lint` — auto-fix tools.
+  - Individual targets: `format`, `lint`, `typecheck`, `audit`, `deadcode`, `test`, `test-e2e` — all depend on `sync` except `publish`, `compile`, and `init`.
+  - Specialized targets: `check-format`, `check-lint`, `check-complexity`, `check-typecheck` (check-only variants).
+  - Other targets: `publish`, `compile`, `init package_name="modernpackage"`.
 
 ## Tests
 
@@ -118,8 +117,7 @@ init_new_package(name)            (main.py:37-51)
   - `tests/test_main.py` — single test of `--version` branch.
 - **Configuration & build**:
   - `pyproject.toml` — single config hub (build backend, dependencies, tool settings).
-  - `Makefile` — command hub (development, testing, publishing targets).
-  - `Justfile` — currently defines only `lifecycle` target.
+  - `Justfile` — command hub (development, testing, publishing recipes).
 - **Dependencies**:
   - `requirements.txt` — runtime dependencies (currently empty).
   - `requirements-dev.txt` — pinned dev and test dependencies.
@@ -127,7 +125,7 @@ init_new_package(name)            (main.py:37-51)
 - **CI/CD**:
   - `.github/workflows/check-modernpackage-on-python314.yml` — GitHub Actions workflow.
   - `.gitlab-ci.yml` — GitLab CI configuration.
-  - Both run `make check` as the primary gate.
+  - Both install `just` and run `just sync` + `just check` as the primary gate.
 - **Documentation & metadata**:
   - `README.md` — user-facing usage guide and feature-request backlog.
   - `BACKLOG.md` — task tracking.
@@ -136,11 +134,10 @@ init_new_package(name)            (main.py:37-51)
 - **Build output**:
   - `dist/` — contains `0.0.8` wheel and sdist (version older than `__init__.py:3` `0.0.9`; see Known gaps).
 
-The architecture is self-referential: the CLI clones this very repository, then `make init` rewrites the clone to a new package name (`main.py:37-51`, `Makefile:60-75`).
+The architecture is self-referential: the CLI clones this very repository, then `just init` rewrites the clone to a new package name (`main.py:37-51`).
 
 ## Known gaps & divergences
 
-- **No error handling in `init_new_package()`** (`main.py:37-51`): both `Popen` calls discard output via `.communicate()[0]` with no success/failure checks. If `git clone` or `make init` fail, the user sees no error and the process silently continues.
+- **No error handling in `init_new_package()`** (`main.py:37-51`): both `Popen` calls discard output via `.communicate()[0]` with no success/failure checks. If `git clone` or `just init` fail, the user sees no error and the process silently continues.
 - **Version drift** (`__init__.py:3`): source declares `__version__ = '0.0.9'`, but `dist/` contains `0.0.8` wheel and sdist. No in-repo evidence of which version is published; the discrepancy is unresolved.
-- **Justfile vs. BACKLOG divergence** (`Justfile:1-4`, `BACKLOG.md:26-30`): `BACKLOG.md` references `just` commands such as `just check-format` and `just check`, but the present `Justfile` only defines a `lifecycle` target — so those `just` commands do not work. README correctly documents `make check` / `make fix` (`README.md:15-21`) as the development commands.
 - **README Feature requests are aspirational** (`README.md:36-78`): the "Feature requests" section lists desired enhancements (virtualenv init, git/network checks, async tests, etc.), none of which are implemented. Notably, the documented no-network crash traceback (`README.md:57-76`) is a known failure mode, not a solved feature.

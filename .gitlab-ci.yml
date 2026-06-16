@@ -11,8 +11,12 @@ cache:
     - .cache/pip
 
 before_script:
-  - make .venv
+  - pip install uv
+  - uv tool install rust-just
+  - export PATH="$HOME/.local/bin:$PATH"
+  - just sync
 
 test:
   script:
-    - make check
+    - export PATH="$HOME/.local/bin:$PATH"
+    - just check
