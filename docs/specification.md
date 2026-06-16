@@ -94,7 +94,6 @@ init_new_package(name)            (main.py:37-51)
   - `fix` (`Makefile:11`): runs `format fixlint`.
   - Individual targets: `format`, `lint`, `fixlint`, `mypy`, `audit`, `deadcode`, `test` — all depend on `.venv`.
   - Other targets: `publish` (`Makefile:22-25`), `compile` (`Makefile:53-55`), `sync` (`Makefile:49-51`).
-- **Known gap**: `BACKLOG.md` (`BACKLOG.md:26-30`) references `just` commands such as `just check-format` and `just check`, but the present `Justfile` (`Justfile:1-4`) only defines a `lifecycle` target; those `just` commands do not work. README correctly documents `make check` / `make fix` (`README.md:15-21`), which is the actual quality gate.
 
 ## Tests
 

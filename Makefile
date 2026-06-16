@@ -53,6 +53,7 @@ sync: .venv
 compile:
 	uv pip compile -U -q pyproject.toml -o requirements.txt
 	uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt
+	uv lock --upgrade
 
 ## NOTE: --quiet removes some useful output from commonly used targets.
 # Another workaround should be found to suppress init error for target up to date rule.

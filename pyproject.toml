@@ -34,7 +34,7 @@ test = [
     "pytest",
     "pytest-cov",
     "pytest-xdist",
-    "vupi>=0.0.6",
+    "vupi>=0.0.7",
 ]
 
 [tool.pytest.ini_options]

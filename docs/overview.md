@@ -30,6 +30,7 @@ After cloning and `cd`-ing into the created package directory, developers use:
 
 - **`make check`** — run all code quality gates in sequence: unit tests, ruff lint, mypy, pip-audit, deadcode detection. Primary quality gate; used in CI/CD.
 - **`make fix`** — format code and auto-fix linting issues.
+- **`make compile`** — regenerate and upgrade all dependency artifacts: `requirements.txt`, `requirements-dev.txt`, and `uv.lock` to the latest versions available.
 - **`make test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
 - **`make test-e2e`** — run only tests marked `@pytest.mark.e2e` (reserved for real external calls).
 - **`make lint`** — check for linting violations.
@@ -41,6 +42,7 @@ After cloning and `cd`-ing into the created package directory, developers use:
 Alternatively, use equivalent **`just` targets** (Justfile) for the same commands:
 
 - **`just check`** — runs `check-format check-lint check-complexity check-typecheck test`
+- **`just compile`** — regenerate and upgrade all dependency artifacts (same as `make compile`)
 - **`just test`** — runs parallel tests (mocked-only, excludes e2e) across all-but-one CPU cores
 - **`just test-e2e`** — runs only tests marked `@pytest.mark.e2e`
 - **`just format`** — runs `uv run ruff format modernpackage tests`
@@ -55,7 +57,8 @@ Both `Makefile` and `Justfile` targets depend on synced dependencies (dev and te
 - **Single-file CLI**: `modernpackage/main.py` handles argument parsing and orchestrates `git clone` + `make init`.
 - **Package replication**: the `Makefile init` target uses `git grep + sed` to rename all "modernpackage" occurrences to the new package name, resets version to `0.0.1`, and reinitializes git.
 - **Configuration-as-code**: all tool settings live in `pyproject.toml` (ruff, mypy, pytest, deadcode, pip-audit); the Makefile and Justfile delegate to them via `uv run`.
-- **Private index**: GitLab private package index configured for pulling internal dependencies.
+- **Dependency compilation workflow**: `make compile` and `just compile` regenerate all three dependency artifacts in lockstep (`requirements.txt`, `requirements-dev.txt`, `uv.lock`) to ensure they always agree on shared package versions and are upgraded to the latest versions available in the GitLab index.
+- **Private index**: GitLab private package index configured for pulling internal dependencies; dependency resolution is capped by what this index serves, which may lag behind PyPI.
 
 ## Known Gaps & Future Work
 

@@ -144,11 +144,25 @@ This ensures all code paths are covered by type hints and comply with strict typ
 - **Version source**: dynamic, read from `modernpackage/__init__.py` at build time (no hard-coded version in `pyproject.toml`)
 - **Python requirement**: `>= 3.14`
 - **Runtime dependencies**: none (empty list)
-- **Test dependencies**: hatch, ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, pytest-xdist, vupi
+- **Test dependencies**: hatch, ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, pytest-xdist, vupi (with a minimum version floor for the constrained package)
 
 ### Publishing
 
 `make publish` clears `dist/`, builds via `hatch build`, and publishes via `hatch publish`.
+
+### Dependency Compilation & Locking
+
+The project uses two mechanisms to pin and regenerate dependencies:
+
+1. **`requirements.txt` and `requirements-dev.txt`**: generated via `uv pip compile -U` to freeze all transitive dependencies
+2. **`uv.lock`**: generated via `uv lock --upgrade` to create a uv-native lock file
+
+Both `Makefile` and `Justfile` define a `compile` recipe that regenerates all three artifacts in lockstep:
+- `uv pip compile -U -q pyproject.toml -o requirements.txt` (regenerates runtime pins; currently empty since `dependencies = []`)
+- `uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt` (regenerates dev/test pins including the `test` extra)
+- `uv lock --upgrade` (regenerates the native uv lock file to match the same versions)
+
+This ensures that `requirements.txt`, `requirements-dev.txt`, and `uv.lock` always agree on shared package versions and are bumped together whenever dependencies are upgraded. The compile recipes delegate to the private GitLab uv index configured in `pyproject.toml`, which may lag behind PyPI; the resolved versions are capped by what that index serves.
 
 ## Configuration Hub
 
@@ -194,18 +208,20 @@ The primary command hub. Targets include:
 - **`.venv`**: creates Python 3.14 virtualenv, installs dev and test dependencies
 - **`check`**: runs all quality gates in sequence (`test lint mypy audit deadcode`)
 - **`fix`**: runs auto-fix tools (`format fixlint`)
+- **`compile`**: upgrades and regenerates all dependency artifacts (`uv pip compile -U` for both requirements files, then `uv lock --upgrade` for the lock file)
 - **`test`**: runs pytest in parallel across `nproc --ignore=1` workers with coverage (mocked unit tests only, excludes e2e)
 - **`test-e2e`**: runs pytest with only `e2e` marked tests
 - **`lint`**, **`format`**, **`mypy`**, **`audit`**, **`deadcode`**: individual quality checks
 - **`publish`**: builds and publishes to PyPI
 
-All targets depend on `.venv` and use the virtualenv to invoke tools.
+All targets depend on `.venv` and use the virtualenv to invoke tools (except `compile`, which runs without a venv dependency to allow regenerating pinned dependencies).
 
 #### Justfile
 
 Provides equivalent `just` targets:
 
 - **`sync`**: syncs dependencies from requirements files
+- **`compile`**: upgrades and regenerates all dependency artifacts (same as Makefile: `uv pip compile -U` for both requirements files, then `uv lock --upgrade` for the lock file)
 - **`test`**: runs pytest in parallel across `nproc --ignore=1` workers (mocked unit tests only, excludes e2e)
 - **`test-e2e`**: runs pytest with only `e2e` marked tests (overrides the default `-m 'not e2e'` behavior)
 - **`check`**: combined quality check (format, lint, complexity, typecheck, test) — enforces all quality gates including complexity threshold of 8

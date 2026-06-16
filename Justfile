@@ -35,3 +35,8 @@ check-typecheck: sync
   uv run mypy modernpackage tests
 
 check: check-format check-lint check-complexity check-typecheck test
+
+compile:
+  uv pip compile -U -q pyproject.toml -o requirements.txt
+  uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt
+  uv lock --upgrade

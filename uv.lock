@@ -739,7 +739,7 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'test'" },
     { name = "pytest-xdist", marker = "extra == 'test'" },
     { name = "ruff", marker = "extra == 'test'" },
-    { name = "vupi", marker = "extra == 'test'", specifier = ">=0.0.6" },
+    { name = "vupi", marker = "extra == 'test'", specifier = ">=0.0.7" },
 ]
 provides-extras = ["test"]
 
@@ -1554,7 +1554,7 @@ wheels = [
 
 [[package]]
 name = "vupi"
-version = "0.0.6"
+version = "0.0.7"
 source = { registry = "https://gitlab.com/api/v4/projects/niekas%2Fpackages/packages/pypi/simple" }
 dependencies = [
     { name = "claude-agent-sdk" },
@@ -1563,7 +1563,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
 ]
-sdist = { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/86a9e546a98a861cb0e67a7fa02e69cdc865b53a4c59067d981f3277e1e673c4/vupi-0.0.6.tar.gz", hash = "sha256:86a9e546a98a861cb0e67a7fa02e69cdc865b53a4c59067d981f3277e1e673c4" }
+sdist = { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/6084b1473d3ba81c2013052df4c024d2dbad01be79d7e812042bafe57caa49a9/vupi-0.0.7.tar.gz", hash = "sha256:6084b1473d3ba81c2013052df4c024d2dbad01be79d7e812042bafe57caa49a9" }
 wheels = [
-    { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/f1a4ec9c902d44ae569c929f8d947dee521ddd92d264fd8d525f734a21266786/vupi-0.0.6-py3-none-any.whl", hash = "sha256:f1a4ec9c902d44ae569c929f8d947dee521ddd92d264fd8d525f734a21266786" },
+    { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/3da816d9c3da4e77a57a11e070388f30288dd769584f6a608f3dbb8153067c7c/vupi-0.0.7-py3-none-any.whl", hash = "sha256:3da816d9c3da4e77a57a11e070388f30288dd769584f6a608f3dbb8153067c7c" },
 ]
