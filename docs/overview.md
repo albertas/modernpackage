@@ -28,7 +28,7 @@
 
 After cloning and `cd`-ing into the created package directory, developers use:
 
-- **`make check`** — run all code quality gates in sequence: unit tests, ruff lint, ruff format check, mypy, pip-audit, deadcode detection. Primary quality gate; used in CI/CD.
+- **`make check`** — run all code quality gates in sequence: unit tests, ruff lint, mypy, pip-audit, deadcode detection. Primary quality gate; used in CI/CD.
 - **`make fix`** — format code and auto-fix linting issues.
 - **`make test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
 - **`make test-e2e`** — run only tests marked `@pytest.mark.e2e` (reserved for real external calls).
