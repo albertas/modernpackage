@@ -6,11 +6,12 @@
 
 `modernpackage` is a standalone package that, when invoked as `modernpackage <name>` or `mp <name>`, clones itself to a new directory and rewrites all occurrences of "modernpackage" to the given package name. The result is a ready-to-build Python package with:
 
-- Modern tooling: **ruff** (linting, formatting), **mypy** (type checking), **pytest** (testing with parallel execution), **pip-audit** (vulnerability scanning)
-- Single configuration hub via `pyproject.toml` with strict settings (line-length 88, strict mypy, 95% test coverage minimum)
-- Comprehensive test coverage (95%) ensuring all code paths are exercised deterministically and in parallel across all-but-one CPU cores with fully mocked dependencies
-- Development workflow via `Makefile` and `Justfile` for common tasks: `check`, `fix`, `test`, `test-e2e`, `lint`, `format`, `publish`
-- GitHub Actions and GitLab CI integration that enforce quality gates
+- **Modern tooling**: **ruff** (linting, formatting), **mypy** (strict type checking), **pytest** (testing with parallel execution), **pip-audit** (vulnerability scanning), **deadcode** (unused code detection)
+- **Single configuration hub** via `pyproject.toml` with strict settings (line-length 88, strict mypy with full type annotations verified, 95% test coverage minimum)
+- **Comprehensive test coverage** (95% minimum) ensuring all code paths are exercised deterministically and in parallel across all-but-one CPU cores with fully mocked dependencies
+- **Development workflow** via `Makefile` and `Justfile` for common tasks: `check`, `fix`, `test`, `test-e2e`, `lint`, `format`, `typecheck`, `publish`
+- **GitHub Actions and GitLab CI integration** that enforce quality gates
+- **Full type hints** on all public functions with mypy strict mode enabled and passing
 
 ## Documentation Files
 

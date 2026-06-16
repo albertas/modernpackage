@@ -61,7 +61,13 @@ The CLI uses `argparse.ArgumentParser` with the following configuration:
 - **`-v` / `--version`**: optional flag, `action='store_true'`, default `False` — prints package version
 - **`package_name`**: optional positional argument, `nargs='?'`, validated via `type=check_alpha_numeric()` — name of package to initialize
 
-The parser is created and invoked in `parse_args()`, which returns an `argparse.Namespace` object.
+The parser is created and invoked in `parse_args()`, which returns an `argparse.Namespace` object with type-annotated fields:
+- `version: bool` — whether the `--version` flag was provided
+- `package_name: str | None` — the package name (if provided), or `None` if omitted
+
+### Type Safety
+
+The `parse_args()` function is fully type-annotated (`def parse_args() -> Namespace`) and verified by mypy in strict mode. All argument validation and type checking is enforced at parse time.
 
 ## Validation
 

@@ -1,10 +1,8 @@
 # BACKLOG.md Format
 
+[overview.md](overview.md)
+
 The [`BACKLOG.md`](../BACKLOG.md) file tracks planned work using a hierarchical task structure with progress markers and category tags.
-
-## Overview
-
-[Back to overview](overview.md)
 
 ## Task Structure
 
@@ -57,3 +55,5 @@ Tasks may include category tags in square brackets to group related work:
 ## Current Status
 
 See [`BACKLOG.md`](../BACKLOG.md) for the current task list and progress toward code quality milestones.
+
+Code quality audits (marked with `[cq:*]` tags) ensure that the package maintains strict type checking, linting, formatting, test coverage, and code complexity standards. The `[cq:typecheck]` category specifically tracks mypy strict-mode verification—currently passing with no issues found.

@@ -35,14 +35,15 @@ This constant is:
 
 ### `modernpackage/main.py`
 
-The main CLI orchestrator (62 lines) with four functions:
+The main CLI orchestrator (66 lines) with four fully type-annotated functions:
 
 #### `check_alpha_numeric(value: str) -> str`
 
 Validates that a string contains only alphanumeric characters. Used as the `type=` validator in argument parsing.
 
-- **Returns** the input string unchanged if valid
-- **Raises** `ArgumentTypeError('Non-AlphaNumeric package name')` if the string contains non-alphanumeric characters
+- **Parameter**: `value: str` — the input string to validate
+- **Returns**: `str` — the input string unchanged if valid
+- **Raises**: `ArgumentTypeError('Non-AlphaNumeric package name')` if the string contains non-alphanumeric characters
 
 #### `parse_args() -> Namespace`
 
@@ -51,17 +52,20 @@ Parses command-line arguments using `argparse.ArgumentParser`.
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`)
   - `package_name`: optional positional argument (validated via `check_alpha_numeric`)
-- **Returns** an `argparse.Namespace` object with fields `version` and `package_name`
+- **Returns**: `Namespace` — an `argparse.Namespace` object with fields `version` (bool) and `package_name` (str | None)
 
 #### `init_new_package(package_name: str) -> None`
 
 Orchestrates the package initialization flow by cloning and rewriting:
 
-1. Resolves target path: `Path.cwd() / package_name`
-2. Spawns `git clone https://github.com/albertas/modernpackage <path>`
-3. Spawns `make init <package_name>` (cwd: the cloned directory)
-4. Both subprocess calls use `Popen` with `communicate()` to capture output (discarded)
-5. No error handling or return value — silent on failure (current state)
+1. **Parameter**: `package_name: str` — name of the new package to create
+2. **Returns**: `None` — no return value; operates via side effects
+3. **Process**:
+   - Resolves target path: `Path.cwd() / package_name`
+   - Spawns `git clone https://github.com/albertas/modernpackage <path>`
+   - Spawns `make init <package_name>` (cwd: the cloned directory)
+   - Both subprocess calls use `Popen` with `communicate()` to capture output (discarded)
+   - No error handling or explicit return — silent on failure (current state)
 
 The `Makefile init` target (in the cloned repo) performs the actual transformation:
 - Renames all "modernpackage" occurrences to the new package name
@@ -73,10 +77,63 @@ The `Makefile init` target (in the cloned repo) performs the actual transformati
 
 The CLI entry point (orchestrator):
 
-1. Calls `parse_args()` to get user input
-2. **If** `version` flag is set: prints `modernpackage <__version__>` and exits
-3. **Elif** `package_name` is provided: calls `init_new_package(package_name)`
-4. **Else**: silent no-op (no error, no message)
+- **Returns**: `None` — no return value
+- **Flow**:
+  1. Calls `parse_args()` to get user input
+  2. **If** `version` flag is set: prints `modernpackage <__version__>` and exits
+  3. **Elif** `package_name` is provided: calls `init_new_package(package_name)`
+  4. **Else**: silent no-op (no error, no message)
+
+## Type Annotations & Mypy Verification
+
+### Full Type Coverage
+
+All public functions in `modernpackage/main.py` carry complete type annotations:
+
+- **`check_alpha_numeric(value: str) -> str`** — parameter and return types specified
+- **`parse_args() -> Namespace`** — return type specified (no parameters)
+- **`init_new_package(package_name: str) -> None`** — parameter type and return type specified
+- **`main() -> None`** — return type specified (no parameters)
+
+### Mypy Configuration
+
+Mypy is configured in `pyproject.toml` with strict mode enabled:
+
+```ini
+[tool.mypy]
+exclude = ["build", "dist", ".venv"]
+python_version = "3.14"
+strict = true
+pretty = true
+color_output = true
+show_error_codes = true
+warn_return_any = true
+warn_unused_configs = true
+```
+
+Key settings:
+- **`strict = true`** — enforces full type annotations on all functions and enforces strict type compatibility checks
+- **`python_version = "3.14"`** — type checks assume Python 3.14 or later features
+- **`warn_return_any = true`** — warns if any function returns an unannotated `Any` type
+- **`warn_unused_configs = true`** — warns if configuration options are unused
+
+### Verification
+
+The strict type-checking audit is run via `just check-typecheck` (or `just typecheck` for automatic fixing):
+
+```bash
+just check-typecheck  # runs: uv run mypy modernpackage tests
+```
+
+**Current status**: ✅ **All 4 source files pass strict mypy**
+- `modernpackage/__init__.py` — version constant
+- `modernpackage/main.py` — CLI orchestrator with 4 functions
+- `tests/__init__.py` — test package marker
+- `tests/test_main.py` — comprehensive test suite
+
+Result: `Success: no issues found in 4 source files`
+
+This ensures all code paths are covered by type hints and comply with strict type-checking rules.
 
 ## Build & Versioning
 
