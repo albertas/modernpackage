@@ -67,11 +67,14 @@ Orchestrates the package initialization flow by cloning and rewriting:
      - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
      - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
    - **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory) with `stderr=PIPE`
-   - Waits for completion via `communicate()` and captures both stdout and stderr
-   - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'` (unchanged from current behavior)
-   - **If `returncode == 0`**: completes successfully
+   - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
+     - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message, for example:
+       - `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
+     - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
+       - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
+       - **If `returncode == 0`**: completes successfully
 
-Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes.
+Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes. The `just init` missing-command error path is caught at the point of spawning the subprocess, before any execution attempts, and provides a clear, actionable installation instruction.
 
 The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Renames all "modernpackage" occurrences to the new package name
@@ -329,7 +332,9 @@ Both the `git clone` and `just init` subprocess calls capture stderr and include
 
 **Git clone step**: Both stdout and stderr are captured via `Popen(..., stderr=PIPE)` and `communicate()`, which returns a `(stdout, stderr)` tuple. If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'git clone failed with exit code {returncode}: {stderr}'`. The decoded stderr output provides visibility into the root cause (e.g., network errors, invalid URLs, authentication failures). This prevents the function from continuing to the `just init` step when cloning fails.
 
-**Just init step**: Both stdout and stderr are captured via `Popen(..., stderr=PIPE)` and `communicate()`. If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'just init failed with exit code {returncode}: {stderr}'`. The decoded stderr output provides visibility into the root cause (e.g., missing `just` command, rewrite errors, git failures). A failed `just init` leaves the cloned directory in an incomplete state, so the error is caught and reported immediately rather than silently continuing.
+**Just init step**: The `Popen` call for `just init` is wrapped in a `try`/`except FileNotFoundError` block to detect when the `just` command is not installed. If `FileNotFoundError` is raised (indicating the executable cannot be found), a `RuntimeError` is raised with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`. This check occurs before subprocess execution, providing immediate feedback to the user.
+
+If the `Popen` call succeeds but the subprocess exits with a non-zero return code, a `RuntimeError` is raised with the message `'just init failed with exit code {returncode}: {stderr}'`. The decoded stderr output provides visibility into the root cause (e.g., rewrite errors, git failures within the init script). A failed `just init` leaves the cloned directory in an incomplete state, so the error is caught and reported immediately rather than silently continuing.
 
 ### Version drift
 

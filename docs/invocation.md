@@ -129,6 +129,14 @@ just init failed with exit code <code>: <stderr output>
 
 The error message includes the captured stderr output from the failed `just init` command. The command exits with exit code 1 and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
 
+If the `just` command is not installed (detected at subprocess spawn time before `just init` execution), the error is caught in `init_new_package()` and raised as a `RuntimeError`, which is caught in `main()` and printed to stderr with exit code 1:
+
+```
+'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation
+```
+
+The command exits with exit code 1 and the `<package_name>` directory is left in the incomplete state from the successful `git clone`.
+
 All errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users.
 
 ## Argument Parser

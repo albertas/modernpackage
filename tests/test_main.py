@@ -61,6 +61,16 @@ def test_init_new_package_git_clone_failure() -> None:
             init_new_package('mypackage')
 
 
+def test_init_new_package_just_not_installed() -> None:
+    git_clone_mock = MagicMock()
+    git_clone_mock.returncode = 0
+    git_clone_mock.communicate.return_value = (b'', b'')
+    with patch('modernpackage.main.Popen') as popen_mock:
+        popen_mock.side_effect = [git_clone_mock, FileNotFoundError('just not found')]
+        with pytest.raises(RuntimeError, match=r'just.*install'):
+            init_new_package('mypackage')
+
+
 def test_init_new_package_just_init_failure() -> None:
     git_clone_mock = MagicMock()
     git_clone_mock.returncode = 0

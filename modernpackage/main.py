@@ -99,13 +99,20 @@ def init_new_package(package_name: str) -> None:
         message = f'{friendly}\n\n{raw}' if friendly else raw
         raise RuntimeError(message)
 
-    pipe = Popen(  # noqa: S603
-        ['just', 'init', package_name],  # noqa: S607
-        stdin=PIPE,
-        stdout=PIPE,
-        stderr=PIPE,
-        cwd=new_package_path,
-    )
+    try:
+        pipe = Popen(  # noqa: S603
+            ['just', 'init', package_name],  # noqa: S607
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=PIPE,
+            cwd=new_package_path,
+        )
+    except FileNotFoundError as error:
+        message = (
+            "'just' command not found — install it to initialize the package."
+            ' See https://github.com/casey/just#installation'
+        )
+        raise RuntimeError(message) from error
     _stdout, stderr = pipe.communicate()
     stderr_text = stderr.decode().strip()
 

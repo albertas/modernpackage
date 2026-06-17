@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V1] Detect when just is not installed and print an actionable message
 - [ ] [V2] Run just check inside the freshly created package
 - [ ] [V2] Report to the user whether the post-scaffold just check passed or failed
 - [ ] [V2] Exit non-zero when just check fails in the generated package
@@ -31,6 +30,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T21] [V1] Detect when just is not installed and print an actionable message
 - [x] [T20] [V1] Map common git clone failures to human-readable, actionable messages (e.g. repository unreachable — check your network)
 - [x] [T19] [V1] Exit with a non-zero status code whenever a scaffolding step fails
 - [x] [T18] [V1] Surface the captured stderr to the user when a step fails
