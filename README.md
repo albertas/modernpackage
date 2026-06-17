@@ -1,16 +1,40 @@
 # modernpackage
-This package allows to quickly initialise new Python package using bleeding edge tools like linters, just run:
-- `pip install modernpackage`
-- `modernpackage <your-package-name>`     # or `$ mp <your-package-name>`
 
-Now you are able to:
-- `cd <your-package-name>`
-- `just check    # To run tests and linters`
-- `just publish  # To publish your new package to PyPi.org to make it accessable to everyone`
+`modernpackage` is a self-replicating CLI scaffolder for new Python packages using a strict, modern toolset.
 
-Add Git remote repository (first create this project on Gitlab) to be able to push changes:
-- `git remote add origin git@gitlab.com:<your-username>/<your-package-name>.git`
-- `git push`
+## Usage
+
+Install and run:
+```bash
+pip install modernpackage
+modernpackage <your-package-name>     # or `mp <your-package-name>`
+```
+
+View the installed version:
+```bash
+modernpackage --version               # or `mp -v`
+```
+
+### Exit Codes
+
+`modernpackage` returns exit code 0 on success (package initialized or version displayed) and exit code 1 on failure (git clone or just init failed). This allows shell scripts and CI/CD pipelines to detect failures.
+
+## After Initialization
+
+Once your new package is created, you can begin development:
+
+```bash
+cd <your-package-name>
+just check    # Run tests and linters
+just fix      # Auto-fix linting and formatting issues
+just publish  # Publish your package to PyPI.org
+```
+
+To push to a Git repository (create the project on GitLab/GitHub first):
+```bash
+git remote add origin git@gitlab.com:<your-username>/<your-package-name>.git
+git push
+```
 
 ## Development
 Commonly used commands for package development:

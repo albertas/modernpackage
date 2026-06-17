@@ -13,8 +13,9 @@ def test_show_version() -> None:
         patch('modernpackage.main.print') as print_mock,
     ):
         argparse_mock().parse_args().version = True
-        main()
+        result = main()
         print_mock.assert_called_once_with(f'modernpackage {__version__}')
+    assert result == 0
 
 
 def test_check_alpha_numeric_valid() -> None:
@@ -74,8 +75,9 @@ def test_main_with_package_name() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = 'mypackage'
-        main()
+        result = main()
     init_mock.assert_called_once_with(package_name='mypackage')
+    assert result == 0
 
 
 def test_main_surfaces_stderr_on_failure() -> None:
@@ -93,6 +95,19 @@ def test_main_surfaces_stderr_on_failure() -> None:
     assert 'boom' in printed
 
 
+def test_main_returns_one_on_failure() -> None:
+    with (
+        patch('modernpackage.main.ArgumentParser') as argparse_mock,
+        patch('modernpackage.main.init_new_package') as init_mock,
+        patch('modernpackage.main.print'),
+    ):
+        argparse_mock().parse_args().version = False
+        argparse_mock().parse_args().package_name = 'mypackage'
+        init_mock.side_effect = RuntimeError('git clone failed with exit code 1: boom')
+        result = main()
+    assert result == 1
+
+
 def test_main_no_args() -> None:
     with (
         patch('modernpackage.main.ArgumentParser') as argparse_mock,
@@ -101,6 +116,7 @@ def test_main_no_args() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = None
-        main()
+        result = main()
     print_mock.assert_not_called()
     init_mock.assert_not_called()
+    assert result == 0

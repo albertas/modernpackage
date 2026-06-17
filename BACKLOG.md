@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V1] Exit with a non-zero status code whenever a scaffolding step fails
 - [ ] [V1] Map common git clone failures to human-readable, actionable messages (e.g. repository unreachable — check your network)
 - [ ] [V1] Detect when just is not installed and print an actionable message
 - [ ] [V2] Run just check inside the freshly created package
@@ -33,6 +32,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T19] [V1] Exit with a non-zero status code whenever a scaffolding step fails
 - [x] [T18] [V1] Surface the captured stderr to the user when a step fails
 - [x] [T17] [V1] Capture stderr from each subprocess call instead of discarding it
 - [x] [T16] [V1] Check the return code of the just init subprocess and treat a non-zero code as a failure

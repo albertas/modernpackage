@@ -67,8 +67,8 @@ def init_new_package(package_name: str) -> None:
         raise RuntimeError(message)
 
 
-def main() -> None:
-    """Return 'Hello world!' or package version if -v option is provided."""
+def main() -> int:
+    """Orchestrate CLI commands; return 0 on success or 1 on scaffolding failure."""
     parsed_args = parse_args()
 
     if parsed_args.version:
@@ -79,3 +79,6 @@ def main() -> None:
             init_new_package(package_name=parsed_args.package_name)
         except RuntimeError as error:
             print(error, file=sys.stderr)  # noqa: T201
+            return 1
+
+    return 0

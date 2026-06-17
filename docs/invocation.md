@@ -12,13 +12,21 @@ Both route to `modernpackage.main:main()`, so they are functionally identical.
 
 ## Command-Line Interface
 
+### Exit Codes
+
+`modernpackage` returns exit codes as follows:
+- **Exit code 0**: successful operation (version printed, package initialized, or no arguments provided)
+- **Exit code 1**: failure in package initialization (git clone or just init failed)
+
+The exit code is reflected in the process exit status, allowing shell scripts and CI/CD pipelines to detect failures.
+
 ### No arguments (no-op)
 
 ```bash
 modernpackage
 ```
 
-Calls `main()` with no arguments. If neither `--version` nor a package name is provided, the function exits silently with no action.
+Calls `main()` with no arguments. If neither `--version` nor a package name is provided, the function exits silently with no action and exit code 0.
 
 ### Version flag
 
@@ -27,7 +35,7 @@ modernpackage --version
 modernpackage -v
 ```
 
-Prints the installed version of `modernpackage` and exits:
+Prints the installed version of `modernpackage` and exits with exit code 0:
 ```
 modernpackage <version>
 ```
@@ -58,7 +66,7 @@ Upon success, a new directory named `<package_name>` is created in the current w
 
 #### Failure path
 
-If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr:
+If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1:
 
 ```
 git clone failed with exit code <code>: <stderr output>
@@ -66,13 +74,13 @@ git clone failed with exit code <code>: <stderr output>
 
 The error message includes the captured stderr output from the failed `git clone` command, providing visibility into the root cause. The command exits without creating the target directory.
 
-If the `just init` step fails after cloning completes (e.g., due to missing `just` command, rewrite errors, or other failures), the error is caught in `main()` and printed to stderr:
+If the `just init` step fails after cloning completes (e.g., due to missing `just` command, rewrite errors, or other failures), the error is caught in `main()` and printed to stderr with exit code 1:
 
 ```
 just init failed with exit code <code>: <stderr output>
 ```
 
-The error message includes the captured stderr output from the failed `just init` command. The command exits and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
+The error message includes the captured stderr output from the failed `just init` command. The command exits with exit code 1 and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
 
 Both errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users.
 

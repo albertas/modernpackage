@@ -77,21 +77,21 @@ The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Renames the package directory (`modernpackage/` → `<name>/`)
 - Reinitializes git (clears `.git`, runs `git init`, commits initial state)
 
-#### `main() -> None`
+#### `main() -> int`
 
 The CLI entry point (orchestrator):
 
-- **Returns**: `None` — no return value
+- **Returns**: `int` — a process exit code (0 for success, 1 for failure)
 - **Flow**:
   1. Calls `parse_args()` to get user input
-  2. **If** `version` flag is set: prints `modernpackage <__version__>` and exits
+  2. **If** `version` flag is set: prints `modernpackage <__version__>` and returns `0`
   3. **Elif** `package_name` is provided:
      - Calls `init_new_package(package_name)` inside a `try`/`except RuntimeError` block
-     - **If** `RuntimeError` is raised: catches it and prints the error message to `sys.stderr` (which includes captured stderr from the failed subprocess)
-     - **If** no error: continues normally
-  4. **Else**: silent no-op (no error, no message)
+     - **If** `RuntimeError` is raised: catches it, prints the error message to `sys.stderr` (which includes captured stderr from the failed subprocess), and returns `1`
+     - **If** no error: returns `0`
+  4. **Else**: silent no-op (no error, no message) and returns `0`
 
-The error handling ensures that subprocess failures (from `git clone` or `just init`) are surfaced to the user as clean, readable messages on stderr instead of Python tracebacks.
+The error handling ensures that subprocess failures (from `git clone` or `just init`) are surfaced to the user as clean, readable messages on stderr instead of Python tracebacks. The returned exit code is translated to the process exit status by the console script wrapper (which calls `sys.exit(main())`), allowing shell scripts and CI/CD pipelines to detect failures properly.
 
 ## Type Annotations & Mypy Verification
 
