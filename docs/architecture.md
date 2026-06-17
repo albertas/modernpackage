@@ -65,7 +65,9 @@ Orchestrates the package initialization flow by cloning and rewriting:
    - Waits for completion via `communicate()` and inspects `returncode`
    - **If `returncode != 0`**: raises `RuntimeError` with message `'git clone failed with exit code {returncode}'`
    - **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory)
-   - The `just init` subprocess call uses `Popen` with `communicate()` to capture output (discarded); no error handling on this step
+   - Waits for completion via `communicate()` and inspects `returncode`
+   - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}'`
+   - **If `returncode == 0`**: completes successfully
 
 The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Renames all "modernpackage" occurrences to the new package name
@@ -294,9 +296,11 @@ This self-replication pattern allows the package to be both a tool and a templat
 
 ### Error handling in `init_new_package()`
 
-**Git clone step**: the `git clone` subprocess now checks the return code after `communicate()`. If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'git clone failed with exit code {returncode}'`. This prevents the function from continuing to the `just init` step when cloning fails.
+Both the `git clone` and `just init` subprocess calls now check the return code after `communicate()`:
 
-**Just init step**: the `just init` subprocess call still discards output with no error checks. Failures (e.g., missing `just` command, rewrite errors) are silent. The user sees no error message and the process continues (future scope).
+**Git clone step**: If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'git clone failed with exit code {returncode}'`. This prevents the function from continuing to the `just init` step when cloning fails.
+
+**Just init step**: If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'just init failed with exit code {returncode}'`. A failed `just init` leaves the cloned directory in an incomplete state, so the error is caught and reported immediately rather than silently continuing.
 
 ### Version drift
 

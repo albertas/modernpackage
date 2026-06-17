@@ -49,7 +49,7 @@ Individual check sub-steps are also available:
 
 ## Key Implementation Details
 
-- **Single-file CLI**: `modernpackage/main.py` handles argument parsing and orchestrates `git clone` + `just init`. The `git clone` step checks for errors (non-zero exit codes) and raises `RuntimeError` on failure.
+- **Single-file CLI**: `modernpackage/main.py` handles argument parsing and orchestrates `git clone` + `just init`. Both the `git clone` and `just init` steps check for errors (non-zero exit codes) and raise `RuntimeError` on failure.
 - **Package replication**: the `just init` recipe uses `git grep + sed` to rename all "modernpackage" occurrences to the new package name, resets version to `0.0.1`, and reinitializes git.
 - **Configuration-as-code**: all tool settings live in `pyproject.toml` (ruff, mypy, pytest, deadcode, pip-audit); the Justfile delegates to them via `uv run`.
 - **Dependency compilation workflow**: `just compile` regenerates all three dependency artifacts in lockstep (`requirements.txt`, `requirements-dev.txt`, `uv.lock`) to ensure they always agree on shared package versions and are upgraded to the latest versions available in the GitLab index.
@@ -58,7 +58,6 @@ Individual check sub-steps are also available:
 ## Known Gaps & Future Work
 
 See [specification.md § Known gaps & divergences](specification.md#known-gaps--divergences) for:
-- Partial error handling in `init_new_package()` — git clone failures are now caught and raise `RuntimeError`, but `just init` failures are still silently discarded.
 - Version drift between `__init__.py` and published wheels.
 
 See [BACKLOG.md](../BACKLOG.md) for planned improvements: coverage measurement, deterministic tests with pytest-xdist, latest Python/dependency versions, uv-based publishing.

@@ -57,6 +57,10 @@ def init_new_package(package_name: str) -> None:
     )
     pipe.communicate()[0].decode().strip()
 
+    if pipe.returncode != 0:
+        message = f'just init failed with exit code {pipe.returncode}'
+        raise RuntimeError(message)
+
 
 def main() -> None:
     """Return 'Hello world!' or package version if -v option is provided."""

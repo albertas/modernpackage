@@ -1,5 +1,5 @@
 from argparse import ArgumentTypeError
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -49,6 +49,17 @@ def test_init_new_package_git_clone_failure() -> None:
     with patch('modernpackage.main.Popen') as popen_mock:
         popen_mock.return_value.returncode = 1
         with pytest.raises(RuntimeError, match='git clone failed with exit code 1'):
+            init_new_package('mypackage')
+
+
+def test_init_new_package_just_init_failure() -> None:
+    git_clone_mock = MagicMock()
+    git_clone_mock.returncode = 0
+    just_init_mock = MagicMock()
+    just_init_mock.returncode = 1
+    with patch('modernpackage.main.Popen') as popen_mock:
+        popen_mock.side_effect = [git_clone_mock, just_init_mock]
+        with pytest.raises(RuntimeError, match='just init failed with exit code 1'):
             init_new_package('mypackage')
 
 

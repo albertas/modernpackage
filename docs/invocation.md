@@ -64,7 +64,15 @@ If the `git clone` step fails (e.g., due to network errors, invalid URL, or repo
 RuntimeError: git clone failed with exit code <code>
 ```
 
-The command exits without creating the target directory. If the `just init` step fails after cloning completes, the error is currently silent (the `<package_name>` directory is left in an incomplete state).
+The command exits without creating the target directory.
+
+If the `just init` step fails after cloning completes (e.g., due to missing `just` command, rewrite errors, or other failures), a `RuntimeError` is raised:
+
+```
+RuntimeError: just init failed with exit code <code>
+```
+
+The command exits and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
 
 ## Argument Parser
 
