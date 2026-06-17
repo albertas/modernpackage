@@ -1,0 +1,49 @@
+{
+  "stories": [
+    {"vision_id": "V1", "title": "Check the return code of the git clone subprocess and treat a non-zero code as a failure"},
+    {"vision_id": "V1", "title": "Check the return code of the just init subprocess and treat a non-zero code as a failure"},
+    {"vision_id": "V1", "title": "Capture stderr from each subprocess call instead of discarding it"},
+    {"vision_id": "V1", "title": "Surface the captured stderr to the user when a step fails"},
+    {"vision_id": "V1", "title": "Exit with a non-zero status code whenever a scaffolding step fails"},
+    {"vision_id": "V1", "title": "Map common git clone failures to human-readable, actionable messages (e.g. repository unreachable — check your network)"},
+    {"vision_id": "V1", "title": "Detect when just is not installed and print an actionable message"},
+
+    {"vision_id": "V2", "title": "Add a --verify CLI flag to the argument parser"},
+    {"vision_id": "V2", "title": "Run just check inside the freshly created package when --verify is set"},
+    {"vision_id": "V2", "title": "Report to the user whether the post-scaffold just check passed or failed"},
+    {"vision_id": "V2", "title": "Exit non-zero when --verify is set and just check fails in the generated package"},
+    {"vision_id": "V2", "title": "Add an e2e test that scaffolds a package and asserts just check passes"},
+
+    {"vision_id": "V3", "title": "Relax name validation to accept valid PEP 508 / PyPI distribution names including hyphens and underscores"},
+    {"vision_id": "V3", "title": "Normalize an accepted distribution name into an import-safe module name"},
+    {"vision_id": "V3", "title": "Reject names that collide with Python standard-library module names"},
+    {"vision_id": "V3", "title": "Reject names already taken by an existing PyPI package"},
+    {"vision_id": "V3", "title": "Return a precise explanation of why a package name was refused"},
+
+    {"vision_id": "V4", "title": "Add CLI flags for author name, email, description, license, and repository URL"},
+    {"vision_id": "V4", "title": "Read author metadata defaults from environment variables"},
+    {"vision_id": "V4", "title": "Read author name and email from the user's git config (user.name / user.email)"},
+    {"vision_id": "V4", "title": "Support a per-user config file supplying default metadata values"},
+    {"vision_id": "V4", "title": "Populate pyproject.toml author, description, license, and repository URL during init"},
+    {"vision_id": "V4", "title": "Define a precedence order for metadata sources (CLI flags > env vars > git config > config file)"},
+
+    {"vision_id": "V5", "title": "Verify git, just, and uv are on PATH before scaffolding"},
+    {"vision_id": "V5", "title": "Refuse to proceed when the target directory already exists"},
+    {"vision_id": "V5", "title": "Check that the GitHub template remote is reachable before cloning"},
+    {"vision_id": "V5", "title": "Print a concise preflight checklist of all environment checks"},
+    {"vision_id": "V5", "title": "Abort early with a specific remediation hint when any precondition fails"},
+
+    {"vision_id": "V6", "title": "Add a --dry-run flag that previews what would be created and renamed without touching disk"},
+    {"vision_id": "V6", "title": "Print a post-init summary with the created path, package name, and reset version"},
+    {"vision_id": "V6", "title": "Print the next commands to run (cd <name> && just check) after a successful run"},
+
+    {"vision_id": "V7", "title": "Bundle the template inside the published wheel"},
+    {"vision_id": "V7", "title": "Cache the last successful clone for reuse"},
+    {"vision_id": "V7", "title": "Add an --offline flag that forces use of the vendored template copy"},
+    {"vision_id": "V7", "title": "Automatically fall back to the vendored template when the network is unavailable"},
+
+    {"vision_id": "V8", "title": "Add a --ref <tag> flag that pins scaffolding to a specific template ref"},
+    {"vision_id": "V8", "title": "Make modernpackage --version report the template and tooling versions it will produce"},
+    {"vision_id": "V8", "title": "Warn when the installed CLI is older than the latest published release"}
+  ]
+}

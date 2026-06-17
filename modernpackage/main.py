@@ -45,6 +45,10 @@ def init_new_package(package_name: str) -> None:
     )
     pipe.communicate()[0]
 
+    if pipe.returncode != 0:
+        message = f'git clone failed with exit code {pipe.returncode}'
+        raise RuntimeError(message)
+
     pipe = Popen(  # noqa: S603
         ['just', 'init', package_name],  # noqa: S607
         stdin=PIPE,

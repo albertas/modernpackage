@@ -40,8 +40,16 @@ def test_parse_args_package_name() -> None:
 
 def test_init_new_package() -> None:
     with patch('modernpackage.main.Popen') as popen_mock:
+        popen_mock.return_value.returncode = 0
         init_new_package('mypackage')
-    assert popen_mock.called
+    assert popen_mock.call_count == 2  # noqa: PLR2004
+
+
+def test_init_new_package_git_clone_failure() -> None:
+    with patch('modernpackage.main.Popen') as popen_mock:
+        popen_mock.return_value.returncode = 1
+        with pytest.raises(RuntimeError, match='git clone failed with exit code 1'):
+            init_new_package('mypackage')
 
 
 def test_main_with_package_name() -> None:

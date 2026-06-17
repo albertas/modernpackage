@@ -1,0 +1,44 @@
+{
+  "ideas": [
+    {
+      "title": "Fail-loud scaffolding with actionable errors",
+      "description": "Make init_new_package() check the return code of both `git clone` and `just init`, surface captured stderr to the user, and exit non-zero on failure. Replace the current silent discard of subprocess output with clear, human-readable messages (e.g. 'git clone failed: repository unreachable — check your network' or 'just is not installed').",
+      "capability_gap": "Today cloning/initialization failures are silently swallowed: the user gets no error, no exit code, and a half-created or missing directory. The maintainer cannot tell success from failure in a script or CI, which breaks the 'one command to a buildable package' promise."
+    },
+    {
+      "title": "Preflight environment checks before cloning",
+      "description": "Before doing any work, verify required tooling and connectivity: `git`, `just`, and `uv` are on PATH, the target directory does not already exist (refuse to overwrite), and the GitHub remote is reachable. Print a concise checklist and abort early with a specific remediation hint if any precondition fails.",
+      "capability_gap": "The tool assumes a perfectly provisioned machine and reachable network. The persona starts packages on fresh laptops and CI runners where `just`/`uv` may be missing or there's no network — currently this produces a confusing crash or empty directory rather than a clear 'install X first' message."
+    },
+    {
+      "title": "Offline / vendored template mode",
+      "description": "Bundle the template inside the published wheel (or cache the last successful clone) so `modernpackage <name>` can scaffold without ever contacting GitHub. Add a `--offline` flag, and fall back to the vendored copy automatically when the network is unavailable.",
+      "capability_gap": "Scaffolding is hard-wired to a live `git clone` from github.com. On airplanes, locked-down corporate networks, or behind the private GitLab index, the persona cannot create a new package at all — the core workflow has a hard network dependency it doesn't need."
+    },
+    {
+      "title": "Dry-run and post-init summary output",
+      "description": "Add a `--dry-run` flag that prints exactly what would be created/renamed without touching disk, and on a real run print a short summary at the end: created path, package name, reset version, and the next commands to run (`cd <name> && just check`). Replace the current silent no-op/silent-success behavior.",
+      "capability_gap": "The tool runs almost entirely silently — no progress, no confirmation, no 'what next'. The persona has no way to preview a destructive scaffold or to know it succeeded and where to go next without manually inspecting the filesystem."
+    },
+    {
+      "title": "Richer, validated package naming",
+      "description": "Relax the strict isalnum() rule to accept valid PEP 508 / PyPI distribution names (hyphens and underscores), normalize them to a valid import-safe module name, and reject names that collide with stdlib modules or already-taken PyPI packages. Give a precise error explaining why a name was rejected.",
+      "capability_gap": "Real package names routinely contain hyphens/underscores (e.g. `my-cool-lib`), but the validator rejects anything non-alphanumeric with a generic message. The persona is forced into awkward run-together names and gets no guidance toward a valid, non-conflicting choice."
+    },
+    {
+      "title": "Configurable author/metadata seeding",
+      "description": "On init, populate pyproject.toml author name/email, description, license, and initial repo URL from CLI flags, environment, or git config (user.name/user.email) instead of leaving template placeholders. Optionally read defaults from a per-user config file.",
+      "capability_gap": "Every generated package still carries template metadata that the maintainer must hand-edit before publishing. The 'idea to publishable package in one command' goal breaks down at the metadata step, which is repeated boilerplate for a solo maintainer who spins up packages often."
+    },
+    {
+      "title": "Self-update / version-pinned templating",
+      "description": "Let the user pin which template ref to scaffold from (`--ref <tag>`), and have `modernpackage --version` also report the template/tooling versions it will produce. Add a check that warns when the installed CLI is older than the latest published release.",
+      "capability_gap": "There is no way to control or even see which version of the toolchain a new package inherits, and known version drift (0.0.8 vs 0.0.9) means the persona can't guarantee that every spawned project starts at the same, current quality bar."
+    },
+    {
+      "title": "End-to-end smoke test of the generated package",
+      "description": "Add an optional `--verify` step (and an e2e test) that, after scaffolding, runs `just check` inside the new package and reports whether it passes. This proves the produced package is immediately buildable, lint-clean, and type-checked before handing control back to the user.",
+      "capability_gap": "Nothing today actually confirms that a freshly generated package passes its own quality gates — the test suite only covers the --version branch. The persona's whole value proposition (never debug a misconfigured day-one project) is currently unverified end-to-end."
+    }
+  ]
+}

@@ -48,11 +48,23 @@ usage: modernpackage [-v] [package_name]
 modernpackage: error: argument package_name: Non-AlphaNumeric package name
 ```
 
+#### Success path
+
 Upon success, a new directory named `<package_name>` is created in the current working directory, containing a complete, ready-to-use Python package with:
 - All source files cloned from `https://github.com/albertas/modernpackage`
 - All occurrences of "modernpackage" renamed to the new package name
 - Version reset to `0.0.1`
 - Git repository reinitialized
+
+#### Failure path
+
+If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), a `RuntimeError` is raised:
+
+```
+RuntimeError: git clone failed with exit code <code>
+```
+
+The command exits without creating the target directory. If the `just init` step fails after cloning completes, the error is currently silent (the `<package_name>` directory is left in an incomplete state).
 
 ## Argument Parser
 

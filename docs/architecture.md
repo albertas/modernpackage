@@ -61,10 +61,11 @@ Orchestrates the package initialization flow by cloning and rewriting:
 2. **Returns**: `None` — no return value; operates via side effects
 3. **Process**:
    - Resolves target path: `Path.cwd() / package_name`
-   - Spawns `git clone https://github.com/albertas/modernpackage <path>`
-   - Spawns `just init <package_name>` (cwd: the cloned directory)
-   - Both subprocess calls use `Popen` with `communicate()` to capture output (discarded)
-   - No error handling or explicit return — silent on failure (current state)
+   - Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen`
+   - Waits for completion via `communicate()` and inspects `returncode`
+   - **If `returncode != 0`**: raises `RuntimeError` with message `'git clone failed with exit code {returncode}'`
+   - **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory)
+   - The `just init` subprocess call uses `Popen` with `communicate()` to capture output (discarded); no error handling on this step
 
 The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Renames all "modernpackage" occurrences to the new package name
@@ -291,11 +292,11 @@ This self-replication pattern allows the package to be both a tool and a templat
 
 ## Known Gaps & Deviations
 
-### No error handling in `init_new_package()`
+### Error handling in `init_new_package()`
 
-Both `git clone` and `just init` subprocess calls discard output with no error checks. Failures (e.g., network errors, missing `just` command) are silent. The user sees no error message and the process continues.
+**Git clone step**: the `git clone` subprocess now checks the return code after `communicate()`. If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'git clone failed with exit code {returncode}'`. This prevents the function from continuing to the `just init` step when cloning fails.
 
-**Plan**: future phases may add error handling and user feedback, but it is not in scope for the current coverage goal.
+**Just init step**: the `just init` subprocess call still discards output with no error checks. Failures (e.g., missing `just` command, rewrite errors) are silent. The user sees no error message and the process continues (future scope).
 
 ### Version drift
 

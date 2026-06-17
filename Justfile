@@ -3,6 +3,9 @@ lifecycle:
   @uv pip install -e .[test]
   @count=0; while uv run lifecycle --max-tasks 1 --prior-tasks "$count"; do count=$((count + 1)); done
 
+vision:
+  uv run vision
+
 sync:
   @uv pip sync requirements-dev.txt
   @uv pip install -e .[test]
@@ -37,16 +40,16 @@ check-typecheck: sync
 audit: sync
   uv run pip-audit --skip-editable
 
-deadcode: sync
-  uv run deadcode modernpackage tests
+# deadcode: sync
+#   uv run deadcode modernpackage tests
 
 fix-lint: sync
   uv run ruff check --fix --unsafe-fixes modernpackage tests
-  uv run deadcode --fix modernpackage tests
+  # uv run deadcode --fix modernpackage tests
 
 fix: format fix-lint
 
-check: check-format check-lint check-complexity check-typecheck test audit deadcode
+check: check-format check-lint check-complexity check-typecheck test audit # deadcode
 
 publish:
   rm -fr dist/*

@@ -19,7 +19,7 @@ boolean-py==5.0
     # via license-expression
 cachecontrol==0.14.4
     # via pip-audit
-certifi==2026.5.20
+certifi==2026.6.17
     # via
     #   httpcore
     #   httpx
@@ -28,7 +28,7 @@ cffi==2.0.0
     # via cryptography
 charset-normalizer==3.4.7
     # via requests
-claude-agent-sdk==0.2.102
+claude-agent-sdk==0.2.103
     # via vupi
 click==8.4.1
     # via uvicorn
@@ -36,7 +36,7 @@ coverage==7.14.1
     # via pytest-cov
 cryptography==49.0.0
     # via pyjwt
-cyclonedx-python-lib==11.10.0
+cyclonedx-python-lib==11.11.0
     # via pip-audit
 deadcode==2.4.1
     # via modernpackage (pyproject.toml)
@@ -75,7 +75,7 @@ license-expression==30.4.4
     # via cyclonedx-python-lib
 markdown-it-py==4.2.0
     # via rich
-mcp==1.27.2
+mcp==1.28.0
     # via claude-agent-sdk
 mdurl==0.1.2
     # via markdown-it-py
@@ -194,5 +194,5 @@ urllib3==2.7.0
     # via requests
 uvicorn==0.49.0
     # via mcp
-vupi==0.0.7
+vupi==0.0.8
     # via modernpackage (pyproject.toml)

@@ -1,5 +1,42 @@
 # ToDo
+
+- [ ] [V1] Check the return code of the just init subprocess and treat a non-zero code as a failure
+- [ ] [V1] Capture stderr from each subprocess call instead of discarding it
+- [ ] [V1] Surface the captured stderr to the user when a step fails
+- [ ] [V1] Exit with a non-zero status code whenever a scaffolding step fails
+- [ ] [V1] Map common git clone failures to human-readable, actionable messages (e.g. repository unreachable — check your network)
+- [ ] [V1] Detect when just is not installed and print an actionable message
+- [ ] [V2] Run just check inside the freshly created package
+- [ ] [V2] Report to the user whether the post-scaffold just check passed or failed
+- [ ] [V2] Exit non-zero when just check fails in the generated package
+- [ ] [V2] Add an e2e test that scaffolds a package and asserts just check passes
+- [ ] [V3] Relax name validation to accept valid PEP 508 / PyPI distribution names including hyphens and underscores
+- [ ] [V3] Normalize an accepted distribution name into an import-safe module name
+- [ ] [V3] Reject names that collide with Python standard-library module names
+- [ ] [V3] Return a precise explanation of why a package name was refused
+- [ ] [V4] Add CLI flags for author name, email, description, license, and repository URL
+- [ ] [V4] Read author metadata defaults from environment variables
+- [ ] [V4] Read author name and email from the user's git config (user.name / user.email)
+- [ ] [V4] Support a per-user config file supplying default metadata values
+- [ ] [V4] Populate pyproject.toml author, description, license, and repository URL during init
+- [ ] [V4] Define a precedence order for metadata sources (CLI flags > env vars > git config > config file)
+- [ ] [V5] Verify git, just, and uv are on PATH before scaffolding
+- [ ] [V5] Refuse to proceed when the target directory already exists
+- [ ] [V5] Check that the GitHub template remote is reachable before cloning
+- [ ] [V5] Print a concise preflight checklist of all environment checks
+- [ ] [V5] Abort early with a specific remediation hint when any precondition fails
+- [ ] [V6] Add a --dry-run flag that previews what would be created and renamed without touching disk
+- [ ] [V6] Print a post-init summary with the created path, package name, and reset version
+- [ ] [V6] Print the next commands to run (cd <name> && just check) after a successful run
+- [ ] [V7] Bundle the template inside the published wheel
+- [ ] [V7] Cache the last successful clone for reuse
+- [ ] [V8] Add a --ref <tag> flag that pins scaffolding to a specific template ref
+- [ ] [V8] Make modernpackage --version report the template and tooling versions it will produce
+- [ ] [V8] Warn when the installed CLI is older than the latest published release
+- [ ] Remove scaffolding/initialization related code programatically from the resulting project 
+
 # Done
+- [x] [T15] [V1] Check the return code of the git clone subprocess and treat a non-zero code as a failure
 - [x] [T14] Merge Makefile and Justfiles: move Makefile capabilities to Justfile and remove Makefile.
 - [x] [T13] Use uv for publishing package instead of hatch
 - [x] Ensure code quality [cq:ensure]
