@@ -1,5 +1,6 @@
 """Example package configuration using bleeding edge toolset."""
 
+import sys
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from pathlib import Path
 from subprocess import PIPE, Popen
@@ -74,4 +75,7 @@ def main() -> None:
         print(f'modernpackage {__version__}')  # noqa: T201
 
     elif parsed_args.package_name:
-        init_new_package(package_name=parsed_args.package_name)
+        try:
+            init_new_package(package_name=parsed_args.package_name)
+        except RuntimeError as error:
+            print(error, file=sys.stderr)  # noqa: T201

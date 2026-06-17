@@ -78,6 +78,21 @@ def test_main_with_package_name() -> None:
     init_mock.assert_called_once_with(package_name='mypackage')
 
 
+def test_main_surfaces_stderr_on_failure() -> None:
+    with (
+        patch('modernpackage.main.ArgumentParser') as argparse_mock,
+        patch('modernpackage.main.init_new_package') as init_mock,
+        patch('modernpackage.main.print') as print_mock,
+    ):
+        argparse_mock().parse_args().version = False
+        argparse_mock().parse_args().package_name = 'mypackage'
+        init_mock.side_effect = RuntimeError('git clone failed with exit code 1: boom')
+        main()  # must not raise
+    # error message (with captured stderr) was shown to the user
+    printed = str(print_mock.call_args.args[0])
+    assert 'boom' in printed
+
+
 def test_main_no_args() -> None:
     with (
         patch('modernpackage.main.ArgumentParser') as argparse_mock,

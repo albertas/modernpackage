@@ -58,21 +58,23 @@ Upon success, a new directory named `<package_name>` is created in the current w
 
 #### Failure path
 
-If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), a `RuntimeError` is raised:
+If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr:
 
 ```
-RuntimeError: git clone failed with exit code <code>: <stderr output>
+git clone failed with exit code <code>: <stderr output>
 ```
 
 The error message includes the captured stderr output from the failed `git clone` command, providing visibility into the root cause. The command exits without creating the target directory.
 
-If the `just init` step fails after cloning completes (e.g., due to missing `just` command, rewrite errors, or other failures), a `RuntimeError` is raised:
+If the `just init` step fails after cloning completes (e.g., due to missing `just` command, rewrite errors, or other failures), the error is caught in `main()` and printed to stderr:
 
 ```
-RuntimeError: just init failed with exit code <code>: <stderr output>
+just init failed with exit code <code>: <stderr output>
 ```
 
 The error message includes the captured stderr output from the failed `just init` command. The command exits and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
+
+Both errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users.
 
 ## Argument Parser
 

@@ -34,7 +34,7 @@ This constant is:
 
 ### `modernpackage/main.py`
 
-The main CLI orchestrator (66 lines) with four fully type-annotated functions:
+The main CLI orchestrator with four fully type-annotated functions:
 
 #### `check_alpha_numeric(value: str) -> str`
 
@@ -85,8 +85,13 @@ The CLI entry point (orchestrator):
 - **Flow**:
   1. Calls `parse_args()` to get user input
   2. **If** `version` flag is set: prints `modernpackage <__version__>` and exits
-  3. **Elif** `package_name` is provided: calls `init_new_package(package_name)`
+  3. **Elif** `package_name` is provided:
+     - Calls `init_new_package(package_name)` inside a `try`/`except RuntimeError` block
+     - **If** `RuntimeError` is raised: catches it and prints the error message to `sys.stderr` (which includes captured stderr from the failed subprocess)
+     - **If** no error: continues normally
   4. **Else**: silent no-op (no error, no message)
+
+The error handling ensures that subprocess failures (from `git clone` or `just init`) are surfaced to the user as clean, readable messages on stderr instead of Python tracebacks.
 
 ## Type Annotations & Mypy Verification
 
