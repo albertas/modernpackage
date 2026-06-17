@@ -41,6 +41,7 @@ def test_parse_args_package_name() -> None:
 def test_init_new_package() -> None:
     with patch('modernpackage.main.Popen') as popen_mock:
         popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
     assert popen_mock.call_count == 2  # noqa: PLR2004
 
@@ -48,6 +49,7 @@ def test_init_new_package() -> None:
 def test_init_new_package_git_clone_failure() -> None:
     with patch('modernpackage.main.Popen') as popen_mock:
         popen_mock.return_value.returncode = 1
+        popen_mock.return_value.communicate.return_value = (b'', b'some error')
         with pytest.raises(RuntimeError, match='git clone failed with exit code 1'):
             init_new_package('mypackage')
 
@@ -55,8 +57,10 @@ def test_init_new_package_git_clone_failure() -> None:
 def test_init_new_package_just_init_failure() -> None:
     git_clone_mock = MagicMock()
     git_clone_mock.returncode = 0
+    git_clone_mock.communicate.return_value = (b'', b'')
     just_init_mock = MagicMock()
     just_init_mock.returncode = 1
+    just_init_mock.communicate.return_value = (b'', b'some error')
     with patch('modernpackage.main.Popen') as popen_mock:
         popen_mock.side_effect = [git_clone_mock, just_init_mock]
         with pytest.raises(RuntimeError, match='just init failed with exit code 1'):

@@ -61,18 +61,18 @@ Upon success, a new directory named `<package_name>` is created in the current w
 If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), a `RuntimeError` is raised:
 
 ```
-RuntimeError: git clone failed with exit code <code>
+RuntimeError: git clone failed with exit code <code>: <stderr output>
 ```
 
-The command exits without creating the target directory.
+The error message includes the captured stderr output from the failed `git clone` command, providing visibility into the root cause. The command exits without creating the target directory.
 
 If the `just init` step fails after cloning completes (e.g., due to missing `just` command, rewrite errors, or other failures), a `RuntimeError` is raised:
 
 ```
-RuntimeError: just init failed with exit code <code>
+RuntimeError: just init failed with exit code <code>: <stderr output>
 ```
 
-The command exits and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
+The error message includes the captured stderr output from the failed `just init` command. The command exits and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
 
 ## Argument Parser
 

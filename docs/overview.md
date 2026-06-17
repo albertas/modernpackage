@@ -49,7 +49,7 @@ Individual check sub-steps are also available:
 
 ## Key Implementation Details
 
-- **Single-file CLI**: `modernpackage/main.py` handles argument parsing and orchestrates `git clone` + `just init`. Both the `git clone` and `just init` steps check for errors (non-zero exit codes) and raise `RuntimeError` on failure.
+- **Single-file CLI**: `modernpackage/main.py` handles argument parsing and orchestrates `git clone` + `just init`. Both the `git clone` and `just init` steps capture stderr and check for errors (non-zero exit codes), raising `RuntimeError` with detailed error output on failure (including stderr from the failed subprocess).
 - **Package replication**: the `just init` recipe uses `git grep + sed` to rename all "modernpackage" occurrences to the new package name, resets version to `0.0.1`, and reinitializes git.
 - **Configuration-as-code**: all tool settings live in `pyproject.toml` (ruff, mypy, pytest, deadcode, pip-audit); the Justfile delegates to them via `uv run`.
 - **Dependency compilation workflow**: `just compile` regenerates all three dependency artifacts in lockstep (`requirements.txt`, `requirements-dev.txt`, `uv.lock`) to ensure they always agree on shared package versions and are upgraded to the latest versions available in the GitLab index.

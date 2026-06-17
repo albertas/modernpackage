@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-17 23:07:45
+heart_beat: 2026-06-17 23:13:32
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T16-2026-06-17-v1-check-the-return-code-of-the-just-init-subproce
-    heart_beat: 2026-06-17 23:07:45
+  - artifact_dir: T17-2026-06-17-v1-capture-stderr-from-each-subprocess-call-instea
+    heart_beat: 2026-06-17 23:13:32

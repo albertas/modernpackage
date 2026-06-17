@@ -61,13 +61,15 @@ Orchestrates the package initialization flow by cloning and rewriting:
 2. **Returns**: `None` — no return value; operates via side effects
 3. **Process**:
    - Resolves target path: `Path.cwd() / package_name`
-   - Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen`
-   - Waits for completion via `communicate()` and inspects `returncode`
-   - **If `returncode != 0`**: raises `RuntimeError` with message `'git clone failed with exit code {returncode}'`
-   - **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory)
-   - Waits for completion via `communicate()` and inspects `returncode`
-   - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}'`
+   - Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen` with `stderr=PIPE`
+   - Waits for completion via `communicate()` and captures both stdout and stderr
+   - **If `returncode != 0`**: raises `RuntimeError` with message `'git clone failed with exit code {returncode}: {decoded stderr}'`
+   - **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory) with `stderr=PIPE`
+   - Waits for completion via `communicate()` and captures both stdout and stderr
+   - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
    - **If `returncode == 0`**: completes successfully
+
+Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues).
 
 The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Renames all "modernpackage" occurrences to the new package name
@@ -283,24 +285,24 @@ On a 1-core machine, `nproc --ignore=1` yields 0; `pytest-xdist` treats `-n 0` a
 When a user runs `modernpackage mypackage`:
 
 1. `main()` parses arguments and calls `init_new_package('mypackage')`
-2. `init_new_package()` clones the official repo to `./mypackage`
-3. The `just init` recipe (in the clone) transforms it:
+2. `init_new_package()` clones the official repo to `./mypackage`, capturing stderr for detailed error reporting
+3. On successful clone, the `just init` recipe (in the clone) transforms it:
    - Renames all "modernpackage" → "mypackage"
    - Resets version to `0.0.1`
    - Reinitializes git
 4. Result: a new, independent Python package ready for development
 
-This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup.
+This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup. Both the clone and initialization steps report detailed error output if they fail, making it easy to diagnose issues (network errors, missing dependencies, permission problems, etc.).
 
 ## Known Gaps & Deviations
 
 ### Error handling in `init_new_package()`
 
-Both the `git clone` and `just init` subprocess calls now check the return code after `communicate()`:
+Both the `git clone` and `just init` subprocess calls capture stderr and include it in error messages:
 
-**Git clone step**: If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'git clone failed with exit code {returncode}'`. This prevents the function from continuing to the `just init` step when cloning fails.
+**Git clone step**: Both stdout and stderr are captured via `Popen(..., stderr=PIPE)` and `communicate()`, which returns a `(stdout, stderr)` tuple. If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'git clone failed with exit code {returncode}: {stderr}'`. The decoded stderr output provides visibility into the root cause (e.g., network errors, invalid URLs, authentication failures). This prevents the function from continuing to the `just init` step when cloning fails.
 
-**Just init step**: If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'just init failed with exit code {returncode}'`. A failed `just init` leaves the cloned directory in an incomplete state, so the error is caught and reported immediately rather than silently continuing.
+**Just init step**: Both stdout and stderr are captured via `Popen(..., stderr=PIPE)` and `communicate()`. If the return code is non-zero (indicating failure), a `RuntimeError` is raised with the message `'just init failed with exit code {returncode}: {stderr}'`. The decoded stderr output provides visibility into the root cause (e.g., missing `just` command, rewrite errors, git failures). A failed `just init` leaves the cloned directory in an incomplete state, so the error is caught and reported immediately rather than silently continuing.
 
 ### Version drift
 

@@ -42,23 +42,27 @@ def init_new_package(package_name: str) -> None:
         ['git', 'clone', 'https://github.com/albertas/modernpackage', new_package_path],  # noqa: S607
         stdin=PIPE,
         stdout=PIPE,
+        stderr=PIPE,
     )
-    pipe.communicate()[0]
+    _stdout, stderr = pipe.communicate()
+    stderr_text = stderr.decode().strip()
 
     if pipe.returncode != 0:
-        message = f'git clone failed with exit code {pipe.returncode}'
+        message = f'git clone failed with exit code {pipe.returncode}: {stderr_text}'
         raise RuntimeError(message)
 
     pipe = Popen(  # noqa: S603
         ['just', 'init', package_name],  # noqa: S607
         stdin=PIPE,
         stdout=PIPE,
+        stderr=PIPE,
         cwd=new_package_path,
     )
-    pipe.communicate()[0].decode().strip()
+    _stdout, stderr = pipe.communicate()
+    stderr_text = stderr.decode().strip()
 
     if pipe.returncode != 0:
-        message = f'just init failed with exit code {pipe.returncode}'
+        message = f'just init failed with exit code {pipe.returncode}: {stderr_text}'
         raise RuntimeError(message)
 
 
