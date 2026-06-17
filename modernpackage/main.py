@@ -1,11 +1,56 @@
 """Example package configuration using bleeding edge toolset."""
 
+import re
 import sys
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from pathlib import Path
 from subprocess import PIPE, Popen
 
 from modernpackage import __version__
+
+# Ordered most-specific first so that a more precise pattern wins over a broad one.
+_GIT_CLONE_ERROR_MESSAGES: list[tuple[re.Pattern[str], str]] = [
+    # Network connectivity failures
+    (
+        re.compile(
+            r'could not resolve host|could not read from remote'
+            r'|failed to connect|connection timed out|network is unreachable'
+        ),
+        'repository unreachable — check your network connection',
+    ),
+    # Repository not found on the remote (git may insert the URL between words)
+    (
+        re.compile(r'repository.*not found|remote: not found|does not exist'),
+        'template repository not found — it may have moved or been removed',
+    ),
+    # SSH / credential authentication errors (must precede broad "permission denied")
+    (
+        re.compile(
+            r'permission denied \(publickey\)|authentication failed'
+            r'|could not read username'
+        ),
+        'authentication failed — check your git credentials or access rights',
+    ),
+    # Destination directory already occupied
+    (
+        re.compile(r'already exists and is not an empty directory'),
+        'destination directory already exists — choose a different package name',
+    ),
+    # Filesystem permission / write errors (broad, intentionally last)
+    (
+        re.compile(r'permission denied|could not create|unable to create'),
+        'cannot write to the destination directory — check filesystem permissions',
+    ),
+]
+
+
+def humanize_git_clone_error(stderr_text: str) -> str | None:
+    """Return the first friendly message for a known git clone failure, or None."""
+    lowercased = stderr_text.lower()
+    for pattern, message in _GIT_CLONE_ERROR_MESSAGES:
+        if pattern.search(lowercased):
+            return message
+    return None
 
 
 def check_alpha_numeric(value: str) -> str:
@@ -49,7 +94,9 @@ def init_new_package(package_name: str) -> None:
     stderr_text = stderr.decode().strip()
 
     if pipe.returncode != 0:
-        message = f'git clone failed with exit code {pipe.returncode}: {stderr_text}'
+        raw = f'git clone failed with exit code {pipe.returncode}: {stderr_text}'
+        friendly = humanize_git_clone_error(stderr_text)
+        message = f'{friendly}\n\n{raw}' if friendly else raw
         raise RuntimeError(message)
 
     pipe = Popen(  # noqa: S603

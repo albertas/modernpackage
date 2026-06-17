@@ -4,7 +4,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from modernpackage import __version__
-from modernpackage.main import check_alpha_numeric, init_new_package, main, parse_args
+from modernpackage.main import (
+    check_alpha_numeric,
+    humanize_git_clone_error,
+    init_new_package,
+    main,
+    parse_args,
+)
 
 
 def test_show_version() -> None:
@@ -120,3 +126,54 @@ def test_main_no_args() -> None:
     print_mock.assert_not_called()
     init_mock.assert_not_called()
     assert result == 0
+
+
+def test_humanize_git_clone_error_network() -> None:
+    message = humanize_git_clone_error('fatal: Could not resolve host: github.com')
+    assert message == 'repository unreachable — check your network connection'
+
+
+def test_humanize_git_clone_error_repo_not_found() -> None:
+    message = humanize_git_clone_error(
+        "fatal: repository 'https://github.com/x' not found"
+    )
+    assert (
+        message == 'template repository not found — it may have moved or been removed'
+    )
+
+
+def test_humanize_git_clone_error_auth() -> None:
+    message = humanize_git_clone_error('fatal: Permission denied (publickey).')
+    assert (
+        message == 'authentication failed — check your git credentials or access rights'
+    )
+
+
+def test_humanize_git_clone_error_directory_exists() -> None:
+    message = humanize_git_clone_error(
+        "fatal: destination path 'mypkg' already exists and is not an empty directory."
+    )
+    assert (
+        message
+        == 'destination directory already exists — choose a different package name'
+    )
+
+
+def test_humanize_git_clone_error_unknown_returns_none() -> None:
+    message = humanize_git_clone_error('fatal: some completely unrecognized error')
+    assert message is None
+
+
+def test_init_new_package_git_clone_network_failure() -> None:
+    with patch('modernpackage.main.Popen') as popen_mock:
+        popen_mock.return_value.returncode = 1
+        popen_mock.return_value.communicate.return_value = (
+            b'',
+            b'fatal: Could not resolve host: github.com',
+        )
+        with pytest.raises(RuntimeError) as exc_info:
+            init_new_package('mypackage')
+    error_message = str(exc_info.value)
+    assert 'check your network' in error_message
+    assert 'git clone failed with exit code 1' in error_message
+    assert 'Could not resolve host' in error_message

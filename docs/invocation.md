@@ -66,13 +66,60 @@ Upon success, a new directory named `<package_name>` is created in the current w
 
 #### Failure path
 
-If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1:
+If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1.
+
+For common failure modes, a friendly, actionable message is displayed first, followed by the raw stderr for diagnostics:
+
+```
+<friendly message>
+
+git clone failed with exit code <code>: <stderr output>
+```
+
+**Common failure messages:**
+
+- **Network unreachable**: 
+  ```
+  repository unreachable — check your network connection
+
+  git clone failed with exit code 1: fatal: unable to access 'https://github.com/albertas/modernpackage/': Could not resolve host: github.com
+  ```
+
+- **Repository not found**:
+  ```
+  template repository not found — it may have moved or been removed
+
+  git clone failed with exit code 1: fatal: repository 'https://github.com/albertas/modernpackage' not found
+  ```
+
+- **Authentication failed**:
+  ```
+  authentication failed — check your git credentials or access rights
+
+  git clone failed with exit code 1: fatal: could not read Username for 'https://github.com': terminal prompts disabled
+  ```
+
+- **Destination directory exists**:
+  ```
+  destination directory already exists — choose a different package name
+
+  git clone failed with exit code 128: fatal: destination path already exists and is not an empty directory.
+  ```
+
+- **Filesystem permission denied**:
+  ```
+  cannot write to the destination directory — check filesystem permissions
+
+  git clone failed with exit code 1: fatal: could not create work tree dir 'mypackage': Permission denied
+  ```
+
+For unknown errors (patterns that don't match any friendly message), the raw error output is displayed:
 
 ```
 git clone failed with exit code <code>: <stderr output>
 ```
 
-The error message includes the captured stderr output from the failed `git clone` command, providing visibility into the root cause. The command exits without creating the target directory.
+The command exits without creating the target directory when `git clone` fails.
 
 If the `just init` step fails after cloning completes (e.g., due to missing `just` command, rewrite errors, or other failures), the error is caught in `main()` and printed to stderr with exit code 1:
 
@@ -82,7 +129,7 @@ just init failed with exit code <code>: <stderr output>
 
 The error message includes the captured stderr output from the failed `just init` command. The command exits with exit code 1 and the `<package_name>` directory is left in an incomplete state (the cloned files are present, but the transformation to the new package name was not completed).
 
-Both errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users.
+All errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users.
 
 ## Argument Parser
 

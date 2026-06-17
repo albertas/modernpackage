@@ -63,19 +63,41 @@ Orchestrates the package initialization flow by cloning and rewriting:
    - Resolves target path: `Path.cwd() / package_name`
    - Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen` with `stderr=PIPE`
    - Waits for completion via `communicate()` and captures both stdout and stderr
-   - **If `returncode != 0`**: raises `RuntimeError` with message `'git clone failed with exit code {returncode}: {decoded stderr}'`
+   - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:
+     - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
+     - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
    - **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory) with `stderr=PIPE`
    - Waits for completion via `communicate()` and captures both stdout and stderr
-   - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
+   - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'` (unchanged from current behavior)
    - **If `returncode == 0`**: completes successfully
 
-Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues).
+Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes.
 
 The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Renames all "modernpackage" occurrences to the new package name
 - Resets the version to `0.0.1`
 - Renames the package directory (`modernpackage/` → `<name>/`)
 - Reinitializes git (clears `.git`, runs `git init`, commits initial state)
+
+#### `humanize_git_clone_error(stderr_text: str) -> str | None`
+
+A pure helper function that maps common `git clone` failure patterns to human-readable, actionable messages.
+
+- **Parameter**: `stderr_text: str` — the captured stderr output from a failed `git clone` command
+- **Returns**: `str | None` — a friendly error message if a known pattern is found; `None` if no pattern matches
+- **Algorithm**: iterates over an ordered list of compiled regex patterns (matched case-insensitively against the lowercased stderr) and returns the first matching message, or `None` if nothing matches
+
+**Error patterns and friendly messages:**
+
+| Pattern | Friendly Message |
+|---------|------------------|
+| `could not resolve host`, `could not read from remote`, `failed to connect`, `connection timed out`, `network is unreachable` | `repository unreachable — check your network connection` |
+| `repository not found`, `remote: not found`, `does not exist` | `template repository not found — it may have moved or been removed` |
+| `permission denied (publickey)`, `authentication failed`, `could not read username` | `authentication failed — check your git credentials or access rights` |
+| `already exists and is not an empty directory` | `destination directory already exists — choose a different package name` |
+| `permission denied`, `could not create`, `unable to create` | `cannot write to the destination directory — check filesystem permissions` |
+
+Patterns are ordered most-specific first to avoid premature matches. The implementation maintains low cyclomatic complexity (a simple loop over the mapping).
 
 #### `main() -> int`
 

@@ -19,6 +19,8 @@ modernpackage --version               # or `mp -v`
 
 `modernpackage` returns exit code 0 on success (package initialized or version displayed) and exit code 1 on failure (git clone or just init failed). This allows shell scripts and CI/CD pipelines to detect failures.
 
+When `git clone` fails, the error message is enhanced with a friendly, actionable explanation of common failure modes (e.g., "repository unreachable — check your network connection" for network errors). The raw stderr is included for diagnostics. Unknown errors fall back to the raw error output.
+
 ## After Initialization
 
 Once your new package is created, you can begin development:
