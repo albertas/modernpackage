@@ -68,6 +68,15 @@ _REMOTE_REACHABILITY_TIMEOUT_SECONDS: int = 10
 
 Passed as the `timeout=` parameter to `subprocess.run()` in `_verify_template_remote_reachable()`. If the probe does not complete within this timeout, a `TimeoutExpired` exception is caught and converted to a friendly error message. The timeout is a constant (not a CLI flag) to avoid unrequested configurability while still providing a reasonable bound on hung connections.
 
+**`_PREFLIGHT_HEADER: str`**
+
+The header line printed at the start of the preflight checklist:
+```python
+_PREFLIGHT_HEADER: str = 'Preflight checks:'
+```
+
+Printed to stdout by `_run_preflight_checks()` before any check lines, establishing the section heading for the checklist.
+
 **`_PACKAGE_NAME_RE: re.Pattern[str]`**
 
 Compiled regex pattern for PEP 508 / PyPI distribution names:
@@ -285,6 +294,92 @@ A private helper that verifies the template repository is reachable before attem
 - Uses `subprocess.run(check=False, capture_output=True, text=True)` (the existing module's probe idiom, per `_git_config_default()`) rather than `Popen`, keeping the `Popen` pipeline and test assertions unchanged
 - Bounded by `_REMOTE_REACHABILITY_TIMEOUT_SECONDS` to prevent hung DNS/connections from defeating the "fail fast" goal
 - Raises `RuntimeError` to funnel through the existing `main()` exception handler for clean error output
+
+#### `PreflightCheck` dataclass
+
+An immutable data record that represents one entry in the preflight check registry.
+
+```python
+@dataclass(frozen=True)
+class PreflightCheck:
+    label: str  # text shown after the status marker on the checklist line
+    run: 'Callable[[], None]'  # verifier; returns None on success, raises RuntimeError on failure
+```
+
+**Fields:**
+- `label: str` — the human-readable label for this check (e.g., `'required tools on PATH (git, just, uv)'`), printed on the checklist line after the status marker
+- `run: 'Callable[[], None]'` — a callable with no parameters that executes the check. It returns `None` on success or raises `RuntimeError` on failure. The type annotation is a string (forward-reference) because `Callable` is only imported under `TYPE_CHECKING`.
+
+**Usage**: Created and used by `_run_preflight_checks()` to build a registry of checks in order. Each check is independent and encapsulates one verifier.
+
+#### `_format_check_line(label: str, *, ok: bool) -> str`
+
+A private helper that formats one checklist line with a status marker and label.
+
+- **Parameters**:
+  - `label: str` — the check label (e.g., `'required tools on PATH (git, just, uv)'`)
+  - `ok: bool` — keyword-only; whether the check passed (True) or failed (False)
+- **Returns**: `str` — one indented checklist line with marker and label, e.g., `'  [ok]   required tools on PATH (git, just, uv)'` or `'  [FAIL] required tools on PATH (git, just, uv)'`
+- **Marker formatting**: The marker (`[ok]` or `[FAIL]`) is left-justified in a 6-character field so that labels align vertically:
+  - `[ok]` (3 chars) → padded to `'[ok]  '` (6 chars) → with the literal space yields 3 spaces before the label
+  - `[FAIL]` (5 chars) → no padding, fits exactly (6 chars) → with the literal space yields 1 space before the label
+- **Indentation**: Each line is indented with 2 spaces at the start for visual hierarchy under the `Preflight checks:` header
+
+**Examples:**
+- `_format_check_line('package name valid', ok=True)` → `'  [ok]   package name valid'`
+- `_format_check_line('required tools on PATH (git, just, uv)', ok=True)` → `'  [ok]   required tools on PATH (git, just, uv)'`
+- `_format_check_line('target directory available', ok=False)` → `'  [FAIL] target directory available'`
+
+#### `_run_preflight_checks(target_path: Path) -> None`
+
+A private orchestrator that runs a registry of preflight checks in order, prints each result to stdout, and aborts on the first failure.
+
+- **Purpose**: Called in `init_new_package()` before any subprocess spawning or filesystem operation, to run all preflight checks and emit a human-readable checklist. The checklist gives users visibility into exactly which checks passed and which failed (if any).
+- **Parameter**: `target_path: Path` — the computed target directory path (e.g., `Path.cwd() / 'my_cool_package'`), used to bind the `_verify_target_directory_absent()` check via closure
+- **Returns**: `None` (raises `RuntimeError` on first check failure)
+- **Algorithm**:
+  1. Constructs a registry (tuple) of `PreflightCheck` instances, each with a label and a verifier callable:
+     - `PreflightCheck('package name valid', lambda: None)` — display-only check (name is already validated at argparse time, so the verifier is a no-op)
+     - `PreflightCheck('required tools on PATH (git, just, uv)', _verify_required_tools)` — verifies all required tools via `shutil.which()`
+     - `PreflightCheck('target directory available', lambda: _verify_target_directory_absent(target_path))` — closure binding the target path
+     - `PreflightCheck('template remote reachable', _verify_template_remote_reachable)` — verifies template reachability via `git ls-remote`
+  2. Prints the header line `'Preflight checks:'` to stdout
+  3. Iterates over the registry in order:
+     - Calls `check.run()` (the verifier)
+     - **If the verifier returns normally** (no exception): prints `_format_check_line(check.label, ok=True)` to stdout and continues to the next check
+     - **If the verifier raises `RuntimeError`**: prints `_format_check_line(check.label, ok=False)` to stdout, then bare-`raise` (re-raises the exception untouched, preserving the message and `__cause__` chain)
+     - Checks after the failure never run and are never printed
+- **Output (happy path)**:
+  ```
+  Preflight checks:
+    [ok]   package name valid
+    [ok]   required tools on PATH (git, just, uv)
+    [ok]   target directory available
+    [ok]   template remote reachable
+  ```
+- **Output (failure on the last check)**:
+  ```
+  Preflight checks:
+    [ok]   package name valid
+    [ok]   required tools on PATH (git, just, uv)
+    [ok]   target directory available
+    [FAIL] template remote reachable
+  ```
+  (followed by the re-raised `RuntimeError` caught in `main()` and printed to stderr)
+- **Design rationale**:
+  - The registry is built per-call so that `_verify_target_directory_absent()` can be bound to the runtime `target_path` via closure, avoiding a module-global that cannot see the runtime path
+  - The package name check is display-only because the name is already validated at argparse time; by the time the checklist prints, the name is guaranteed valid. This check is listed for "at a glance" completeness without redundant re-validation.
+  - The tools label is derived from `_REQUIRED_TOOLS` constant (never hardcoded), so if the tuple changes, the checklist label stays truthful
+  - Checks after the failure are never printed (they never ran), so the printed lines reflect exactly what was executed
+  - Only `RuntimeError` is caught — the sole exception type raised by the verifiers. Other exceptions propagate untouched.
+  - Bare `raise` preserves the original `RuntimeError` message and any `__cause__` chain (important for re-raised timeouts or nested errors)
+  - The orchestrator prints directly to stdout (not stderr), keeping informational output separate from error details (which go to stderr via the caught `RuntimeError` in `main()`)
+
+**Integration with `init_new_package()`**: Called at the start of `init_new_package()`, replacing the three direct calls to verifiers (`_verify_required_tools()`, `_verify_target_directory_absent(new_package_path)`, `_verify_template_remote_reachable()`). The orchestrator call is a single line:
+```python
+_run_preflight_checks(new_package_path)
+```
+where `new_package_path = Path.cwd() / module_name`
 
 #### `_explain_invalid_package_name(value: str) -> str`
 
@@ -714,9 +809,12 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
    For example, if the user provides `my-cool.package`, the derived `module_name` is `my_cool_package`.
 4. **Process**:
    - Resolves target path using the module name: `Path.cwd() / module_name`
-   - **Step 0: Preflight checks** — **Before any subprocess or filesystem operation**, runs two preflight checks:
-     1. Calls `_verify_required_tools()` to verify that `git`, `just`, and `uv` all resolve on `PATH`. If any tool is missing, raises `RuntimeError` with an actionable message naming all absent tools, preventing the clone directory from being created and subprocess calls from being attempted.
-     2. Calls `_verify_target_directory_absent(target_path)` to verify that the computed target directory does not already exist (file or directory). If the path exists, raises `RuntimeError` with an actionable message suggesting the user choose a different package name or remove the existing directory, preventing git clone from failing with a cryptic error.
+   - **Step 0: Preflight checks & checklist** — **Before any subprocess or filesystem operation**, calls `_run_preflight_checks(target_path)` to run a series of preflight checks and print a checklist to stdout:
+     1. Package name valid — display-only check (already validated at argparse time)
+     2. Required tools on PATH — calls `_verify_required_tools()` to verify that `git`, `just`, and `uv` all resolve on `PATH`. If any tool is missing, raises `RuntimeError` with an actionable message naming all absent tools, preventing the clone directory from being created and subprocess calls from being attempted.
+     3. Target directory available — calls `_verify_target_directory_absent(target_path)` to verify that the computed target directory does not already exist (file or directory). If the path exists, raises `RuntimeError` with an actionable message suggesting the user choose a different package name or remove the existing directory, preventing git clone from failing with a cryptic error.
+     4. Template remote reachable — calls `_verify_template_remote_reachable()` to verify the template is reachable via `git ls-remote` with a timeout. If unreachable, raises `RuntimeError` with a friendly message and diagnostic details.
+     The checklist is printed to stdout showing each check as `[ok]` or `[FAIL]`. If any check fails, the checklist up to the failure is printed, the error is re-raised to be caught in `main()` for stderr printing, and subsequent checks never run.
    - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <module_name>` via `Popen` with `stderr=PIPE` (target directory uses underscores, not hyphens/dots)
      - Waits for completion via `communicate()` and captures both stdout and stderr
      - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:

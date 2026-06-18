@@ -8,12 +8,24 @@ Install and run:
 ```bash
 pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
+                                       # prints preflight checklist to stdout ([ok] / [FAIL])
                                        # verifies git, just, and uv are on PATH
                                        # checks that target directory does not already exist
                                        # probes template repository reachability (fails fast on network issues)
                                        # validates the name (rejects stdlib collisions before scaffolding)
                                        # creates a new package and validates it with just check
                                        # prints "just check passed" or "just check failed"
+
+# Example: Preflight checklist (on success)
+modernpackage my-package
+
+# Output:
+# Preflight checks:
+#   [ok]   package name valid
+#   [ok]   required tools on PATH (git, just, uv)
+#   [ok]   target directory available
+#   [ok]   template remote reachable
+# just check passed — my_package scaffold is valid.
 
 # Example: Create a package with a name containing hyphens and dots
 modernpackage my-cool.package           # Valid PEP 508 distribution name
@@ -73,10 +85,33 @@ modernpackage my-package --repository-url "github.com/user/repo"  # Error: Inval
                                         # Exit code 2 (argument validation error)
                                         # No scaffolding occurs
 
-# Example: Required tool not found (missing git)
-modernpackage my-package                # Error: required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
-                                        # Exit code 1 (preflight check fails)
-                                        # No scaffolding occurs, no directory created
+# Example: Preflight checklist failure (missing git)
+modernpackage my-package
+
+# Output (stdout):
+# Preflight checks:
+#   [ok]   package name valid
+#   [FAIL] required tools on PATH (git, just, uv)
+#
+# Output (stderr):
+# required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+# Exit code 1 (preflight check fails)
+# No scaffolding occurs, no directory created
+
+# Example: Preflight checklist failure (directory exists)
+mkdir my-package
+modernpackage my-package
+
+# Output (stdout):
+# Preflight checks:
+#   [ok]   package name valid
+#   [ok]   required tools on PATH (git, just, uv)
+#   [FAIL] target directory available
+#
+# Output (stderr):
+# target directory already exists: /path/to/my_package — choose a different package name or remove the existing directory
+# Exit code 1 (preflight check fails)
+# No scaffolding occurs
 
 # Example: Multiple required tools missing (missing git and uv)
 modernpackage my-package                # Error: required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation

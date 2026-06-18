@@ -481,6 +481,25 @@ def _apply_license(content: str, package_license: str) -> str:
     )
 
 
+@dataclass(frozen=True)
+class PreflightCheck:
+    """One entry in the preflight check registry."""
+
+    label: str  # text shown after the status marker on the checklist line
+    run: Callable[
+        [], None
+    ]  # verifier; returns None on success, raises RuntimeError on failure
+
+
+_PREFLIGHT_HEADER: str = 'Preflight checks:'
+
+
+def _format_check_line(label: str, *, ok: bool) -> str:
+    """Return one indented checklist line; marker padded to 6 chars so labels align."""
+    marker = '[ok]' if ok else '[FAIL]'
+    return f'  {marker:<6} {label}'
+
+
 def _verify_required_tools() -> None:
     """Raise RuntimeError if any required executable is absent from PATH."""
     missing = [tool for tool in _REQUIRED_TOOLS if shutil.which(tool) is None]
@@ -539,6 +558,35 @@ def _verify_template_remote_reachable() -> None:
         raise RuntimeError(message)
 
 
+def _run_preflight_checks(target_path: Path) -> None:
+    """Print the preflight checklist to stdout, running each check in order.
+
+    The registry is built per-call so `_verify_target_directory_absent` binds
+    `target_path` via closure. Each check's verifier raises RuntimeError on
+    failure; the success path emits all `[ok]` lines.
+    """
+    checks = (
+        PreflightCheck('package name valid', lambda: None),
+        PreflightCheck(
+            f'required tools on PATH ({", ".join(_REQUIRED_TOOLS)})',
+            _verify_required_tools,
+        ),
+        PreflightCheck(
+            'target directory available',
+            lambda: _verify_target_directory_absent(target_path),
+        ),
+        PreflightCheck('template remote reachable', _verify_template_remote_reachable),
+    )
+    print(_PREFLIGHT_HEADER)  # noqa: T201
+    for check in checks:
+        try:
+            check.run()
+        except RuntimeError:
+            print(_format_check_line(check.label, ok=False))  # noqa: T201
+            raise
+        print(_format_check_line(check.label, ok=True))  # noqa: T201
+
+
 def init_new_package(  # noqa: PLR0913
     package_name: str,
     *,
@@ -552,9 +600,7 @@ def init_new_package(  # noqa: PLR0913
     module_name = normalize_module_name(package_name)
     new_package_path = Path.cwd() / module_name
 
-    _verify_required_tools()
-    _verify_target_directory_absent(new_package_path)
-    _verify_template_remote_reachable()
+    _run_preflight_checks(new_package_path)
 
     pipe = Popen(  # noqa: S603
         ['git', 'clone', _TEMPLATE_REPOSITORY_URL, new_package_path],  # noqa: S607

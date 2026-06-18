@@ -123,60 +123,113 @@ After all steps complete, the outcome of `just check` is reported and the exit c
 
 The package directory is created in both cases; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory). However, the exit code now reflects the validation outcome, allowing CI/CD pipelines and automated tools to detect when the scaffolded package does not meet quality standards.
 
-#### Preflight checks
+#### Preflight checks and checklist
 
-Before any subprocess is spawned or any directory is created, `init_new_package()` performs two preflight checks:
+Before any subprocess is spawned or any directory is created, `init_new_package()` performs a series of preflight checks and prints a concise checklist to stdout showing each check's outcome.
 
-##### 1. Required Tools Check
+The checklist is printed to **stdout** (informational output) with one line per check and status markers (`[ok]` or `[FAIL]`). If any check fails, the checklist is printed up to and including the failing check, and the error details are printed to **stderr**. This separation of streams keeps the checklist visible while error details stay distinct.
 
-Verifies that all required tools are available on `PATH`:
+##### Preflight Checklist Output (Happy Path)
+
+When all checks pass, the full checklist is printed to stdout:
 
 ```bash
 modernpackage my-package
 ```
 
-If any required tool (`git`, `just`, or `uv`) is not found on `PATH`, the command exits immediately with exit code 1 and an error message:
-
+**Output:**
 ```
-required tool(s) not found on PATH: <tools> — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+Preflight checks:
+  [ok]   package name valid
+  [ok]   required tools on PATH (git, just, uv)
+  [ok]   target directory available
+  [ok]   template remote reachable
 ```
 
-For example, if `git` is missing:
+Scaffolding then proceeds to clone, initialize, and validate the package.
 
+##### Check Details
+
+The checklist includes four checks run in order:
+
+1. **Package name valid** — display-only check confirming the package name passed PEP 508 validation (already validated at argparse time, so never fails at this point)
+2. **Required tools on PATH** — verifies that all required tools (`git`, `just`, `uv`) are available on `PATH` via `shutil.which()`
+3. **Target directory available** — verifies that the target package directory does not already exist (file or directory)
+4. **Template remote reachable** — verifies that the template repository is reachable via a `git ls-remote` probe with a 10-second timeout
+
+##### Preflight Checklist Output (Failure Path)
+
+When a check fails, the checklist is printed up to and including the failing check (marked `[FAIL]`), and scaffolding aborts before any clone or filesystem operation.
+
+**Example: Missing git tool**
+
+```bash
+modernpackage my-package
+```
+
+**Output (stdout):**
+```
+Preflight checks:
+  [ok]   package name valid
+  [FAIL] required tools on PATH (git, just, uv)
+```
+
+**Output (stderr):**
 ```
 required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
 ```
 
-If multiple tools are missing (e.g., `git` and `uv`), they are all listed in a single message:
+**Exit code:** 1
 
-```
-required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
-```
-
-##### 2. Target Directory Check
-
-Verifies that the target package directory does not already exist:
+**Example: Target directory exists**
 
 ```bash
 mkdir my-package
 modernpackage my-package
 ```
 
-If the target directory (named after the normalized module name) already exists, the command exits immediately with exit code 1 and an error message:
+**Output (stdout):**
+```
+Preflight checks:
+  [ok]   package name valid
+  [ok]   required tools on PATH (git, just, uv)
+  [FAIL] target directory available
+```
 
+**Output (stderr):**
 ```
-target directory already exists: /path/to/my_package — choose a different package name or remove the existing directory
+target directory already exists: /home/user/my_package — choose a different package name or remove the existing directory
 ```
 
-For example, if you try to create a package with a name that already exists:
-
-```
-target directory already exists: /home/user/my_cool_package — choose a different package name or remove the existing directory
-```
+**Exit code:** 1
 
 **Important**: The target directory name is derived by normalizing the package name (replacing hyphens and dots with underscores). For example, `my-cool.package` becomes `my_cool_package`. This check verifies that a directory with this normalized name does not exist before attempting to clone.
 
-These preflight checks ensure that scaffolding fails fast and clearly when requirements are not met, preventing confusing late failures or incomplete clones.
+**Example: Template remote unreachable**
+
+```bash
+modernpackage my-package
+```
+
+**Output (stdout):**
+```
+Preflight checks:
+  [ok]   package name valid
+  [ok]   required tools on PATH (git, just, uv)
+  [ok]   target directory available
+  [FAIL] template remote reachable
+```
+
+**Output (stderr):**
+```
+repository unreachable — check your network connection
+
+template remote unreachable (git ls-remote exit code 2): fatal: Could not resolve host: github.com
+```
+
+**Exit code:** 1
+
+These preflight checks ensure that scaffolding fails fast and clearly when requirements are not met, with a visible checklist showing exactly which checks passed and which failed, preventing confusing late failures or incomplete clones.
 
 #### Failure path
 

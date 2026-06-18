@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V5] Print a concise preflight checklist of all environment checks
 - [ ] [V5] Abort early with a specific remediation hint when any precondition fails
 - [ ] [V6] Add a --dry-run flag that previews what would be created and renamed without touching disk
 - [ ] [V6] Print a post-init summary with the created path, package name, and reset version
@@ -13,6 +12,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T41] [V5] Print a concise preflight checklist of all environment checks
 - [x] [T40] [V5] Check that the GitHub template remote is reachable before cloning
 - [x] [T39] [V5] Refuse to proceed when the target directory already exists
 - [x] [T38] [V5] Verify git, just, and uv are on PATH before scaffolding

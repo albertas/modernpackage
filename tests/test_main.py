@@ -581,6 +581,33 @@ def test_init_new_package_reports_check_passed() -> None:
     assert result == 0
 
 
+def test_run_preflight_checks_prints_full_checklist_on_clean_run(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with (
+        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage')
+    out = capsys.readouterr().out
+    expected = [
+        'Preflight checks:',
+        '  [ok]   package name valid',
+        '  [ok]   required tools on PATH (git, just, uv)',
+        '  [ok]   target directory available',
+        '  [ok]   template remote reachable',
+    ]
+    # each expected line present and in order
+    indices = [out.index(line) for line in expected]
+    assert all(line in out for line in expected)
+    assert indices == sorted(indices)
+    assert popen_mock.call_count >= 1  # reached scaffolding
+
+
 def test_init_new_package_reports_check_failed() -> None:
     git_clone_mock = MagicMock()
     git_clone_mock.returncode = 0
@@ -634,6 +661,51 @@ def test_init_new_package_aborts_when_remote_unreachable() -> None:
         )
         with pytest.raises(RuntimeError, match='repository unreachable'):
             init_new_package('mypackage')
+    assert popen_mock.call_count == 0
+
+
+def test_run_preflight_checks_marks_failing_check_and_aborts(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with (
+        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(
+            returncode=2, stderr='fatal: Could not resolve host: github.com'
+        )
+        with pytest.raises(RuntimeError, match='repository unreachable'):
+            init_new_package('mypackage')
+    captured = capsys.readouterr()
+    out = captured.out
+    assert '  [ok]   package name valid' in out
+    assert '  [ok]   required tools on PATH (git, just, uv)' in out
+    assert '  [ok]   target directory available' in out
+    assert '  [FAIL] template remote reachable' in out
+    assert popen_mock.call_count == 0
+
+
+def test_run_preflight_checks_aborts_on_earlier_check_without_later_lines(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == 'git' else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        with pytest.raises(RuntimeError, match='git'):
+            init_new_package('mypackage')
+    out = capsys.readouterr().out
+    assert '  [ok]   package name valid' in out
+    assert '  [FAIL] required tools on PATH (git, just, uv)' in out
+    # later checks did not run, so their lines are absent
+    assert 'target directory available' not in out
+    assert 'template remote reachable' not in out
     assert popen_mock.call_count == 0
 
 
