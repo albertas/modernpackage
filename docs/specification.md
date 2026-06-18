@@ -37,16 +37,18 @@ init_new_package(name)            (main.py:37-51)
 ## CLI entry point
 
 - **Console scripts**: two entry points, `modernpackage` and `mp`, both route to `modernpackage.main:main` (`pyproject.toml:23-25`).
-- **`main()` control flow** (`main.py:54-62`): calls `parse_args()`, then branches:
+- **`main()` control flow**: calls `parse_args()`, then branches:
   - If `--version` / `-v` flag set, prints `modernpackage <__version__>` and exits.
   - Elif package name provided, calls `init_new_package(package_name)`.
   - Else no-op (silent exit).
-- **`parse_args()` signature** (`main.py:18-34`): uses `argparse.ArgumentParser`:
+- **`parse_args()` signature**: uses `argparse.ArgumentParser`:
   - `-v` / `--version`: `action='store_true'`, default `False`.
   - `package_name`: optional positional argument (`nargs='?'`), validated via `type=validate_package_name`.
-- **`validate_package_name(value)` validator** (`main.py`): validates that `value` is a valid PEP 508 / PyPI distribution name (alphanumeric start/end, with hyphens/underscores/dots in between, case-insensitive via compiled regex `_PACKAGE_NAME_RE`); returns `value` if valid, else raises `ArgumentTypeError(f'Invalid package name: {value!r}')`.
-- **`_PACKAGE_NAME_RE` pattern** (`main.py`): compiled regex constant matching PEP 508 / PyPI distribution names: `r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$'` with `re.IGNORECASE`.
-- **`__version__` source** (`modernpackage/__init__.py:3`): constant `'0.0.9'`.
+  - **`--author-name`**, **`--author-email`**, **`--description`**, **`--license`**, **`--repository-url`**: optional metadata flags, each `default=None`, resolved through a declarative precedence ladder after parsing.
+- **Metadata defaults precedence** (main.py, `_resolve_metadata_defaults` over `_METADATA_FIELDS`): when a metadata flag is omitted, its value is resolved first-non-`None` through an ordered source list. For `author_name` / `author_email`: `flag > env > git config > config file > None`. For `description` / `license` / `repository_url` (no git source): `flag > env > config file > None`. Each source is consulted lazily and only when higher-priority sources are unset. Validation (email, URL) runs once on the final resolved value, source-agnostic.
+- **`validate_package_name(value)` validator**: validates that `value` is a valid PEP 508 / PyPI distribution name (alphanumeric start/end, with hyphens/underscores/dots in between, case-insensitive via compiled regex `_PACKAGE_NAME_RE`); returns `value` if valid, else raises `ArgumentTypeError(f'Invalid package name: {value!r}')`.
+- **`_PACKAGE_NAME_RE` pattern**: compiled regex constant matching PEP 508 / PyPI distribution names: `r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$'` with `re.IGNORECASE`.
+- **`__version__` source** (`modernpackage/__init__.py`): constant `'0.0.9'`.
 
 ## Package-init flow
 

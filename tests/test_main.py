@@ -272,6 +272,9 @@ def test_parse_args_help_advertises_env_vars(
     help_text = capsys.readouterr().out
     assert 'MODERNPACKAGE_AUTHOR_NAME' in help_text
     assert 'MODERNPACKAGE_REPOSITORY_URL' in help_text
+    assert 'user.name' in help_text
+    assert 'user.email' in help_text
+    assert 'config.toml' in help_text
 
 
 def test_init_new_package() -> None:

@@ -5,6 +5,7 @@ import re
 import sys
 import tomllib
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
+from dataclasses import dataclass
 from pathlib import Path
 from subprocess import PIPE, Popen, run
 from typing import TYPE_CHECKING
@@ -102,6 +103,35 @@ _GIT_CONFIG_USER_EMAIL_KEY: str = 'user.email'
 _CONFIG_DIR_NAME: str = 'modernpackage'
 _CONFIG_FILE_NAME: str = 'config.toml'
 _XDG_CONFIG_HOME_ENV: str = 'XDG_CONFIG_HOME'
+
+
+@dataclass(frozen=True)
+class _MetadataField:
+    """Declares how one metadata field resolves its default, sources in order."""
+
+    attr: str  # Namespace attribute the flag stores to (e.g. 'author_name')
+    env_var: str  # Environment variable consulted after the flag
+    git_key: str | None  # git config key consulted next; None = no git source
+    config_key: str  # Config-file flat key consulted last
+
+
+# One entry per metadata field. Sources are tried in the canonical order
+# env -> git config -> config file; the flag value already in the namespace wins
+# implicitly because the resolver only fills attrs still set to None. git_key=None
+# encodes the author-only asymmetry: description / license / repository_url have
+# no git source (precedence: flag > env > config file > None), while author_name /
+# author_email do (flag > env > git config > config file > None).
+_METADATA_FIELDS: tuple[_MetadataField, ...] = (
+    _MetadataField(
+        'author_name', _AUTHOR_NAME_ENV, _GIT_CONFIG_USER_NAME_KEY, 'author_name'
+    ),
+    _MetadataField('description', _DESCRIPTION_ENV, None, 'description'),
+    _MetadataField('license', _LICENSE_ENV, None, 'license'),
+    _MetadataField(
+        'author_email', _AUTHOR_EMAIL_ENV, _GIT_CONFIG_USER_EMAIL_KEY, 'author_email'
+    ),
+    _MetadataField('repository_url', _REPOSITORY_URL_ENV, None, 'repository_url'),
+)
 
 
 def _explain_invalid_package_name(value: str) -> str:
@@ -253,24 +283,27 @@ def _config_file_default(config: Mapping[str, object], key: str) -> str | None:
     return None
 
 
-def _apply_config_file_defaults(
+def _resolve_metadata_defaults(
     arguments: Namespace, config: Mapping[str, object]
 ) -> None:
-    """Fill None metadata fields from the config file (weakest source, in-place).
+    """Fill each None metadata field from its first available source, in-place.
 
-    Called after flag, env, and git-config sources so config-file values only
-    apply when all higher-priority sources are absent (design Decision 5).
+    Walks `_METADATA_FIELDS`; for a field still None, tries env, then git config
+    (only if the descriptor names a git key), then the config file, stopping at
+    the first non-None value. Each source is consulted lazily and only when the
+    higher-priority sources came back None, so "loser never consulted" assertions
+    hold (a stronger source never triggers a weaker reader). The config file is
+    passed in pre-loaded so it is read exactly once per `parse_args()` call.
     """
-    if arguments.author_name is None:
-        arguments.author_name = _config_file_default(config, 'author_name')
-    if arguments.description is None:
-        arguments.description = _config_file_default(config, 'description')
-    if arguments.license is None:
-        arguments.license = _config_file_default(config, 'license')
-    if arguments.author_email is None:
-        arguments.author_email = _config_file_default(config, 'author_email')
-    if arguments.repository_url is None:
-        arguments.repository_url = _config_file_default(config, 'repository_url')
+    for field in _METADATA_FIELDS:
+        if getattr(arguments, field.attr) is not None:
+            continue
+        value = _environment_default(field.env_var)
+        if value is None and field.git_key is not None:
+            value = _git_config_default(field.git_key)
+        if value is None:
+            value = _config_file_default(config, field.config_key)
+        setattr(arguments, field.attr, value)
 
 
 def _validated_or_error(
@@ -307,7 +340,8 @@ def parse_args() -> Namespace:
         '--author-name',
         help=(
             'Author name to record in the new package.'
-            ' Defaults to $MODERNPACKAGE_AUTHOR_NAME.'
+            ' Defaults to $MODERNPACKAGE_AUTHOR_NAME, then git config'
+            ' user.name, then the config.toml config file.'
         ),
         default=None,
     )
@@ -315,7 +349,8 @@ def parse_args() -> Namespace:
         '--description',
         help=(
             'Short description of the new package.'
-            ' Defaults to $MODERNPACKAGE_DESCRIPTION.'
+            ' Defaults to $MODERNPACKAGE_DESCRIPTION, then the config.toml'
+            ' config file.'
         ),
         default=None,
     )
@@ -323,7 +358,8 @@ def parse_args() -> Namespace:
         '--author-email',
         help=(
             'Author email to record in the new package.'
-            ' Defaults to $MODERNPACKAGE_AUTHOR_EMAIL.'
+            ' Defaults to $MODERNPACKAGE_AUTHOR_EMAIL, then git config'
+            ' user.email, then the config.toml config file.'
         ),
         type=validate_author_email,
         default=None,
@@ -332,7 +368,8 @@ def parse_args() -> Namespace:
         '--license',
         help=(
             'License identifier for the new package.'
-            ' Defaults to $MODERNPACKAGE_LICENSE.'
+            ' Defaults to $MODERNPACKAGE_LICENSE, then the config.toml'
+            ' config file.'
         ),
         default=None,
     )
@@ -340,27 +377,14 @@ def parse_args() -> Namespace:
         '--repository-url',
         help=(
             'Repository URL to record in the new package.'
-            ' Defaults to $MODERNPACKAGE_REPOSITORY_URL.'
+            ' Defaults to $MODERNPACKAGE_REPOSITORY_URL, then the config.toml'
+            ' config file.'
         ),
         type=validate_repository_url,
         default=None,
     )
     arguments = parser.parse_args()
-    if arguments.author_name is None:
-        arguments.author_name = _environment_default(_AUTHOR_NAME_ENV)
-    if arguments.description is None:
-        arguments.description = _environment_default(_DESCRIPTION_ENV)
-    if arguments.license is None:
-        arguments.license = _environment_default(_LICENSE_ENV)
-    if arguments.author_email is None:
-        arguments.author_email = _environment_default(_AUTHOR_EMAIL_ENV)
-    if arguments.repository_url is None:
-        arguments.repository_url = _environment_default(_REPOSITORY_URL_ENV)
-    if arguments.author_name is None:
-        arguments.author_name = _git_config_default(_GIT_CONFIG_USER_NAME_KEY)
-    if arguments.author_email is None:
-        arguments.author_email = _git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)
-    _apply_config_file_defaults(arguments, _load_config_file())
+    _resolve_metadata_defaults(arguments, _load_config_file())
     arguments.author_email = _validated_or_error(
         parser, arguments.author_email, validate_author_email
     )

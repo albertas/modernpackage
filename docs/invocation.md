@@ -418,7 +418,7 @@ modernpackage my-package --repository-url "https://github.com/example/repo"
 modernpackage my-package --repository-url "http://example.com/repo"
 ```
 
-**Note**: The metadata flags are optional and defaulting to `None`. They are currently threaded through the initialization flow but not yet written to `pyproject.toml` (that is deferred to later V4 work). You can provide them to scaffold the package foundation, and they will be available for future use.
+**Note**: The metadata flags are optional and default to `None`. Each resolved (non-`None`) value is written into the new package's `pyproject.toml` by `_write_package_metadata` after the template is cloned and before `just init`, so the metadata lands in the first commit. A field left `None` leaves its template placeholder untouched.
 
 ## Validation
 
