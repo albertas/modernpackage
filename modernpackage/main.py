@@ -69,6 +69,13 @@ _DISALLOWED_CHAR_RE: re.Pattern[str] = re.compile(r'[^a-z0-9._-]', re.IGNORECASE
 # equal to any of these would shadow a stdlib module on import, so reject it.
 _STDLIB_MODULE_NAMES: frozenset[str] = sys.stdlib_module_names
 
+# Permissive email shape: non-whitespace, '@', non-whitespace, '.',
+# non-whitespace. Full RFC 5322 validation is out of scope (design Decision 4).
+_EMAIL_RE: re.Pattern[str] = re.compile(r'^\S+@\S+\.\S+$')
+
+# Require an http(s):// scheme; no network/reachability check (design Decision 5).
+_REPOSITORY_URL_RE: re.Pattern[str] = re.compile(r'^https?://\S+$')
+
 
 def _explain_invalid_package_name(value: str) -> str:
     """Return a precise reason a name failed `_PACKAGE_NAME_RE`.
@@ -119,6 +126,22 @@ def normalize_module_name(value: str) -> str:
     return value.replace('.', '_').replace('-', '_')
 
 
+def validate_author_email(value: str) -> str:
+    """Validate value has a basic email shape; raise ArgumentTypeError otherwise."""
+    if not _EMAIL_RE.match(value):
+        message = f'Invalid author email: {value!r} — expected name@domain.tld'
+        raise ArgumentTypeError(message)
+    return value
+
+
+def validate_repository_url(value: str) -> str:
+    """Validate value is an http(s) URL; raise ArgumentTypeError otherwise."""
+    if not _REPOSITORY_URL_RE.match(value):
+        message = f'Invalid repository URL: {value!r} — expected http(s)://…'
+        raise ArgumentTypeError(message)
+    return value
+
+
 def parse_args() -> Namespace:
     """Parse CLI options and return them as Namespace (object instance)."""
     parser = ArgumentParser()
@@ -135,11 +158,50 @@ def parse_args() -> Namespace:
         nargs='?',
         type=validate_package_name,
     )
+    parser.add_argument(
+        '--author-name',
+        help='Author name to record in the new package.',
+        default=None,
+    )
+    parser.add_argument(
+        '--description',
+        help='Short description of the new package.',
+        default=None,
+    )
+    parser.add_argument(
+        '--author-email',
+        help='Author email to record in the new package.',
+        type=validate_author_email,
+        default=None,
+    )
+    parser.add_argument(
+        '--license',
+        help='License identifier for the new package.',
+        default=None,
+    )
+    parser.add_argument(
+        '--repository-url',
+        help='Repository URL to record in the new package.',
+        type=validate_repository_url,
+        default=None,
+    )
     return parser.parse_args()
 
 
-def init_new_package(package_name: str) -> int:
+def init_new_package(  # noqa: PLR0913
+    package_name: str,
+    *,
+    author_name: str | None = None,
+    author_email: str | None = None,
+    description: str | None = None,
+    package_license: str | None = None,
+    repository_url: str | None = None,
+) -> int:
     """Clone modernpackage files into `package_name` and run `just init` in it."""
+    # Threaded for later V4 work (writing metadata into pyproject.toml); not yet
+    # consumed. The `del` documents intent and satisfies ruff ARG001.
+    del author_name, author_email, description, package_license, repository_url
+
     module_name = normalize_module_name(package_name)
     new_package_path = Path.cwd() / module_name
 
@@ -208,7 +270,14 @@ def main() -> int:
 
     elif parsed_args.package_name:
         try:
-            return init_new_package(package_name=parsed_args.package_name)
+            return init_new_package(
+                package_name=parsed_args.package_name,
+                author_name=parsed_args.author_name,
+                author_email=parsed_args.author_email,
+                description=parsed_args.description,
+                package_license=parsed_args.license,
+                repository_url=parsed_args.repository_url,
+            )
         except RuntimeError as error:
             print(error, file=sys.stderr)  # noqa: T201
             return 1

@@ -11,7 +11,9 @@ from modernpackage.main import (
     main,
     normalize_module_name,
     parse_args,
+    validate_author_email,
     validate_package_name,
+    validate_repository_url,
 )
 
 
@@ -100,6 +102,68 @@ def test_parse_args_package_name() -> None:
     assert result.package_name == 'mypackage'
 
 
+def test_parse_args_author_name() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--author-name', 'Ada']):
+        result = parse_args()
+    assert result.author_name == 'Ada'
+
+
+def test_parse_args_description() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--description', 'A tool']):
+        result = parse_args()
+    assert result.description == 'A tool'
+
+
+def test_parse_args_license() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--license', 'MIT']):
+        result = parse_args()
+    assert result.license == 'MIT'
+
+
+def test_validate_author_email_accepts() -> None:
+    assert validate_author_email('a@b.co') == 'a@b.co'
+
+
+def test_validate_author_email_rejects() -> None:
+    with pytest.raises(ArgumentTypeError, match='Invalid author email'):
+        validate_author_email('not-an-email')
+
+
+def test_parse_args_author_email() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--author-email', 'a@b.co']):
+        result = parse_args()
+    assert result.author_email == 'a@b.co'
+
+
+def test_validate_repository_url_accepts() -> None:
+    assert validate_repository_url('https://x.com/r') == 'https://x.com/r'
+
+
+def test_validate_repository_url_rejects() -> None:
+    for bad_url in ('ftp://x', 'x.com'):
+        with pytest.raises(ArgumentTypeError, match='Invalid repository URL'):
+            validate_repository_url(bad_url)
+
+
+def test_parse_args_repository_url() -> None:
+    with patch(
+        'sys.argv',
+        ['modernpackage', 'mypackage', '--repository-url', 'https://x.com/r'],
+    ):
+        result = parse_args()
+    assert result.repository_url == 'https://x.com/r'
+
+
+def test_parse_args_metadata_defaults_none() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.author_name is None
+    assert result.author_email is None
+    assert result.description is None
+    assert result.license is None
+    assert result.repository_url is None
+
+
 def test_init_new_package() -> None:
     with patch('modernpackage.main.Popen') as popen_mock:
         popen_mock.return_value.returncode = 0
@@ -171,9 +235,21 @@ def test_main_with_package_name() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = 'mypackage'
+        argparse_mock().parse_args().author_name = None
+        argparse_mock().parse_args().author_email = None
+        argparse_mock().parse_args().description = None
+        argparse_mock().parse_args().license = None
+        argparse_mock().parse_args().repository_url = None
         init_mock.return_value = 0
         result = main()
-    init_mock.assert_called_once_with(package_name='mypackage')
+    init_mock.assert_called_once_with(
+        package_name='mypackage',
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
     assert result == 0
 
 

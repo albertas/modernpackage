@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V4] Add CLI flags for author name, email, description, license, and repository URL
 - [ ] [V4] Read author metadata defaults from environment variables
 - [ ] [V4] Read author name and email from the user's git config (user.name / user.email)
 - [ ] [V4] Support a per-user config file supplying default metadata values
@@ -22,6 +21,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T32] [V4] Add CLI flags for author name, email, description, license, and repository URL
 - [x] [T31] [V3] Return a precise explanation of why a package name was refused
 - [x] [T30] [V3] Reject names that collide with Python standard-library module names
 - [x] [T29] [V3] Normalize an accepted distribution name into an import-safe module name

@@ -17,6 +17,14 @@ modernpackage my-cool.package           # Valid PEP 508 distribution name
                                         # Creates directory: my_cool_package
                                         # All Python imports: from my_cool_package import ...
 
+# Example: Create a package with metadata
+modernpackage my-package \
+  --author-name "Ada Lovelace" \
+  --author-email "ada@example.com" \
+  --description "A cool package" \
+  --license "MIT" \
+  --repository-url "https://github.com/example/my-package"
+
 # Example: Invalid package name (leading separator)
 modernpackage -bad                      # Error: Invalid package name: '-bad' — name must start and end with a letter or digit
                                         # Exit code 2 (argument validation error)
@@ -31,12 +39,34 @@ modernpackage 'has space'               # Error: Invalid package name: 'has spac
 modernpackage json                      # Error: Package name 'json' collides with the Python standard-library module 'json'
                                         # Exit code 2 (argument validation error)
                                         # No scaffolding occurs
+
+# Example: Invalid email format
+modernpackage my-package --author-email "not-an-email"  # Error: Invalid author email: 'not-an-email' — expected name@domain.tld
+                                        # Exit code 2 (argument validation error)
+                                        # No scaffolding occurs
+
+# Example: Invalid repository URL (missing http(s) scheme)
+modernpackage my-package --repository-url "github.com/user/repo"  # Error: Invalid repository URL: 'github.com/user/repo' — expected http(s)://…
+                                        # Exit code 2 (argument validation error)
+                                        # No scaffolding occurs
 ```
 
 View the installed version:
 ```bash
 modernpackage --version               # or `mp -v`
 ```
+
+### Optional Metadata Flags
+
+The CLI accepts five optional flags for package metadata:
+
+- **`--author-name`**: Author name to include in the package (free string)
+- **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`)
+- **`--description`**: Short description of the package (free string)
+- **`--license`**: License identifier (free string; commonly SPDX identifiers like `MIT`, `Apache-2.0`, etc.)
+- **`--repository-url`**: Repository URL (must start with `http://` or `https://`)
+
+All metadata flags are optional and default to `None`. When provided, they are validated at parse time (email and URL shapes are checked). Invalid metadata causes the command to exit with code 2 before any scaffolding occurs. The metadata is currently threaded through the initialization flow for foundation-building; writing it to `pyproject.toml` is deferred to later V4 work.
 
 ### Exit Codes
 

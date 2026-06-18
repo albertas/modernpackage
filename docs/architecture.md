@@ -34,7 +34,61 @@ This constant is:
 
 ### `modernpackage/main.py`
 
-The main CLI orchestrator with five fully type-annotated functions:
+The main CLI orchestrator with type-annotated functions and module-level regex constants.
+
+#### Module-Level Constants
+
+**`_PACKAGE_NAME_RE: re.Pattern[str]`**
+
+Compiled regex pattern for PEP 508 / PyPI distribution names:
+```python
+_PACKAGE_NAME_RE: re.Pattern[str] = re.compile(
+    r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$',
+    re.IGNORECASE,
+)
+```
+
+Matches a single alphanumeric character or an alphanumeric start followed by any number of allowed characters (alphanumeric, hyphens, underscores, dots) followed by an alphanumeric end. Used by `validate_package_name()`.
+
+**`_DISALLOWED_CHAR_RE: re.Pattern[str]`**
+
+Compiled regex pattern to find the first disallowed character in a package name:
+```python
+_DISALLOWED_CHAR_RE: re.Pattern[str] = re.compile(r'[^a-z0-9._-]', re.IGNORECASE)
+```
+
+Matches any character that is NOT in `[a-z0-9._-]` (case-insensitive). Used by `_explain_invalid_package_name()` to identify the first disallowed character and provide precise error messages.
+
+**`_STDLIB_MODULE_NAMES: frozenset[str]`**
+
+Frozen set of all Python standard-library top-level module names (available since Python 3.10):
+```python
+_STDLIB_MODULE_NAMES: frozenset[str] = sys.stdlib_module_names
+```
+
+Used by `validate_package_name()` to reject package names whose normalized module form would collide with a stdlib module (e.g., `json`, `os`, `email`).
+
+**`_EMAIL_RE: re.Pattern[str]`**
+
+Compiled regex pattern for basic email shape validation (permissive):
+```python
+_EMAIL_RE: re.Pattern[str] = re.compile(r'^\S+@\S+\.\S+$')
+```
+
+Matches: non-whitespace, `@`, non-whitespace, `.`, non-whitespace. Used by `validate_author_email()`. This is deliberately permissive and does not enforce RFC 5322 compliance.
+
+**`_REPOSITORY_URL_RE: re.Pattern[str]`**
+
+Compiled regex pattern for HTTP(S) URL validation:
+```python
+_REPOSITORY_URL_RE: re.Pattern[str] = re.compile(r'^https?://\S+$')
+```
+
+Matches: `http://` or `https://`, followed by one or more non-whitespace characters. Used by `validate_repository_url()`. Does not perform network reachability checks.
+
+#### Functions
+
+The main CLI orchestrator with type-annotated functions:
 
 #### `_explain_invalid_package_name(value: str) -> str`
 
@@ -103,6 +157,57 @@ Examples:
 - `validate_package_name('os')` → raises `ArgumentTypeError("Package name 'os' collides with the Python standard-library module 'os'")`
 - `validate_package_name('email')` → raises `ArgumentTypeError("Package name 'email' collides with the Python standard-library module 'email'")`
 
+#### `validate_author_email(value: str) -> str`
+
+Validates that a string has a basic email shape using a permissive regex pattern. Used as the `type=` validator in argument parsing for the `--author-email` flag.
+
+A valid email must:
+- Start with non-whitespace characters
+- Contain exactly one `@` symbol  
+- Follow with non-whitespace characters
+- Contain exactly one `.`
+- End with non-whitespace characters
+
+Pattern: `^\S+@\S+\.\S+$` (one or more non-whitespace, `@`, one or more non-whitespace, `.`, one or more non-whitespace)
+
+- **Parameter**: `value: str` — the input string to validate
+- **Returns**: `str` — the input string unchanged if valid
+- **Raises**: `ArgumentTypeError(f'Invalid author email: {value!r} — expected name@domain.tld')` if the string does not match the email pattern
+
+Examples:
+- `validate_author_email('a@b.co')` → `'a@b.co'` ✓
+- `validate_author_email('user@example.com')` → `'user@example.com'` ✓
+- `validate_author_email('not-an-email')` → raises `ArgumentTypeError('Invalid author email: 'not-an-email' — expected name@domain.tld')`
+- `validate_author_email('user@example')` → raises `ArgumentTypeError('Invalid author email: 'user@example' — expected name@domain.tld')`
+
+**Notes:**
+- This is deliberately permissive and does not enforce RFC 5322 compliance (full email validation is out of scope)
+- The regex rejects obviously wrong input without over-engineering
+
+#### `validate_repository_url(value: str) -> str`
+
+Validates that a string is an HTTP or HTTPS URL. Used as the `type=` validator in argument parsing for the `--repository-url` flag. Does not perform network reachability checks.
+
+A valid URL must:
+- Start with `http://` or `https://`
+- Follow with one or more non-whitespace characters
+
+Pattern: `^https?://\S+$`
+
+- **Parameter**: `value: str` — the input string to validate
+- **Returns**: `str` — the input string unchanged if valid
+- **Raises**: `ArgumentTypeError(f'Invalid repository URL: {value!r} — expected http(s)://…')` if the string does not match the URL pattern
+
+Examples:
+- `validate_repository_url('https://x.com/r')` → `'https://x.com/r'` ✓
+- `validate_repository_url('http://example.com')` → `'http://example.com'` ✓
+- `validate_repository_url('github.com/user/repo')` → raises `ArgumentTypeError('Invalid repository URL: 'github.com/user/repo' — expected http(s)://…')`
+- `validate_repository_url('ftp://x.com')` → raises `ArgumentTypeError('Invalid repository URL: 'ftp://x.com' — expected http(s)://…')`
+
+**Notes:**
+- Only `http://` and `https://` schemes are accepted; other schemes (ftp, git, etc.) are rejected
+- No network call is made to verify URL reachability or validity; only the scheme and format are checked
+
 #### `normalize_module_name(value: str) -> str`
 
 Converts a validated distribution name into an import-safe Python module identifier by replacing `.` and `-` with `_`.
@@ -129,7 +234,7 @@ Examples:
 **Notes and limitations:**
 - Input is expected to be already validated by `validate_package_name`, so this never returns `None`
 - Uppercase letters in the input are preserved (e.g., `MyPackage` remains `MyPackage`, not lowercased)
-- This mapping does not handle Python keywords (`class`, `import`, etc.) or names starting with digits (e.g., `9lives`) — these remain invalid module names. Such names should be rejected at validation time (currently out of scope).
+- This mapping does not handle Python keywords (`class`, `import`, etc.) or names starting with digits (e.g., `9lives`) — these remain invalid module names. Such names should be rejected at validation time (currently out of scope)
 
 #### `parse_args() -> Namespace`
 
@@ -138,14 +243,36 @@ Parses command-line arguments using `argparse.ArgumentParser`.
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`)
   - `package_name`: optional positional argument (validated via `validate_package_name`)
-- **Returns**: `Namespace` — an `argparse.Namespace` object with fields `version` (bool) and `package_name` (str | None)
+  - `--author-name`: optional flag (default `None`, free string, no validation)
+  - `--author-email`: optional flag (default `None`, validated via `validate_author_email`)
+  - `--description`: optional flag (default `None`, free string, no validation)
+  - `--license`: optional flag (default `None`, free string, no validation)
+  - `--repository-url`: optional flag (default `None`, validated via `validate_repository_url`)
+- **Returns**: `Namespace` — an `argparse.Namespace` object with fields:
+  - `version` (bool) — whether `--version` was provided
+  - `package_name` (str | None) — the package name
+  - `author_name` (str | None) — author name from `--author-name`
+  - `author_email` (str | None) — author email from `--author-email` 
+  - `description` (str | None) — description from `--description`
+  - `license` (str | None) — license identifier from `--license`
+  - `repository_url` (str | None) — repository URL from `--repository-url`
 
-#### `init_new_package(package_name: str) -> int`
+All metadata fields default to `None` when not provided.
+
+#### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None) -> int`
 
 Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name.
 
-1. **Parameter**: `package_name: str` — name of the new package to create (validated distribution name, may contain `.` or `-`)
-2. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails)
+1. **Positional Parameter**: `package_name: str` — name of the new package to create (validated distribution name, may contain `.` or `-`)
+2. **Keyword Parameters** (optional, all default to `None`):
+   - `author_name: str | None = None` — author name to include in the package metadata (free string, not yet written to files)
+   - `author_email: str | None = None` — author email to include in the package metadata (validated via `validate_author_email`, not yet written to files)
+   - `description: str | None = None` — package description to include in metadata (free string, not yet written to files)
+   - `package_license: str | None = None` — license identifier to include in metadata (free string, not yet written to files)
+   - `repository_url: str | None = None` — repository URL to include in metadata (validated via `validate_repository_url`, not yet written to files)
+3. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails)
+
+**Important note on metadata parameters**: The metadata parameters are accepted by the function signature and threaded through from the CLI for foundation-building (forming the infrastructure for later V4 work). They are currently **not written to `pyproject.toml` or any other files** — that writing is deferred to later V4 work. The parameters are acknowledged internally to satisfy linting requirements (unused-argument detection).
 3. **Derivation**: Converts the package name to a module name:
    ```python
    module_name = normalize_module_name(package_name)
@@ -206,15 +333,27 @@ The CLI entry point (orchestrator):
 
 - **Returns**: `int` — a process exit code (0 for success, 1 for failure)
 - **Flow**:
-  1. Calls `parse_args()` to get user input
+  1. Calls `parse_args()` to get user input (including the five new metadata flags)
   2. **If** `version` flag is set: prints `modernpackage <__version__>` and returns `0`
   3. **Elif** `package_name` is provided:
-     - Calls `init_new_package(package_name)` inside a `try`/`except RuntimeError` block
+     - Calls `init_new_package()` with the package name and all metadata keyword arguments inside a `try`/`except RuntimeError` block:
+       ```python
+       init_new_package(
+           package_name=parsed_args.package_name,
+           author_name=parsed_args.author_name,
+           author_email=parsed_args.author_email,
+           description=parsed_args.description,
+           package_license=parsed_args.license,
+           repository_url=parsed_args.repository_url,
+       )
+       ```
      - **If** `RuntimeError` is raised: catches it, prints the error message to `sys.stderr` (which includes captured stderr from the failed subprocess), and returns `1`
      - **If** no error: returns the value from `init_new_package()` (which is `0` if `just check` passed, or `1` if it failed)
   4. **Else**: silent no-op (no error, no message) and returns `0`
 
 The error handling ensures that subprocess failures (from `git clone` or `just init`) are surfaced to the user as clean, readable messages on stderr instead of Python tracebacks. The returned exit code is translated to the process exit status by the console script wrapper (which calls `sys.exit(main())`), allowing shell scripts and CI/CD pipelines to detect failures properly. Validation failures (from `just check`) are now also reflected in the process exit code.
+
+The metadata keyword arguments are passed through even though they are not yet written to files, establishing the plumbing for later V4 work that will perform the actual substitution in `pyproject.toml`.
 
 ## Type Annotations & Mypy Verification
 
@@ -223,9 +362,11 @@ The error handling ensures that subprocess failures (from `git clone` or `just i
 All public functions in `modernpackage/main.py` carry complete type annotations:
 
 - **`validate_package_name(value: str) -> str`** — parameter and return types specified (validation-only, returns input unchanged)
+- **`validate_author_email(value: str) -> str`** — parameter and return types specified (validation-only, returns input unchanged)
+- **`validate_repository_url(value: str) -> str`** — parameter and return types specified (validation-only, returns input unchanged)
 - **`normalize_module_name(value: str) -> str`** — parameter and return types specified (pure string transform)
 - **`parse_args() -> Namespace`** — return type specified (no parameters)
-- **`init_new_package(package_name: str) -> int`** — parameter type and return type specified
+- **`init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None) -> int`** — all parameter types and return type specified
 - **`main() -> int`** — return type specified (no parameters)
 
 ### Mypy Configuration
@@ -260,9 +401,12 @@ just check-typecheck  # runs: uv run mypy modernpackage tests
 
 **Current status**: ✅ **All 4 source files pass strict mypy**
 - `modernpackage/__init__.py` — version constant
-- `modernpackage/main.py` — CLI orchestrator with 5 functions (including the new `normalize_module_name` helper)
+- `modernpackage/main.py` — CLI orchestrator with 6 public functions and 2 private helpers:
+  - Public validators: `validate_package_name`, `validate_author_email`, `validate_repository_url`
+  - Public utilities: `normalize_module_name`, `parse_args`, `init_new_package`, `main`
+  - Private helpers: `_explain_invalid_package_name`, `humanize_git_clone_error`
 - `tests/__init__.py` — test package marker
-- `tests/test_main.py` — comprehensive test suite (including tests for `normalize_module_name` and normalization wiring)
+- `tests/test_main.py` — comprehensive test suite (including tests for validators, normalization, and integration)
 
 Result: `Success: no issues found in 4 source files`
 

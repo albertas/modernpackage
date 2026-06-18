@@ -250,14 +250,55 @@ The CLI uses `argparse.ArgumentParser` with the following configuration:
 
 - **`-v` / `--version`**: optional flag, `action='store_true'`, default `False` — prints package version
 - **`package_name`**: optional positional argument, `nargs='?'`, validated via `type=validate_package_name()` — name of package to initialize (must be a valid PEP 508 / PyPI distribution name)
+- **`--author-name`**: optional flag, default `None` — author name to record in the new package (free string, no validation)
+- **`--author-email`**: optional flag, default `None`, validated via `type=validate_author_email()` — author email to record in the new package (must be a basic email shape: `name@domain.tld`)
+- **`--description`**: optional flag, default `None` — short description of the new package (free string, no validation)
+- **`--license`**: optional flag, default `None` — license identifier for the new package (free string, no validation)
+- **`--repository-url`**: optional flag, default `None`, validated via `type=validate_repository_url()` — repository URL to record in the new package (must be an `http(s)://` URL)
 
 The parser is created and invoked in `parse_args()`, which returns an `argparse.Namespace` object with type-annotated fields:
 - `version: bool` — whether the `--version` flag was provided
 - `package_name: str | None` — the package name (if provided), or `None` if omitted
+- `author_name: str | None` — author name (if provided), or `None` if omitted
+- `author_email: str | None` — author email (if provided), or `None` if omitted
+- `description: str | None` — package description (if provided), or `None` if omitted
+- `license: str | None` — license identifier (if provided), or `None` if omitted
+- `repository_url: str | None` — repository URL (if provided), or `None` if omitted
 
 ### Type Safety
 
 The `parse_args()` function is fully type-annotated (`def parse_args() -> Namespace`) and verified by mypy in strict mode. All argument validation and type checking is enforced at parse time.
+
+### Metadata Flags Examples
+
+```bash
+# Create a package with author information
+modernpackage my-package --author-name "Ada Lovelace" --author-email "ada@example.com"
+
+# Create a package with full metadata
+modernpackage my-package \
+  --author-name "Ada Lovelace" \
+  --author-email "ada@example.com" \
+  --description "A cool package" \
+  --license "MIT" \
+  --repository-url "https://github.com/example/my-package"
+
+# Invalid email (missing domain)
+modernpackage my-package --author-email "not-an-email"
+# Error: Invalid author email: 'not-an-email' — expected name@domain.tld
+# Exit code: 2 (argument validation error, no scaffolding occurs)
+
+# Invalid URL (missing http(s) scheme)
+modernpackage my-package --repository-url "github.com/example/repo"
+# Error: Invalid repository URL: 'github.com/example/repo' — expected http(s)://…
+# Exit code: 2 (argument validation error, no scaffolding occurs)
+
+# Valid URLs (with schemes)
+modernpackage my-package --repository-url "https://github.com/example/repo"
+modernpackage my-package --repository-url "http://example.com/repo"
+```
+
+**Note**: The metadata flags are optional and defaulting to `None`. They are currently threaded through the initialization flow but not yet written to `pyproject.toml` (that is deferred to later V4 work). You can provide them to scaffold the package foundation, and they will be available for future use.
 
 ## Validation
 
