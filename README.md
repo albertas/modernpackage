@@ -80,20 +80,31 @@ modernpackage --version               # or `mp -v`
 
 The CLI accepts five optional flags for package metadata:
 
-- **`--author-name`**: Author name to include in the package (free string). Defaults in order: `$MODERNPACKAGE_AUTHOR_NAME` → `git config user.name` → `None`.
-- **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`). Defaults in order: `$MODERNPACKAGE_AUTHOR_EMAIL` → `git config user.email` → `None`.
-- **`--description`**: Short description of the package (free string). Defaults to `$MODERNPACKAGE_DESCRIPTION` if omitted.
-- **`--license`**: License identifier (free string; commonly SPDX identifiers like `MIT`, `Apache-2.0`, etc.). Defaults to `$MODERNPACKAGE_LICENSE` if omitted.
-- **`--repository-url`**: Repository URL (must start with `http://` or `https://`). Defaults to `$MODERNPACKAGE_REPOSITORY_URL` if omitted.
+- **`--author-name`**: Author name to include in the package (free string). Defaults in order: `$MODERNPACKAGE_AUTHOR_NAME` → `git config user.name` → config file → `None`.
+- **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`). Defaults in order: `$MODERNPACKAGE_AUTHOR_EMAIL` → `git config user.email` → config file → `None`.
+- **`--description`**: Short description of the package (free string). Defaults in order: `$MODERNPACKAGE_DESCRIPTION` → config file → `None`.
+- **`--license`**: License identifier (free string; commonly SPDX identifiers like `MIT`, `Apache-2.0`, etc.). Defaults in order: `$MODERNPACKAGE_LICENSE` → config file → `None`.
+- **`--repository-url`**: Repository URL (must start with `http://` or `https://`). Defaults in order: `$MODERNPACKAGE_REPOSITORY_URL` → config file → `None`.
 
-All metadata flags are optional and default to `None`. When provided via command-line flags, they are validated at parse time (email and URL shapes are checked). When values are sourced from environment variables or git config, they are validated with the same rules as flag-supplied values. Invalid metadata (from any source) causes the command to exit with code 2 before any scaffolding occurs.
+All metadata flags are optional and default to `None`. When provided via command-line flags, they are validated at parse time (email and URL shapes are checked). When values are sourced from environment variables, git config, or the config file, they are validated with the same rules as flag-supplied values. Invalid metadata (from any source) causes the command to exit with code 2 before any scaffolding occurs.
 
-**Precedence**: Command-line flags take highest precedence, followed by environment variables, followed (for `author-name` and `author-email` only) by git config, and finally `None` if no source is set.
+**Precedence**: Command-line flags take highest precedence, followed by environment variables, followed (for `author-name` and `author-email` only) by git config, followed by the per-user config file, and finally `None` if no source is set.
 
-- For `author_name` and `author_email`: **flag > env > git config > None**
-- For other fields: **flag > env > None** (no git config fallback)
+- For `author_name` and `author_email`: **flag > env > git config > config file > None**
+- For other fields: **flag > env > config file > None** (no git config fallback)
 
 When git config values are used, they come from the user's effective git configuration (merged local-over-global, the way `git commit` resolves them). If git is not installed or the config key is unset, the fallback returns `None` silently.
+
+When config-file values are used, they are read from a per-user TOML file at `$XDG_CONFIG_HOME/modernpackage/config.toml` (or `~/.config/modernpackage/config.toml` if `$XDG_CONFIG_HOME` is unset or empty). The config file uses flat TOML keys named after each field: `author_name`, `author_email`, `description`, `license`, and `repository_url`. A value is treated as set only if it is a non-empty string; empty strings and non-string TOML values (int, bool, array, table) are treated as unset. A missing config file is expected and emits no notice. A malformed or unreadable config file is treated gracefully: a notice is printed to stderr (naming the file path and error), and metadata resolution continues with the next fallback source (or `None` if no other source is set). For example:
+
+```toml
+# ~/.config/modernpackage/config.toml
+author_name = "Ada Lovelace"
+author_email = "ada@example.com"
+description = "A cool package"
+license = "MIT"
+repository_url = "https://github.com/example/my-package"
+```
 
 The `--help` output advertises each environment variable, making the fallback mechanism discoverable. Environment variables set to empty strings are treated as unset, allowing fallback to the next source.
 

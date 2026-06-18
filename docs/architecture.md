@@ -149,6 +149,33 @@ _GIT_CONFIG_USER_EMAIL_KEY: str = 'user.email'
 
 Consulted by `_git_config_default()` when reading the user's git config for `author-email`.
 
+**`_CONFIG_DIR_NAME: str`**
+
+Directory name within XDG config home for the per-user config file:
+```python
+_CONFIG_DIR_NAME: str = 'modernpackage'
+```
+
+Used by `_user_config_path()` to construct the default config file path.
+
+**`_CONFIG_FILE_NAME: str`**
+
+File name for the per-user TOML config file:
+```python
+_CONFIG_FILE_NAME: str = 'config.toml'
+```
+
+Used by `_user_config_path()` to construct the default config file path.
+
+**`_XDG_CONFIG_HOME_ENV: str`**
+
+Environment variable name for the XDG config home base directory:
+```python
+_XDG_CONFIG_HOME_ENV: str = 'XDG_CONFIG_HOME'
+```
+
+Consulted by `_user_config_path()` to resolve the per-user config file location.
+
 #### Functions
 
 The main CLI orchestrator with type-annotated functions:
@@ -334,6 +361,66 @@ Examples:
 - `_git_config_default('user.email')` when git is not found → `None`
 - `_git_config_default('user.name')` when the key exists but stdout is empty → `None`
 
+#### `_user_config_path() -> Path | None`
+
+A private helper that resolves the per-user TOML config file path using XDG Base Directory Specification conventions.
+
+- **Purpose**: Used by `_load_config_file()` to determine where to read the per-user config file. Resolves `$XDG_CONFIG_HOME/modernpackage/config.toml`, falling back to `~/.config/modernpackage/config.toml` when `$XDG_CONFIG_HOME` is unset or empty.
+- **Returns**: `Path | None` — the resolved config file path if the home directory can be determined, or `None` if `Path.home()` raises `RuntimeError` (e.g., in odd environments where the home directory cannot be resolved)
+- **Algorithm**:
+  1. Reads `$XDG_CONFIG_HOME` environment variable
+  2. If set and non-empty, uses that directory as the base; else falls back to `~/.config`
+  3. Appends `modernpackage/config.toml` to the base path
+  4. Returns the resolved `Path`, or `None` if home directory resolution fails
+
+Examples:
+- With `XDG_CONFIG_HOME=/custom/xdg` → `/custom/xdg/modernpackage/config.toml`
+- With `XDG_CONFIG_HOME=` (empty) and home `/home/user` → `/home/user/.config/modernpackage/config.toml`
+- With `XDG_CONFIG_HOME` unset and home `/home/user` → `/home/user/.config/modernpackage/config.toml`
+- When `Path.home()` raises `RuntimeError` → `None`
+
+#### `_load_config_file() -> dict[str, object]`
+
+A private helper that parses the per-user TOML config file into a mapping, or returns an empty dict on any error.
+
+- **Purpose**: Used by `parse_args()` to read the per-user config file. Returns an empty dict on any error (missing file, malformed TOML, or read errors), with the behavior depending on the error type:
+  - Missing file (`FileNotFoundError`): silent, returns `{}`
+  - Malformed or unreadable (`TOMLDecodeError` or `OSError`): prints a notice to stderr and returns `{}`
+- **Returns**: `dict[str, object]` — parsed TOML content (a mapping of all top-level keys to their values) if successful, or `{}` if the file is missing or unreadable
+- **Algorithm**:
+  1. Calls `_user_config_path()` to resolve the config file path
+  2. If path is `None`, returns `{}`
+  3. Attempts to open the file in binary mode and parse it with `tomllib.load()`
+  4. Catches `FileNotFoundError` and returns `{}` silently (expected case: no config file yet)
+  5. Catches `tomllib.TOMLDecodeError` or `OSError` (malformed or unreadable), prints a notice to stderr (`'Ignoring unreadable config file {path}: {error}'`), and returns `{}` (design Decision 6 — degrade gracefully at boundaries)
+  6. Never raises; always degrades gracefully
+
+Examples:
+- File missing: returns `{}`
+- File contains valid TOML (`author_name = "Ada"`) → `{'author_name': 'Ada'}`
+- File contains malformed TOML → stderr notice `'Ignoring unreadable config file /home/user/.config/modernpackage/config.toml: ...'`, returns `{}`
+- File unreadable (permission denied) → stderr notice, returns `{}`
+
+#### `_config_file_default(config: Mapping[str, object], key: str) -> str | None`
+
+A private helper that extracts a value from the config file mapping, treating it as set only if it is a non-empty string.
+
+- **Purpose**: Used by `parse_args()` to read individual metadata fields from the loaded config file. Ensures type safety by coercing non-string and empty-string values to `None`, matching the empty-as-unset convention of the environment and git config readers (design Decision 5).
+- **Parameters**:
+  - `config: Mapping[str, object]` — the loaded config file mapping (from `_load_config_file()`)
+  - `key: str` — the config key to read (e.g., `'author_name'`, `'license'`)
+- **Returns**: `str | None` — the value from `config[key]` if it is a non-empty string, or `None` if the key is missing, the value is empty, or the value is non-string (int, bool, array, table, etc.)
+- **Algorithm**:
+  1. Retrieves `config.get(key)`, which returns `None` if key is absent
+  2. Checks if the value is a non-empty `str` using `isinstance(value, str) and value`
+  3. Returns the value unchanged if the check passes, or `None` otherwise
+
+Examples:
+- `_config_file_default({'license': 'MIT'}, 'license')` → `'MIT'`
+- `_config_file_default({'license': ''}, 'license')` → `None` (empty string treated as unset)
+- `_config_file_default({'license': 42}, 'license')` → `None` (non-string value treated as unset)
+- `_config_file_default({}, 'license')` → `None` (missing key)
+
 #### `_validated_or_error(parser: ArgumentParser, value: str | None, validator: Callable[[str], str]) -> str | None`
 
 A private helper that validates a non-`None` value using a validator function, converting `ArgumentTypeError` to `parser.error()` for clean CLI error exits.
@@ -357,40 +444,44 @@ Examples:
 
 #### `parse_args() -> Namespace`
 
-Parses command-line arguments using `argparse.ArgumentParser`, applies environment variable defaults for omitted flags, applies git config defaults for certain omitted env vars, and validates email and URL values.
+Parses command-line arguments using `argparse.ArgumentParser`, applies environment variable defaults for omitted flags, applies git config defaults for certain omitted env vars, applies config file defaults as the weakest source, and validates email and URL values.
 
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`)
   - `package_name`: optional positional argument (validated via `validate_package_name`)
-  - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_NAME_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_NAME_KEY)`.
-  - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_EMAIL_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)`, then validates via `_validated_or_error()`.
-  - `--description`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_DESCRIPTION_ENV)`.
-  - `--license`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_LICENSE_ENV)`.
-  - `--repository-url`: optional flag (default `None`, validated via `validate_repository_url`). If omitted, substitutes `_environment_default(_REPOSITORY_URL_ENV)`, then validates via `_validated_or_error()`.
+  - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_NAME_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_NAME_KEY)`, then `_config_file_default(config, 'author_name')`.
+  - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_EMAIL_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)`, then `_config_file_default(config, 'author_email')`, then validates via `_validated_or_error()`.
+  - `--description`: optional flag (default `None`, free string, no validation). If omitted, falls back via: `_environment_default(_DESCRIPTION_ENV)`, then `_config_file_default(config, 'description')`.
+  - `--license`: optional flag (default `None`, free string, no validation). If omitted, falls back via: `_environment_default(_LICENSE_ENV)`, then `_config_file_default(config, 'license')`.
+  - `--repository-url`: optional flag (default `None`, validated via `validate_repository_url`). If omitted, falls back via: `_environment_default(_REPOSITORY_URL_ENV)`, then `_config_file_default(config, 'repository_url')`, then validates via `_validated_or_error()`.
 
 - **Process**:
   1. **Parse**: creates `ArgumentParser`, defines all arguments with `default=None`, calls `parser.parse_args()` to get initial `Namespace`
-  2. **Environment fallback**: for each of the five metadata fields, if the namespace value is `None` (flag was omitted), substitutes the environment variable value via `_environment_default()`
-  3. **Git config fallback** (for `author_name` and `author_email` only): if the value is still `None` after the environment fallback, consults git config via `_git_config_default()` to establish the precedence ladder: **flag > env > git config > None**
-  4. **Validate**: for email and repository URL, calls `_validated_or_error()` to validate the final (possibly env-sourced or git-config-sourced) value; invalid values exit cleanly with code 2 and a CLI-style error message instead of a traceback
-  5. **Return**: returns the fully resolved namespace
+  2. **Load config file**: calls `_load_config_file()` once to read the per-user TOML config file (missing file returns `{}` silently; malformed file prints a notice and returns `{}`)
+  3. **Environment fallback**: for each of the five metadata fields, if the namespace value is `None` (flag was omitted), substitutes the environment variable value via `_environment_default()`
+  4. **Git config fallback** (for `author_name` and `author_email` only): if the value is still `None` after the environment fallback, consults git config via `_git_config_default()` to establish the first layer of the precedence ladder
+  5. **Config file fallback**: if the value is still `None` after the previous step, consults the config file mapping via `_config_file_default(config, key)` to establish the weakest fallback source
+  6. **Validate**: for email and repository URL, calls `_validated_or_error()` to validate the final (possibly env-sourced, git-config-sourced, or config-file-sourced) value; invalid values exit cleanly with code 2 and a CLI-style error message instead of a traceback
+  7. **Return**: returns the fully resolved namespace
 
 - **Returns**: `Namespace` — an `argparse.Namespace` object with fields:
   - `version` (bool) — whether `--version` was provided
   - `package_name` (str | None) — the package name (from flag or `None`)
-  - `author_name` (str | None) — author name (from flag, env var, git config, or `None`)
-  - `author_email` (str | None) — author email (from flag, env var, git config, or `None`, validated)
-  - `description` (str | None) — description (from flag, env var, or `None`)
-  - `license` (str | None) — license identifier (from flag, env var, or `None`)
-  - `repository_url` (str | None) — repository URL (from flag, env var, or `None`, validated)
+  - `author_name` (str | None) — author name (from flag, env var, git config, config file, or `None`)
+  - `author_email` (str | None) — author email (from flag, env var, git config, config file, or `None`, validated)
+  - `description` (str | None) — description (from flag, env var, config file, or `None`)
+  - `license` (str | None) — license identifier (from flag, env var, config file, or `None`)
+  - `repository_url` (str | None) — repository URL (from flag, env var, config file, or `None`, validated)
 
-**Precedence for `author_name` and `author_email`**: **flag > env > git config > None**. For other fields, precedence is **flag > env > None** (no git config fallback).
+**Precedence for `author_name` and `author_email`**: **flag > env > git config > config file > None**. For other fields, precedence is **flag > env > config file > None** (no git config fallback).
 
 **Git config fallback**: When both flag and environment variable are absent, `author_name` and `author_email` fall back to the user's git config (`user.name` and `user.email` respectively), reading the merged (local-over-global) configuration. Git config values flow through the same validation as env values: email addresses must match the basic email pattern, or the command exits with code 2 and a CLI error.
 
-**Empty environment variables**: An environment variable set to an empty string (`''`) is treated as unset and returns `None`, allowing the next fallback level (git config) to be consulted.
+**Config file fallback**: When flag, environment variable, and (for author fields) git config are all absent or empty, all five metadata fields consult the per-user TOML config file via `_config_file_default()`. A missing config file (or a file missing a key) is silent. A malformed or unreadable file prints a notice to stderr and continues with `None` for that field.
 
-**Complexity**: The function has a McCabe cyclomatic complexity of ≤ 8 (enforced by `pyproject.toml:tool.ruff.lint.mccabe.max-complexity`), with the validation logic extracted into the `_validated_or_error()` helper to keep the post-parse block clear and maintainable.
+**Empty environment variables**: An environment variable set to an empty string (`''`) is treated as unset and returns `None`, allowing the next fallback level (git config, config file, or `None`) to be consulted.
+
+**Complexity**: The function has a McCabe cyclomatic complexity of ≤ 10 (enforced by `pyproject.toml:tool.ruff.lint.mccabe.max-complexity`), with the validation logic extracted into the `_validated_or_error()` helper and the config file helpers extracted into `_load_config_file()` and `_config_file_default()` to keep the post-parse block clear and maintainable.
 
 #### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None) -> int`
 

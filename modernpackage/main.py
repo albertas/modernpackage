@@ -3,13 +3,14 @@
 import os
 import re
 import sys
+import tomllib
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from pathlib import Path
 from subprocess import PIPE, Popen, run
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
 from modernpackage import __version__
 
@@ -94,6 +95,13 @@ _REPOSITORY_URL_ENV: str = 'MODERNPACKAGE_REPOSITORY_URL'
 # (precedence: flag > env > git config > None).
 _GIT_CONFIG_USER_NAME_KEY: str = 'user.name'
 _GIT_CONFIG_USER_EMAIL_KEY: str = 'user.email'
+
+# Per-user TOML config file consulted as the weakest metadata default for all
+# five fields when the matching flag, env var, and git config are all absent
+# (precedence: flag > env > git config > config file > None).
+_CONFIG_DIR_NAME: str = 'modernpackage'
+_CONFIG_FILE_NAME: str = 'config.toml'
+_XDG_CONFIG_HOME_ENV: str = 'XDG_CONFIG_HOME'
 
 
 def _explain_invalid_package_name(value: str) -> str:
@@ -189,6 +197,82 @@ def _git_config_default(key: str) -> str | None:
     return result.stdout.strip() or None
 
 
+def _user_config_path() -> Path | None:
+    """Return the per-user config file path, or None if home is unresolvable.
+
+    Resolves `$XDG_CONFIG_HOME` (a set-but-empty value coalesces to the
+    `~/.config` fallback, matching the empty-as-unset convention of the env
+    reader), else `~/.config`. Returns None when the home directory cannot be
+    determined (design Open Risk: `Path.home()` raises in odd environments).
+    """
+    xdg_config_home = os.environ.get(_XDG_CONFIG_HOME_ENV) or None
+    if xdg_config_home is not None:
+        base = Path(xdg_config_home)
+    else:
+        try:
+            base = Path.home() / '.config'
+        except RuntimeError:
+            return None
+    return base / _CONFIG_DIR_NAME / _CONFIG_FILE_NAME
+
+
+def _load_config_file() -> dict[str, object]:
+    """Parse the per-user TOML config file into a mapping, or return {}.
+
+    A missing file (no resolvable path or FileNotFoundError) returns {} silently
+    — an absent config is expected, not an error. Malformed or unreadable files
+    (TOMLDecodeError / OSError) print a notice to stderr and return {} (design
+    Decision 6).
+    """
+    path = _user_config_path()
+    if path is None:
+        return {}
+    try:
+        with path.open('rb') as config_file:
+            return tomllib.load(config_file)
+    except FileNotFoundError:
+        return {}
+    except (tomllib.TOMLDecodeError, OSError) as error:
+        print(  # noqa: T201
+            f'Ignoring unreadable config file {path}: {error}',
+            file=sys.stderr,
+        )
+        return {}
+
+
+def _config_file_default(config: Mapping[str, object], key: str) -> str | None:
+    """Return config[key] only if it is a non-empty str; else None.
+
+    Empty strings and non-string TOML values (int/bool/array/table) coalesce to
+    None, matching the empty-as-unset convention of the env/git readers and
+    protecting the regex validators from non-str input (design Decision 5).
+    """
+    value = config.get(key)
+    if isinstance(value, str) and value:
+        return value
+    return None
+
+
+def _apply_config_file_defaults(
+    arguments: Namespace, config: Mapping[str, object]
+) -> None:
+    """Fill None metadata fields from the config file (weakest source, in-place).
+
+    Called after flag, env, and git-config sources so config-file values only
+    apply when all higher-priority sources are absent (design Decision 5).
+    """
+    if arguments.author_name is None:
+        arguments.author_name = _config_file_default(config, 'author_name')
+    if arguments.description is None:
+        arguments.description = _config_file_default(config, 'description')
+    if arguments.license is None:
+        arguments.license = _config_file_default(config, 'license')
+    if arguments.author_email is None:
+        arguments.author_email = _config_file_default(config, 'author_email')
+    if arguments.repository_url is None:
+        arguments.repository_url = _config_file_default(config, 'repository_url')
+
+
 def _validated_or_error(
     parser: ArgumentParser,
     value: str | None,
@@ -276,6 +360,7 @@ def parse_args() -> Namespace:
         arguments.author_name = _git_config_default(_GIT_CONFIG_USER_NAME_KEY)
     if arguments.author_email is None:
         arguments.author_email = _git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)
+    _apply_config_file_defaults(arguments, _load_config_file())
     arguments.author_email = _validated_or_error(
         parser, arguments.author_email, validate_author_email
     )

@@ -1,4 +1,4 @@
-from argparse import ArgumentTypeError
+from argparse import ArgumentTypeError, Namespace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -8,7 +8,10 @@ from modernpackage import __version__
 from modernpackage.main import (
     _GIT_CONFIG_USER_EMAIL_KEY,
     _GIT_CONFIG_USER_NAME_KEY,
+    _config_file_default,
     _git_config_default,
+    _load_config_file,
+    _user_config_path,
     humanize_git_clone_error,
     init_new_package,
     main,
@@ -620,3 +623,211 @@ def test_parse_args_malformed_git_config_email_exits_two(
         with pytest.raises(SystemExit) as exit_info:
             parse_args()
     assert exit_info.value.code == 2  # noqa: PLR2004
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Config-file reader helpers and free-string field wiring
+# ---------------------------------------------------------------------------
+
+
+def _write_config(tmp_path: Path, body: str) -> None:
+    config_dir = tmp_path / 'modernpackage'
+    config_dir.mkdir(parents=True, exist_ok=True)
+    (config_dir / 'config.toml').write_text(body)
+
+
+def _parse_args_with_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, argv: list[str]
+) -> Namespace:
+    for env in (
+        'MODERNPACKAGE_AUTHOR_NAME',
+        'MODERNPACKAGE_AUTHOR_EMAIL',
+        'MODERNPACKAGE_DESCRIPTION',
+        'MODERNPACKAGE_LICENSE',
+        'MODERNPACKAGE_REPOSITORY_URL',
+    ):
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))
+    with (
+        patch('sys.argv', argv),
+        patch('modernpackage.main._git_config_default', return_value=None),
+    ):
+        return parse_args()
+
+
+def test_user_config_path_uses_xdg_config_home(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('XDG_CONFIG_HOME', '/tmp/xdg')  # noqa: S108
+    assert _user_config_path() == Path('/tmp/xdg/modernpackage/config.toml')  # noqa: S108
+
+
+def test_user_config_path_falls_back_to_home_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv('XDG_CONFIG_HOME', raising=False)
+    with patch('modernpackage.main.Path.home', return_value=Path('/home/x')):
+        assert _user_config_path() == Path('/home/x/.config/modernpackage/config.toml')
+
+
+def test_user_config_path_empty_xdg_falls_back_to_home(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('XDG_CONFIG_HOME', '')
+    with patch('modernpackage.main.Path.home', return_value=Path('/home/x')):
+        assert _user_config_path() == Path('/home/x/.config/modernpackage/config.toml')
+
+
+def test_config_file_default_returns_non_empty_str() -> None:
+    assert _config_file_default({'license': 'MIT'}, 'license') == 'MIT'
+
+
+def test_config_file_default_empty_string_is_none() -> None:
+    assert _config_file_default({'license': ''}, 'license') is None
+
+
+def test_config_file_default_non_string_is_none() -> None:
+    assert _config_file_default({'license': 42}, 'license') is None
+
+
+def test_config_file_default_missing_key_is_none() -> None:
+    assert _config_file_default({}, 'license') is None
+
+
+def test_load_config_file_missing_returns_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))  # no file written
+    assert _load_config_file() == {}
+
+
+def test_parse_args_config_file_fills_free_string_fields(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(
+        tmp_path, 'author_name = "Ada"\ndescription = "desc"\nlicense = "MIT"\n'
+    )
+    arguments = _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
+    assert arguments.author_name == 'Ada'
+    assert arguments.description == 'desc'
+    assert arguments.license == 'MIT'
+
+
+def test_parse_args_env_beats_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(tmp_path, 'license = "MIT"\n')
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))
+    monkeypatch.setenv('MODERNPACKAGE_LICENSE', 'Apache-2.0')
+    with (
+        patch('sys.argv', ['modernpackage', 'pkg']),
+        patch('modernpackage.main._git_config_default', return_value=None),
+    ):
+        arguments = parse_args()
+    assert arguments.license == 'Apache-2.0'
+
+
+def test_parse_args_git_config_beats_config_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(tmp_path, 'author_name = "File Name"\n')
+    for env in ('MODERNPACKAGE_AUTHOR_NAME', 'MODERNPACKAGE_AUTHOR_EMAIL'):
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))
+    with (
+        patch('sys.argv', ['modernpackage', 'pkg']),
+        patch('modernpackage.main._git_config_default') as git_mock,
+    ):
+        git_mock.side_effect = lambda key: (
+            'Git Name' if key == _GIT_CONFIG_USER_NAME_KEY else None
+        )
+        arguments = parse_args()
+    assert arguments.author_name == 'Git Name'
+
+
+def test_parse_args_empty_config_value_stays_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(tmp_path, 'license = ""\n')
+    arguments = _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
+    assert arguments.license is None
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: Validated fields (email + repository URL) from config file
+# ---------------------------------------------------------------------------
+
+
+def test_parse_args_config_file_fills_email_and_url(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(
+        tmp_path,
+        'author_email = "ada@example.com"\n'
+        'repository_url = "https://example.com/repo"\n',
+    )
+    arguments = _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
+    assert arguments.author_email == 'ada@example.com'
+    assert arguments.repository_url == 'https://example.com/repo'
+
+
+def test_parse_args_flag_beats_config_file_email(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(tmp_path, 'author_email = "file@example.com"\n')
+    arguments = _parse_args_with_config(
+        tmp_path,
+        monkeypatch,
+        ['modernpackage', 'pkg', '--author-email', 'flag@example.com'],
+    )
+    assert arguments.author_email == 'flag@example.com'
+
+
+def test_parse_args_invalid_config_email_exits_two(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(tmp_path, 'author_email = "nope"\n')
+    with pytest.raises(SystemExit) as exit_info:
+        _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
+    assert exit_info.value.code == 2  # noqa: PLR2004
+
+
+def test_parse_args_invalid_config_url_exits_two(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_config(tmp_path, 'repository_url = "ftp://nope"\n')
+    with pytest.raises(SystemExit) as exit_info:
+        _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
+    assert exit_info.value.code == 2  # noqa: PLR2004
+
+
+# ---------------------------------------------------------------------------
+# Phase 3: Malformed-file notice (graceful degradation)
+# ---------------------------------------------------------------------------
+
+
+def test_load_config_file_malformed_prints_notice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_config(tmp_path, 'this is = not valid toml =\n')
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))
+    assert _load_config_file() == {}
+    captured = capsys.readouterr()
+    assert 'config file' in captured.err
+    assert 'config.toml' in captured.err
+
+
+def test_load_config_file_missing_is_silent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setenv('XDG_CONFIG_HOME', str(tmp_path))  # no file written
+    assert _load_config_file() == {}
+    assert capsys.readouterr().err == ''
+
+
+def test_parse_args_malformed_config_continues_with_none(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_config(tmp_path, 'this is = not valid toml =\n')
+    arguments = _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
+    assert arguments.description is None
+    assert arguments.license is None
+    assert 'config.toml' in capsys.readouterr().err

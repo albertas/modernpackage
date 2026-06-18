@@ -248,25 +248,27 @@ The test scaffolds a package from the local template and validates:
 
 ## Metadata Defaults Resolution
 
-When any of the five metadata flags are omitted, `parse_args()` consults defaults in a specific precedence order. For `author_name` and `author_email`, the fallback chain is **flag > env > git config > None**. For other fields, it is **flag > env > None** (no git config fallback).
+When any of the five metadata flags are omitted, `parse_args()` consults defaults in a specific precedence order. For `author_name` and `author_email`, the fallback chain is **flag > env > git config > config file > None**. For other fields, it is **flag > env > config file > None** (no git config fallback).
 
-| Flag | Environment Variable | Git Config Key | Fallback Chain |
-|------|----------------------|---|---|
-| `--author-name` | `MODERNPACKAGE_AUTHOR_NAME` | `user.name` | env → git config → None |
-| `--author-email` | `MODERNPACKAGE_AUTHOR_EMAIL` | `user.email` | env → git config → None |
-| `--description` | `MODERNPACKAGE_DESCRIPTION` | (none) | env → None |
-| `--license` | `MODERNPACKAGE_LICENSE` | (none) | env → None |
-| `--repository-url` | `MODERNPACKAGE_REPOSITORY_URL` | (none) | env → None |
+| Flag | Environment Variable | Git Config Key | Config File Key | Fallback Chain |
+|------|----------------------|---|---|---|
+| `--author-name` | `MODERNPACKAGE_AUTHOR_NAME` | `user.name` | `author_name` | env → git config → config file → None |
+| `--author-email` | `MODERNPACKAGE_AUTHOR_EMAIL` | `user.email` | `author_email` | env → git config → config file → None |
+| `--description` | `MODERNPACKAGE_DESCRIPTION` | (none) | `description` | env → config file → None |
+| `--license` | `MODERNPACKAGE_LICENSE` | (none) | `license` | env → config file → None |
+| `--repository-url` | `MODERNPACKAGE_REPOSITORY_URL` | (none) | `repository_url` | env → config file → None |
 
 **Precedence**: Command-line flags take precedence over all other sources. If a flag is provided, all fallback sources are ignored.
 
 **Environment variable fallback**: When a flag is omitted, the corresponding environment variable is consulted. If the environment variable is unset or empty, the next fallback source is consulted.
 
-**Git config fallback** (for `author_name` and `author_email` only): When both a flag and its environment variable are absent (or empty), the user's git config is consulted via `git config user.name` (or `user.email`). The git config is read as the user's effective configuration (merged local-over-global, the same way `git commit` would resolve it). If git is not installed, the key is unset, or the command fails, the fallback returns `None` silently (no error message).
+**Git config fallback** (for `author_name` and `author_email` only): When both a flag and its environment variable are absent (or empty), the user's git config is consulted via `git config user.name` (or `user.email`). The git config is read as the user's effective configuration (merged local-over-global, the same way `git commit` would resolve it). If git is not installed, the key is unset, or the command fails, the fallback continues to the config file (or returns `None` for author-only fields).
 
-**Empty environment variables**: An environment variable that is set to an empty string (`export MODERNPACKAGE_LICENSE=`) is treated as unset and allows the next fallback source (git config for author fields, or `None` for others) to be consulted.
+**Config file fallback**: When flag, environment variable, and (for author fields) git config are all absent or empty, the per-user TOML config file is consulted. The file is located at `$XDG_CONFIG_HOME/modernpackage/config.toml` (or `~/.config/modernpackage/config.toml` if `$XDG_CONFIG_HOME` is unset or empty). The file uses flat TOML keys (`author_name`, `author_email`, `description`, `license`, `repository_url`). A value is treated as set only if it is a non-empty string; empty strings and non-string TOML values (int, bool, array, table) are treated as unset. A missing config file is expected and emits no notice. A malformed or unreadable config file prints a notice to stderr (naming the file path and error) and the fallback continues to `None`.
 
-**Validation**: Email and URL values are validated regardless of their source (flag, env var, or git config). Invalid values cause the command to exit with code 2 and a clean error message (no traceback).
+**Empty environment variables**: An environment variable that is set to an empty string (`export MODERNPACKAGE_LICENSE=`) is treated as unset and allows the next fallback source (git config for author fields, config file for all fields, or `None` if no other source is set) to be consulted.
+
+**Validation**: Email and URL values are validated regardless of their source (flag, env var, git config, or config file). Invalid values cause the command to exit with code 2 and a clean error message (no traceback).
 
 ### Metadata Defaults Examples
 
@@ -310,19 +312,56 @@ git config user.name "Git Name"
 modernpackage my-package --author-name "Flag Name"  # uses "Flag Name" (flag wins)
 modernpackage my-package                            # uses "Env Name" (env beats git config)
 
+# Config file fallback (flag, env, and git config all absent/empty)
+mkdir -p ~/.config/modernpackage
+cat > ~/.config/modernpackage/config.toml << EOF
+author_name = "Ada Lovelace"
+author_email = "ada@example.com"
+description = "From config file"
+license = "MIT"
+repository_url = "https://github.com/example/my-package"
+EOF
+unset MODERNPACKAGE_AUTHOR_NAME
+unset MODERNPACKAGE_AUTHOR_EMAIL
+unset MODERNPACKAGE_DESCRIPTION
+git config --global --unset user.name 2>/dev/null || true
+git config --local --unset user.name 2>/dev/null || true
+modernpackage my-package      # uses all values from config file
+
+# Precedence: flag > env > git config > config file > None
+git config user.name "Git Name"
+export MODERNPACKAGE_AUTHOR_EMAIL="env@example.com"
+modernpackage my-package --author-name "Flag Name" \
+  # author_name="Flag Name" (flag wins)
+  # author_email="env@example.com" (env beats git config and config file)
+  # description="From config file" (config file used when env/git absent)
+
 # All sources absent
+rm ~/.config/modernpackage/config.toml
 unset MODERNPACKAGE_AUTHOR_NAME
 unset MODERNPACKAGE_AUTHOR_EMAIL
 git config --global --unset user.name 2>/dev/null || true
 git config --local --unset user.name 2>/dev/null || true
-git config --global --unset user.email 2>/dev/null || true
-git config --local --unset user.email 2>/dev/null || true
 modernpackage my-package      # author_name and author_email are None
 
-# Git config email is validated (must be valid format)
-git config user.email "not-an-email"
+# Config file email is validated (must be valid format)
+cat > ~/.config/modernpackage/config.toml << EOF
+author_email = "not-an-email"
+EOF
+unset MODERNPACKAGE_AUTHOR_EMAIL
+git config --global --unset user.email 2>/dev/null || true
+git config --local --unset user.email 2>/dev/null || true
 modernpackage my-package      # Error: Invalid author email: 'not-an-email' — expected name@domain.tld
 echo $?                        # Exit code: 2
+
+# Malformed config file (prints notice to stderr, continues with next source)
+cat > ~/.config/modernpackage/config.toml << EOF
+this is = not valid toml =
+EOF
+unset MODERNPACKAGE_DESCRIPTION
+export MODERNPACKAGE_DESCRIPTION="From env"
+modernpackage my-package      # stderr: "Ignoring unreadable config file …"
+                              # description="From env" (env used after config file error)
 ```
 
 ## Argument Parser
