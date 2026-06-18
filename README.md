@@ -10,6 +10,7 @@ pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # verifies git, just, and uv are on PATH
                                        # checks that target directory does not already exist
+                                       # probes template repository reachability (fails fast on network issues)
                                        # validates the name (rejects stdlib collisions before scaffolding)
                                        # creates a new package and validates it with just check
                                        # prints "just check passed" or "just check failed"
@@ -87,6 +88,13 @@ mkdir my-package
 modernpackage my-package                # Error: target directory already exists: /path/to/my_package — choose a different package name or remove the existing directory
                                         # Exit code 1 (preflight check fails)
                                         # No scaffolding occurs
+
+# Example: Template repository unreachable (network down or DNS failure)
+modernpackage my-package                # Error: repository unreachable — check your network connection
+                                        # 
+                                        # template remote unreachable (git ls-remote exit code 2): fatal: Could not resolve host: github.com
+                                        # Exit code 1 (preflight check fails)
+                                        # No scaffolding occurs, no directory created
 ```
 
 View the installed version:

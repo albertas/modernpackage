@@ -1,6 +1,7 @@
 import tomllib
 from argparse import ArgumentTypeError, Namespace
 from pathlib import Path
+from subprocess import TimeoutExpired
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,6 +17,7 @@ from modernpackage.main import (
     _user_config_path,
     _verify_required_tools,
     _verify_target_directory_absent,
+    _verify_template_remote_reachable,
     _write_package_metadata,
     humanize_git_clone_error,
     init_new_package,
@@ -281,7 +283,11 @@ def test_parse_args_help_advertises_env_vars(
 
 
 def test_init_new_package() -> None:
-    with patch('modernpackage.main.Popen') as popen_mock:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
@@ -289,7 +295,11 @@ def test_init_new_package() -> None:
 
 
 def test_init_new_package_normalizes_name() -> None:
-    with patch('modernpackage.main.Popen') as popen_mock:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('my-cool.package')
@@ -304,7 +314,11 @@ def test_init_new_package_normalizes_name() -> None:
 
 
 def test_init_new_package_runs_just_check() -> None:
-    with patch('modernpackage.main.Popen') as popen_mock:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
@@ -314,7 +328,11 @@ def test_init_new_package_runs_just_check() -> None:
 
 
 def test_init_new_package_git_clone_failure() -> None:
-    with patch('modernpackage.main.Popen') as popen_mock:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 1
         popen_mock.return_value.communicate.return_value = (b'', b'some error')
         with pytest.raises(RuntimeError, match='git clone failed with exit code 1'):
@@ -325,7 +343,11 @@ def test_init_new_package_just_not_installed() -> None:
     git_clone_mock = MagicMock()
     git_clone_mock.returncode = 0
     git_clone_mock.communicate.return_value = (b'', b'')
-    with patch('modernpackage.main.Popen') as popen_mock:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.side_effect = [git_clone_mock, FileNotFoundError('just not found')]
         with pytest.raises(RuntimeError, match=r'just.*install'):
             init_new_package('mypackage')
@@ -338,7 +360,11 @@ def test_init_new_package_just_init_failure() -> None:
     just_init_mock = MagicMock()
     just_init_mock.returncode = 1
     just_init_mock.communicate.return_value = (b'', b'some error')
-    with patch('modernpackage.main.Popen') as popen_mock:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.side_effect = [git_clone_mock, just_init_mock]
         with pytest.raises(RuntimeError, match='just init failed with exit code 1'):
             init_new_package('mypackage')
@@ -351,9 +377,11 @@ def test_verify_required_tools_missing_git() -> None:
     with (
         patch('modernpackage.main.shutil.which', side_effect=which),
         patch('modernpackage.main.Popen') as popen_mock,
-        pytest.raises(RuntimeError, match='git'),
+        patch('modernpackage.main.run') as run_mock,
     ):
-        init_new_package('mypackage')
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        with pytest.raises(RuntimeError, match='git'):
+            init_new_package('mypackage')
     assert popen_mock.call_count == 0
 
 
@@ -364,9 +392,11 @@ def test_verify_required_tools_missing_just() -> None:
     with (
         patch('modernpackage.main.shutil.which', side_effect=which),
         patch('modernpackage.main.Popen') as popen_mock,
-        pytest.raises(RuntimeError, match='just'),
+        patch('modernpackage.main.run') as run_mock,
     ):
-        init_new_package('mypackage')
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        with pytest.raises(RuntimeError, match='just'):
+            init_new_package('mypackage')
     assert popen_mock.call_count == 0
 
 
@@ -377,9 +407,11 @@ def test_verify_required_tools_missing_uv() -> None:
     with (
         patch('modernpackage.main.shutil.which', side_effect=which),
         patch('modernpackage.main.Popen') as popen_mock,
-        pytest.raises(RuntimeError, match='uv'),
+        patch('modernpackage.main.run') as run_mock,
     ):
-        init_new_package('mypackage')
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        with pytest.raises(RuntimeError, match='uv'):
+            init_new_package('mypackage')
     assert popen_mock.call_count == 0
 
 
@@ -398,9 +430,11 @@ def test_verify_required_tools_reports_all_missing() -> None:
     with (
         patch('modernpackage.main.shutil.which', side_effect=which),
         patch('modernpackage.main.Popen') as popen_mock,
-        pytest.raises(RuntimeError) as exc_info,
+        patch('modernpackage.main.run') as run_mock,
     ):
-        init_new_package('mypackage')
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        with pytest.raises(RuntimeError) as exc_info:
+            init_new_package('mypackage')
     error_message = str(exc_info.value)
     assert 'git' in error_message
     assert 'uv' in error_message
@@ -535,8 +569,10 @@ def test_humanize_git_clone_error_unknown_returns_none() -> None:
 def test_init_new_package_reports_check_passed() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
         patch('modernpackage.main.print') as print_mock,
     ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         result = init_new_package('mypackage')
@@ -557,8 +593,10 @@ def test_init_new_package_reports_check_failed() -> None:
     just_check_mock.communicate.return_value = (b'', b'')
     with (
         patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
         patch('modernpackage.main.print') as print_mock,
     ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.side_effect = [git_clone_mock, just_init_mock, just_check_mock]
         result = init_new_package('mypackage')  # must not raise
     printed_calls = [str(call) for call in print_mock.call_args_list]
@@ -568,7 +606,11 @@ def test_init_new_package_reports_check_failed() -> None:
 
 
 def test_init_new_package_git_clone_network_failure() -> None:
-    with patch('modernpackage.main.Popen') as popen_mock:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 1
         popen_mock.return_value.communicate.return_value = (
             b'',
@@ -580,6 +622,19 @@ def test_init_new_package_git_clone_network_failure() -> None:
     assert 'check your network' in error_message
     assert 'git clone failed with exit code 1' in error_message
     assert 'Could not resolve host' in error_message
+
+
+def test_init_new_package_aborts_when_remote_unreachable() -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(
+            returncode=2, stderr='fatal: Could not resolve host: github.com'
+        )
+        with pytest.raises(RuntimeError, match='repository unreachable'):
+            init_new_package('mypackage')
+    assert popen_mock.call_count == 0
 
 
 def test_git_config_default_returns_trimmed_value() -> None:
@@ -1024,9 +1079,11 @@ def test_init_new_package_aborts_when_target_directory_exists(
     with (
         patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
         patch('modernpackage.main.Popen') as popen_mock,
-        pytest.raises(RuntimeError, match='already exists'),
+        patch('modernpackage.main.run') as run_mock,
     ):
-        init_new_package('mypackage')
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        with pytest.raises(RuntimeError, match='already exists'):
+            init_new_package('mypackage')
     assert popen_mock.call_count == 0
 
 
@@ -1037,7 +1094,9 @@ def test_init_new_package_proceeds_when_target_directory_absent(
     with (
         patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
         patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
     ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         result = init_new_package('mypackage')
@@ -1055,3 +1114,44 @@ def test_verify_target_directory_absent_raises_when_exists(tmp_path: Path) -> No
 def test_verify_target_directory_absent_passes_when_absent(tmp_path: Path) -> None:
     absent = tmp_path / 'absent'
     _verify_target_directory_absent(absent)  # must not raise
+
+
+def test_verify_template_remote_reachable_returns_none_when_reachable() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        _verify_template_remote_reachable()  # must not raise
+
+
+def test_verify_template_remote_reachable_raises_on_resolve_host() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.return_value = MagicMock(
+            returncode=2, stderr='fatal: Could not resolve host: github.com'
+        )
+        with pytest.raises(RuntimeError, match='repository unreachable') as exc_info:
+            _verify_template_remote_reachable()
+    message = str(exc_info.value)
+    assert 'check your network' in message
+    assert 'git ls-remote exit code 2' in message
+    assert 'Could not resolve host' in message
+
+
+def test_verify_template_remote_reachable_raises_on_repo_not_found() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.return_value = MagicMock(
+            returncode=128, stderr='remote: Repository not found'
+        )
+        with pytest.raises(RuntimeError) as exc_info:
+            _verify_template_remote_reachable()
+    message = str(exc_info.value)
+    assert 'template repository not found' in message
+    assert 'git ls-remote exit code 128' in message
+
+
+def test_verify_template_remote_reachable_raises_on_timeout() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.side_effect = TimeoutExpired(cmd='git ls-remote', timeout=10)
+        with pytest.raises(RuntimeError, match='repository unreachable') as exc_info:
+            _verify_template_remote_reachable()
+    message = str(exc_info.value)
+    assert 'check your network' in message
+    assert 'timed out' in message

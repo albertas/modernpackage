@@ -67,12 +67,18 @@ Before any subprocess is spawned, run all preflight checks in order:
    - If the path exists (file or directory): raise `RuntimeError` with message "target directory already exists: {path} — choose a different package name or remove the existing directory"
    - If absent: return (no exception)
 
-**Both checks are synchronous and fail-fast; all must pass before proceeding to subprocess. A user sees all preflight validation errors together before any filesystem mutation.**
+3. **`_verify_template_remote_reachable()`**:
+   - Invoke `git ls-remote` with a timeout (`_REMOTE_REACHABILITY_TIMEOUT_SECONDS`) to probe the template repository without cloning
+   - If the remote is reachable (exit code 0): return (no exception)
+   - If the remote is unreachable (non-zero exit code): classify the error via `humanize_git_clone_error()` and raise `RuntimeError` with a friendly + raw message (e.g., "repository unreachable — check your network connection")
+   - If the probe times out: catch `TimeoutExpired` and raise `RuntimeError` with the network-friendly message
+
+**All three checks are synchronous and fail-fast; all must pass before proceeding to the clone. A user sees all preflight validation errors together before any filesystem mutation.**
 
 ### Step 5: Git Clone
 
-Spawn subprocess via `Popen(['git', 'clone', TEMPLATE_URL, target_path], ...)`:
-- Template URL: `https://github.com/albertas/modernpackage`
+Spawn subprocess via `Popen(['git', 'clone', _TEMPLATE_REPOSITORY_URL, target_path], ...)`:
+- Template URL: constant `_TEMPLATE_REPOSITORY_URL` = `https://github.com/albertas/modernpackage`
 - Capture stdout and stderr
 - If returncode != 0:
   - Try to humanize stderr via `humanize_git_clone_error()` (maps common patterns to friendly messages)

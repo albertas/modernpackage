@@ -50,6 +50,24 @@ Used by `_verify_required_tools()` to check that all required tools are availabl
 - `just` — initializing and validating the scaffolded package
 - `uv` — invoked transitively by `just check` for dependency management, building, and publishing
 
+**`_TEMPLATE_REPOSITORY_URL: str`**
+
+The GitHub URL of the template repository cloned to scaffold a new package:
+```python
+_TEMPLATE_REPOSITORY_URL: str = 'https://github.com/albertas/modernpackage'
+```
+
+Used by both the pre-flight reachability probe (`_verify_template_remote_reachable()`) and the git clone command in `init_new_package()`. Centralizing the URL as a constant avoids duplication and ensures consistency across all references to the template repository.
+
+**`_REMOTE_REACHABILITY_TIMEOUT_SECONDS: int`**
+
+Upper bound (in seconds) on the pre-flight `git ls-remote` reachability probe to prevent hung DNS or connection attempts from defeating fail-fast behavior:
+```python
+_REMOTE_REACHABILITY_TIMEOUT_SECONDS: int = 10
+```
+
+Passed as the `timeout=` parameter to `subprocess.run()` in `_verify_template_remote_reachable()`. If the probe does not complete within this timeout, a `TimeoutExpired` exception is caught and converted to a friendly error message. The timeout is a constant (not a CLI flag) to avoid unrequested configurability while still providing a reasonable bound on hung connections.
+
 **`_PACKAGE_NAME_RE: re.Pattern[str]`**
 
 Compiled regex pattern for PEP 508 / PyPI distribution names:
@@ -239,6 +257,34 @@ Examples:
 - Runs after `_verify_required_tools()` but before git clone, ensuring all preflight checks are grouped together
 - Raises `RuntimeError` to funnel through the existing `main()` exception handler for clean error output
 - Provides the full path in the error message so the user knows exactly what exists and where
+
+#### `_verify_template_remote_reachable() -> None`
+
+A private helper that verifies the template repository is reachable before attempting to clone it. This is a pre-flight reachability probe that fails fast if the remote cannot be reached, before any clone operation begins.
+
+- **Purpose**: Called in `init_new_package()` after the two existing preflight checks (`_verify_required_tools()` and `_verify_target_directory_absent()`) and before the git clone `Popen` to fail fast on network/reachability issues rather than discovering them during the clone.
+- **Parameters**: none
+- **Returns**: `None` (raises an exception on failure)
+- **Algorithm**: 
+  1. Invoke `subprocess.run(['git', 'ls-remote', _TEMPLATE_REPOSITORY_URL], check=False, capture_output=True, text=True, timeout=_REMOTE_REACHABILITY_TIMEOUT_SECONDS)`
+  2. Check the return code: if 0, reachability is confirmed and the function returns normally
+  3. If return code != 0, classify the error:
+     - Run the stderr through `humanize_git_clone_error()` (existing pattern table that classifies git errors)
+     - If a friendly message is found: raise `RuntimeError(f'{friendly}\n\n{raw}')` where raw includes the exit code and stderr
+     - If no pattern matches: raise `RuntimeError(raw)` with just the raw message
+  4. On `TimeoutExpired`: catch the exception and raise `RuntimeError()` with a network-friendly message directly (no stderr to classify)
+  
+- **Error messages**:
+  - **Network unreachable** (e.g., DNS fails, connection times out): `RuntimeError('repository unreachable — check your network connection\n\ntemplate remote unreachable (git ls-remote exit code 2): fatal: Could not resolve host: github.com')`
+  - **Repository not found** (e.g., 404 or private repo): `RuntimeError('template repository not found — it may have moved or been removed\n\ntemplate remote unreachable (git ls-remote exit code 128): remote: Repository not found')`
+  - **Timeout**: `RuntimeError('repository unreachable — check your network connection\n\ntemplate remote unreachable (git ls-remote timed out after 10s)')`
+
+**Design rationale:**
+- Uses `git ls-remote` (not raw socket or HTTP) because `git` is already a required tool and `ls-remote` contacts the remote without cloning
+- The same error patterns (`_GIT_CLONE_ERROR_MESSAGES`) that humanize clone failures already understand `git ls-remote` stderr, so no new pattern vocabulary is needed
+- Uses `subprocess.run(check=False, capture_output=True, text=True)` (the existing module's probe idiom, per `_git_config_default()`) rather than `Popen`, keeping the `Popen` pipeline and test assertions unchanged
+- Bounded by `_REMOTE_REACHABILITY_TIMEOUT_SECONDS` to prevent hung DNS/connections from defeating the "fail fast" goal
+- Raises `RuntimeError` to funnel through the existing `main()` exception handler for clean error output
 
 #### `_explain_invalid_package_name(value: str) -> str`
 

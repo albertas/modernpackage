@@ -8,7 +8,7 @@ import tomllib
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from dataclasses import dataclass
 from pathlib import Path
-from subprocess import PIPE, Popen, run
+from subprocess import PIPE, Popen, TimeoutExpired, run
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -54,6 +54,15 @@ _GIT_CLONE_ERROR_MESSAGES: list[tuple[re.Pattern[str], str]] = [
 
 # Required executables that must resolve on PATH before scaffolding begins.
 _REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
+
+
+# Template repository cloned to scaffold a new package; used by the reachability
+# probe and the clone, and as the metadata-replacement target.
+_TEMPLATE_REPOSITORY_URL: str = 'https://github.com/albertas/modernpackage'
+
+# Upper bound (seconds) on the pre-flight `git ls-remote` reachability probe so a
+# hung DNS/connect cannot defeat fail-fast.
+_REMOTE_REACHABILITY_TIMEOUT_SECONDS: int = 10
 
 
 def humanize_git_clone_error(stderr_text: str) -> str | None:
@@ -444,7 +453,7 @@ def _write_package_metadata(  # noqa: PLR0913
         )
     if repository_url is not None:
         updated = updated.replace(
-            'https://github.com/albertas/modernpackage',
+            _TEMPLATE_REPOSITORY_URL,
             _toml_escape(repository_url),
         )
     if package_license is not None:
@@ -494,6 +503,42 @@ def _verify_target_directory_absent(target_path: Path) -> None:
         raise RuntimeError(message)
 
 
+def _verify_template_remote_reachable() -> None:
+    """Raise RuntimeError if the template remote cannot be reached.
+
+    Pre-flight probe (design Decision 1): `git ls-remote` contacts the remote
+    without cloning, and its stderr is already classified by
+    `humanize_git_clone_error`. Returns None silently when reachable. Bounded by
+    `_REMOTE_REACHABILITY_TIMEOUT_SECONDS` so a hung connect still fails fast.
+    """
+    try:
+        result = run(  # noqa: S603
+            ['git', 'ls-remote', _TEMPLATE_REPOSITORY_URL],  # noqa: S607
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=_REMOTE_REACHABILITY_TIMEOUT_SECONDS,
+        )
+    except TimeoutExpired as error:
+        friendly = 'repository unreachable — check your network connection'
+        raw = (
+            'template remote unreachable (git ls-remote timed out after'
+            f' {_REMOTE_REACHABILITY_TIMEOUT_SECONDS}s)'
+        )
+        message = f'{friendly}\n\n{raw}'
+        raise RuntimeError(message) from error
+
+    if result.returncode != 0:
+        stderr_text = result.stderr.strip()
+        raw = (
+            'template remote unreachable (git ls-remote exit code'
+            f' {result.returncode}): {stderr_text}'
+        )
+        friendly_msg = humanize_git_clone_error(stderr_text)
+        message = f'{friendly_msg}\n\n{raw}' if friendly_msg else raw
+        raise RuntimeError(message)
+
+
 def init_new_package(  # noqa: PLR0913
     package_name: str,
     *,
@@ -509,9 +554,10 @@ def init_new_package(  # noqa: PLR0913
 
     _verify_required_tools()
     _verify_target_directory_absent(new_package_path)
+    _verify_template_remote_reachable()
 
     pipe = Popen(  # noqa: S603
-        ['git', 'clone', 'https://github.com/albertas/modernpackage', new_package_path],  # noqa: S607
+        ['git', 'clone', _TEMPLATE_REPOSITORY_URL, new_package_path],  # noqa: S607
         stdin=PIPE,
         stdout=PIPE,
         stderr=PIPE,
