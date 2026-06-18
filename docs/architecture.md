@@ -72,9 +72,11 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
        - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
          - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
          - **If `returncode == 0`**: continues to Step 3
-   - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check <package_name>` (cwd: the cloned directory) via `Popen` with the same error-handling pattern as `just init`
+   - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check <package_name>` (cwd: the cloned directory) via `Popen` and reports the outcome
      - Spawns the subprocess and captures both stdout and stderr via `communicate()`
-     - Does not raise an error on non-zero exit code; `just check` output is captured but validation failure does not block the function (per plan scope)
+     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {package_name} scaffold is valid.'`
+     - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {package_name}.'`
+     - Does not raise an error on non-zero exit code; `just check` failure is reported but does not block the function
      - Returns successfully whether or not `just check` passes
 
 Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes. The `just init` missing-command error path is caught at the point of spawning the subprocess, before any execution attempts, and provides a clear, actionable installation instruction.

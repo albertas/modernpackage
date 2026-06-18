@@ -185,6 +185,39 @@ def test_humanize_git_clone_error_unknown_returns_none() -> None:
     assert message is None
 
 
+def test_init_new_package_reports_check_passed() -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.print') as print_mock,
+    ):
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage')
+    printed_calls = [str(call) for call in print_mock.call_args_list]
+    assert any('just check passed' in call for call in printed_calls)
+
+
+def test_init_new_package_reports_check_failed() -> None:
+    git_clone_mock = MagicMock()
+    git_clone_mock.returncode = 0
+    git_clone_mock.communicate.return_value = (b'', b'')
+    just_init_mock = MagicMock()
+    just_init_mock.returncode = 0
+    just_init_mock.communicate.return_value = (b'', b'')
+    just_check_mock = MagicMock()
+    just_check_mock.returncode = 1
+    just_check_mock.communicate.return_value = (b'', b'')
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.print') as print_mock,
+    ):
+        popen_mock.side_effect = [git_clone_mock, just_init_mock, just_check_mock]
+        init_new_package('mypackage')  # must not raise
+    printed_calls = [str(call) for call in print_mock.call_args_list]
+    assert any('just check failed' in call for call in printed_calls)
+    assert any('1' in call for call in printed_calls)
+
+
 def test_init_new_package_git_clone_network_failure() -> None:
     with patch('modernpackage.main.Popen') as popen_mock:
         popen_mock.return_value.returncode = 1

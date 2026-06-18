@@ -65,6 +65,18 @@ Upon success, a new directory named `<package_name>` is created in the current w
 - Git repository reinitialized
 - Quality validation run via `just check` to verify the scaffolded package passes all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
 
+After all steps complete, the outcome of `just check` is reported:
+- **If `just check` passes** (all quality gates succeed), a message is printed to stdout:
+  ```
+  just check passed — <package_name> scaffold is valid.
+  ```
+- **If `just check` fails** (any quality gate fails), a message is printed to stderr:
+  ```
+  just check failed with exit code <code> — review the output in <package_name>.
+  ```
+
+In both cases, `init_new_package` returns successfully; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory).
+
 #### Failure path
 
 If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1.

@@ -129,6 +129,15 @@ def init_new_package(package_name: str) -> None:
     )
     pipe.communicate()
 
+    if pipe.returncode == 0:
+        print(f'just check passed — {package_name} scaffold is valid.')  # noqa: T201
+    else:
+        print(  # noqa: T201
+            f'just check failed with exit code {pipe.returncode}'
+            f' — review the output in {package_name}.',
+            file=sys.stderr,
+        )
+
 
 def main() -> int:
     """Orchestrate CLI commands; return 0 on success or 1 on scaffolding failure."""

@@ -9,6 +9,7 @@ Install and run:
 pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # creates a new package and validates it with just check
+                                       # prints "just check passed" or "just check failed"
 ```
 
 View the installed version:
@@ -24,7 +25,7 @@ When `git clone` fails, the error message is enhanced with a friendly, actionabl
 
 ## After Initialization
 
-Once your new package is created (and after `just check` has validated the initial scaffold), you can begin development:
+Once your new package is created and validated, you can begin development. The initialization process automatically runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed"). To continue development:
 
 ```bash
 cd <your-package-name>

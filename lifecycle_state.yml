@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-18 07:17:19
+heart_beat: 2026-06-18 07:24:59
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T24-2026-06-18-v2-run-just-check-inside-the-freshly-created-packa
-    heart_beat: 2026-06-18 07:17:19
+  - artifact_dir: T25-2026-06-18-v2-report-to-the-user-whether-the-post-scaffold-ju
+    heart_beat: 2026-06-18 07:24:59
