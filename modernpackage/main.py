@@ -80,7 +80,7 @@ def parse_args() -> Namespace:
     return parser.parse_args()
 
 
-def init_new_package(package_name: str) -> None:
+def init_new_package(package_name: str) -> int:
     """Clone modernpackage files into `package_name` and run `just init` in it."""
     new_package_path = Path.cwd() / package_name
 
@@ -131,12 +131,13 @@ def init_new_package(package_name: str) -> None:
 
     if pipe.returncode == 0:
         print(f'just check passed — {package_name} scaffold is valid.')  # noqa: T201
-    else:
-        print(  # noqa: T201
-            f'just check failed with exit code {pipe.returncode}'
-            f' — review the output in {package_name}.',
-            file=sys.stderr,
-        )
+        return 0
+    print(  # noqa: T201
+        f'just check failed with exit code {pipe.returncode}'
+        f' — review the output in {package_name}.',
+        file=sys.stderr,
+    )
+    return 1
 
 
 def main() -> int:
@@ -148,7 +149,7 @@ def main() -> int:
 
     elif parsed_args.package_name:
         try:
-            init_new_package(package_name=parsed_args.package_name)
+            return init_new_package(package_name=parsed_args.package_name)
         except RuntimeError as error:
             print(error, file=sys.stderr)  # noqa: T201
             return 1

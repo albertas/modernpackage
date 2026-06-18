@@ -53,12 +53,12 @@ Parses command-line arguments using `argparse.ArgumentParser`.
   - `package_name`: optional positional argument (validated via `check_alpha_numeric`)
 - **Returns**: `Namespace` — an `argparse.Namespace` object with fields `version` (bool) and `package_name` (str | None)
 
-#### `init_new_package(package_name: str) -> None`
+#### `init_new_package(package_name: str) -> int`
 
 Orchestrates the package initialization flow by cloning, rewriting, and validating:
 
 1. **Parameter**: `package_name: str` — name of the new package to create
-2. **Returns**: `None` — no return value; operates via side effects
+2. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails)
 3. **Process**:
    - Resolves target path: `Path.cwd() / package_name`
    - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen` with `stderr=PIPE`
@@ -74,10 +74,9 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
          - **If `returncode == 0`**: continues to Step 3
    - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check <package_name>` (cwd: the cloned directory) via `Popen` and reports the outcome
      - Spawns the subprocess and captures both stdout and stderr via `communicate()`
-     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {package_name} scaffold is valid.'`
-     - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {package_name}.'`
-     - Does not raise an error on non-zero exit code; `just check` failure is reported but does not block the function
-     - Returns successfully whether or not `just check` passes
+     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {package_name} scaffold is valid.'` and returns `0`
+     - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {package_name}.'` and returns `1`
+     - Does not raise an error on non-zero exit code; `just check` failure is reported but does not block the function; the failure is propagated via the return code instead
 
 Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes. The `just init` missing-command error path is caught at the point of spawning the subprocess, before any execution attempts, and provides a clear, actionable installation instruction.
 
@@ -120,10 +119,10 @@ The CLI entry point (orchestrator):
   3. **Elif** `package_name` is provided:
      - Calls `init_new_package(package_name)` inside a `try`/`except RuntimeError` block
      - **If** `RuntimeError` is raised: catches it, prints the error message to `sys.stderr` (which includes captured stderr from the failed subprocess), and returns `1`
-     - **If** no error: returns `0`
+     - **If** no error: returns the value from `init_new_package()` (which is `0` if `just check` passed, or `1` if it failed)
   4. **Else**: silent no-op (no error, no message) and returns `0`
 
-The error handling ensures that subprocess failures (from `git clone` or `just init`) are surfaced to the user as clean, readable messages on stderr instead of Python tracebacks. The returned exit code is translated to the process exit status by the console script wrapper (which calls `sys.exit(main())`), allowing shell scripts and CI/CD pipelines to detect failures properly.
+The error handling ensures that subprocess failures (from `git clone` or `just init`) are surfaced to the user as clean, readable messages on stderr instead of Python tracebacks. The returned exit code is translated to the process exit status by the console script wrapper (which calls `sys.exit(main())`), allowing shell scripts and CI/CD pipelines to detect failures properly. Validation failures (from `just check`) are now also reflected in the process exit code.
 
 ## Type Annotations & Mypy Verification
 

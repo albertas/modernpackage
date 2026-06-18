@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V2] Exit non-zero when just check fails in the generated package
 - [ ] [V2] Add an e2e test that scaffolds a package and asserts just check passes
 - [ ] [V3] Relax name validation to accept valid PEP 508 / PyPI distribution names including hyphens and underscores
 - [ ] [V3] Normalize an accepted distribution name into an import-safe module name
@@ -28,6 +27,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T26] [V2] Exit non-zero when just check fails in the generated package
 - [x] [T25] [V2] Report to the user whether the post-scaffold just check passed or failed
 - [x] [T24] [V2] Run just check inside the freshly created package
 - [x] [T21] [V1] Detect when just is not installed and print an actionable message

@@ -15,10 +15,10 @@ Both route to `modernpackage.main:main()`, so they are functionally identical.
 ### Exit Codes
 
 `modernpackage` returns exit codes as follows:
-- **Exit code 0**: successful operation (version printed, package initialized, or no arguments provided)
-- **Exit code 1**: failure in package initialization (git clone or just init failed)
+- **Exit code 0**: successful operation (version printed, package initialized with all quality gates passing, or no arguments provided)
+- **Exit code 1**: failure in package initialization (git clone, just init, or just check failed)
 
-The exit code is reflected in the process exit status, allowing shell scripts and CI/CD pipelines to detect failures.
+The exit code is reflected in the process exit status, allowing shell scripts and CI/CD pipelines to detect failures. Importantly, failures of the validation step (`just check`) now result in exit code 1, allowing automated tools to detect when the scaffolded package does not meet quality standards.
 
 ### No arguments (no-op)
 
@@ -65,17 +65,20 @@ Upon success, a new directory named `<package_name>` is created in the current w
 - Git repository reinitialized
 - Quality validation run via `just check` to verify the scaffolded package passes all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
 
-After all steps complete, the outcome of `just check` is reported:
-- **If `just check` passes** (all quality gates succeed), a message is printed to stdout:
+After all steps complete, the outcome of `just check` is reported and the exit code reflects the result:
+- **If `just check` passes** (all quality gates succeed), a message is printed to stdout and exit code 0 is returned:
   ```
   just check passed — <package_name> scaffold is valid.
   ```
-- **If `just check` fails** (any quality gate fails), a message is printed to stderr:
+  Exit code: 0
+  
+- **If `just check` fails** (any quality gate fails), a message is printed to stderr and exit code 1 is returned:
   ```
   just check failed with exit code <code> — review the output in <package_name>.
   ```
+  Exit code: 1
 
-In both cases, `init_new_package` returns successfully; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory).
+The package directory is created in both cases; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory). However, the exit code now reflects the validation outcome, allowing CI/CD pipelines and automated tools to detect when the scaffolded package does not meet quality standards.
 
 #### Failure path
 

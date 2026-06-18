@@ -102,9 +102,22 @@ def test_main_with_package_name() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = 'mypackage'
+        init_mock.return_value = 0
         result = main()
     init_mock.assert_called_once_with(package_name='mypackage')
     assert result == 0
+
+
+def test_main_returns_one_when_just_check_fails() -> None:
+    with (
+        patch('modernpackage.main.ArgumentParser') as argparse_mock,
+        patch('modernpackage.main.init_new_package') as init_mock,
+    ):
+        argparse_mock().parse_args().version = False
+        argparse_mock().parse_args().package_name = 'mypackage'
+        init_mock.return_value = 1
+        result = main()
+    assert result == 1
 
 
 def test_main_surfaces_stderr_on_failure() -> None:
@@ -192,9 +205,10 @@ def test_init_new_package_reports_check_passed() -> None:
     ):
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
-        init_new_package('mypackage')
+        result = init_new_package('mypackage')
     printed_calls = [str(call) for call in print_mock.call_args_list]
     assert any('just check passed' in call for call in printed_calls)
+    assert result == 0
 
 
 def test_init_new_package_reports_check_failed() -> None:
@@ -212,10 +226,11 @@ def test_init_new_package_reports_check_failed() -> None:
         patch('modernpackage.main.print') as print_mock,
     ):
         popen_mock.side_effect = [git_clone_mock, just_init_mock, just_check_mock]
-        init_new_package('mypackage')  # must not raise
+        result = init_new_package('mypackage')  # must not raise
     printed_calls = [str(call) for call in print_mock.call_args_list]
     assert any('just check failed' in call for call in printed_calls)
     assert any('1' in call for call in printed_calls)
+    assert result == 1
 
 
 def test_init_new_package_git_clone_network_failure() -> None:
