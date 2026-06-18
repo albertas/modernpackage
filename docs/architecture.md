@@ -421,6 +421,110 @@ Examples:
 - `_config_file_default({'license': 42}, 'license')` → `None` (non-string value treated as unset)
 - `_config_file_default({}, 'license')` → `None` (missing key)
 
+#### `_toml_escape(value: str) -> str`
+
+A private helper that escapes special characters in a string to make it safe for insertion into TOML basic-string values.
+
+- **Purpose**: Used by `_write_package_metadata()` and `_apply_license()` to escape values before substituting them into TOML template strings. Ensures that values containing backslashes and double-quotes cannot produce invalid TOML.
+- **Parameter**: `value: str` — the string to escape
+- **Returns**: `str` — the escaped string with backslashes and double-quotes properly escaped for TOML
+- **Algorithm**: 
+  1. Escapes all backslashes by replacing `\` with `\\` (must run first to avoid double-escaping)
+  2. Escapes all double-quotes by replacing `"` with `\"`
+- **Examples**:
+  - `_toml_escape('simple')` → `'simple'` (no change)
+  - `_toml_escape('with "quotes"')` → `'with \"quotes\"'`
+  - `_toml_escape('path\\with\\backslashes')` → `'path\\\\with\\\\backslashes'`
+  - `_toml_escape('both \\"edge cases\\"')` → `'both \\\\\"edge cases\\\\\"'`
+
+**Notes:**
+- Order matters: backslashes are escaped first to avoid double-escaping quotes that are introduced during backslash escaping
+- The function does not validate TOML syntax; it assumes the caller will use the result in a TOML basic-string context (wrapped in `"..."`)
+- This enables safe direct string substitution without requiring a TOML writer library
+
+#### `_write_package_metadata(package_path: Path, *, author_name: str | None, author_email: str | None, description: str | None, package_license: str | None, repository_url: str | None) -> None`
+
+A private helper that applies metadata substitutions to the cloned package's `pyproject.toml` file, replacing known template placeholders with supplied values.
+
+- **Purpose**: Called by `init_new_package()` after cloning and before `just init`, to write user-supplied metadata into the package's configuration file. This ensures the metadata is present in the package's initial git commit and is part of the permanent scaffold.
+- **Parameters** (all keyword-only):
+  - `package_path: Path` — path to the cloned package directory
+  - `author_name: str | None` — author name to write, or `None` to skip (default `None`)
+  - `author_email: str | None` — author email to write, or `None` to skip (default `None`)
+  - `description: str | None` — package description to write, or `None` to skip (default `None`)
+  - `package_license: str | None` — license identifier to write, or `None` to skip (default `None`)
+  - `repository_url: str | None` — repository URL to write, or `None` to skip (default `None`)
+- **Behavior**:
+  1. Constructs the path to `pyproject.toml` inside the package directory
+  2. Attempts to read the file; if it does not exist, prints a notice to stderr and returns without raising
+  3. For each non-`None` field, performs a targeted `str.replace()` of a known template placeholder with the TOML-escaped value
+  4. Only writes the file if at least one substitution changed it (idempotent: repeated calls with the same values are no-ops)
+  5. Never raises; always degrades gracefully on missing files
+- **Template placeholders matched**:
+  - `author_name`: replaces `'Name Surname'` (in `[project].authors[0].name`)
+  - `author_email`: replaces `'email@example.com'` (in `[project].authors[0].email`)
+  - `description`: replaces `'Package configuration example using bleeding edge toolset.'` (in `[project].description`)
+  - `repository_url`: replaces `'https://github.com/albertas/modernpackage'` (in `[project.urls].homepage`)
+  - `package_license`: delegated to `_apply_license()` helper for insertion and classifier cleanup
+- **Graceful degradation**: If the `pyproject.toml` file is missing (e.g., in mocked unit tests that never create a real clone), the function prints a diagnostic notice to stderr and returns without raising. This allows unit tests that mock `Popen` (and thus never create a real filesystem copy) to pass unchanged.
+
+Examples:
+```python
+_write_package_metadata(
+    Path('/tmp/my_package'),
+    author_name='Jane Doe',
+    author_email='jane@example.org',
+    description='A real package.',
+    package_license=None,
+    repository_url='https://example.org/repo',
+)
+# Replaces author name, email, description, and URL in pyproject.toml
+# Leaves package_license placeholder untouched (None)
+
+_write_package_metadata(
+    Path('/tmp/my_package'),
+    author_name=None,
+    author_email=None,
+    description=None,
+    package_license=None,
+    repository_url=None,
+)
+# No changes (all None values are skipped; file is not rewritten)
+```
+
+#### `_apply_license(content: str, package_license: str) -> str`
+
+A private helper that inserts a PEP 639 license key into the TOML content and removes the hardcoded MIT classifier.
+
+- **Purpose**: Called by `_write_package_metadata()` when a license value is supplied. Keeps license-specific logic isolated, helping maintain cyclomatic complexity ≤ 8 in the main writer function.
+- **Parameters**:
+  - `content: str` — the TOML content (read from `pyproject.toml`)
+  - `package_license: str` — the license identifier to write (e.g., `'MIT'`, `'Apache-2.0'`)
+- **Returns**: `str` — the modified TOML content with the license key inserted and the hardcoded MIT classifier removed
+- **Behavior**:
+  1. Constructs the license line: `license = "<escaped_value>"`
+  2. Inserts it after the stable `readme = "README.md"` line (placing it inside `[project]`)
+  3. Removes the hardcoded `"License :: OSI Approved :: MIT License"` classifier line (4-space indent, trailing comma, newline)
+  4. Returns the modified content
+- **Design rationale**: 
+  - License is inserted after `readme` (a stable anchor line) rather than after description (which may be `None` and thus absent), ensuring consistent insertion point
+  - When a license value is supplied, the MIT classifier is removed to avoid contradictory hardcoded licensing information
+  - When license is `None`, `_apply_license()` is not called, so the classifier remains (allowing unspecified licenses to retain the template's default)
+- **Examples**:
+  ```python
+  content = """...
+  readme = "README.md"
+  ...
+      "License :: OSI Approved :: MIT License",
+  ..."""
+  
+  result = _apply_license(content, 'Apache-2.0')
+  # Result contains:
+  # readme = "README.md"
+  # license = "Apache-2.0"
+  # ... (no MIT classifier)
+  ```
+
 #### `_validated_or_error(parser: ArgumentParser, value: str | None, validator: Callable[[str], str]) -> str | None`
 
 A private helper that validates a non-`None` value using a validator function, converting `ArgumentTypeError` to `parser.error()` for clean CLI error exits.
@@ -496,7 +600,7 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
    - `repository_url: str | None = None` — repository URL to include in metadata (validated via `validate_repository_url`, not yet written to files)
 3. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails)
 
-**Important note on metadata parameters**: The metadata parameters are accepted by the function signature and threaded through from the CLI for foundation-building (forming the infrastructure for later V4 work). They are currently **not written to `pyproject.toml` or any other files** — that writing is deferred to later V4 work. The parameters are acknowledged internally to satisfy linting requirements (unused-argument detection).
+**Metadata writing**: The metadata parameters are automatically written to the generated package's `pyproject.toml` file via `_write_package_metadata()`, called after the successful clone and before `just init`. This ensures the metadata is included in the package's initial git commit.
 3. **Derivation**: Converts the package name to a module name:
    ```python
    module_name = normalize_module_name(package_name)
@@ -509,7 +613,8 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
      - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:
        - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
        - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
-   - **Step 2: Initialize** — **If `returncode == 0`**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
+   - **Step 1.5: Write metadata** — **If clone succeeds (`returncode == 0`)**: calls `_write_package_metadata()` to write user-supplied metadata into the package's `pyproject.toml`. All non-`None` values are applied as targeted TOML-escaped substitutions of known template placeholders; `None` values are skipped. If the `pyproject.toml` file is missing, a notice is printed to stderr and the step continues without raising.
+   - **Step 2: Initialize** — **After metadata writing**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
      - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
        - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
        - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
@@ -625,12 +730,12 @@ just check-typecheck  # runs: uv run mypy modernpackage tests
 
 **Current status**: ✅ **All 4 source files pass strict mypy**
 - `modernpackage/__init__.py` — version constant
-- `modernpackage/main.py` — CLI orchestrator with 6 public functions and 2 private helpers:
+- `modernpackage/main.py` — CLI orchestrator with 6 public functions and 5 private helpers:
   - Public validators: `validate_package_name`, `validate_author_email`, `validate_repository_url`
   - Public utilities: `normalize_module_name`, `parse_args`, `init_new_package`, `main`
-  - Private helpers: `_explain_invalid_package_name`, `humanize_git_clone_error`
+  - Private helpers: `_explain_invalid_package_name`, `humanize_git_clone_error`, `_toml_escape`, `_write_package_metadata`, `_apply_license`
 - `tests/__init__.py` — test package marker
-- `tests/test_main.py` — comprehensive test suite (including tests for validators, normalization, and integration)
+- `tests/test_main.py` — comprehensive test suite (including tests for validators, normalization, metadata writing, and integration)
 
 Result: `Success: no issues found in 4 source files`
 
@@ -739,7 +844,10 @@ Tests live in `tests/test_main.py` (mocked unit tests) and `tests/test_e2e.py` (
 - `unittest.mock.patch` for dependency injection (mocking `ArgumentParser`, `print`, `Popen`, etc.)
 - `pytest.raises` for exception testing
 - Unit tests (`tests/test_main.py`): no real subprocess/network calls; all external dependencies mocked
+  - Includes dedicated tests for metadata writing helpers: `test_write_package_metadata_replaces_all_fields`, `test_write_package_metadata_none_is_noop`, `test_write_package_metadata_missing_file`, `test_write_package_metadata_escapes_quotes`, `test_write_package_metadata_writes_license`, `test_write_package_metadata_none_license_keeps_classifier`
+  - Tests verify TOML correctness by parsing results with `tomllib.loads()` to ensure generated TOML is valid
 - End-to-end tests (`tests/test_e2e.py`): real subprocess calls, network access, filesystem operations
+  - Includes assertions that verify on-disk `pyproject.toml` contains supplied metadata values after scaffolding
 
 ### Test Markers
 
@@ -793,6 +901,12 @@ markers = [
 
 The coverage gate is measured **against mocked unit tests only** (the default `just test` run); the e2e test is not included in the coverage measurement because it exercises the public CLI (which is already covered by unit test mocks).
 
+**Metadata writing coverage**: The 95% coverage gate ensures all branches of the new metadata writing helpers (`_toml_escape`, `_write_package_metadata`, `_apply_license`) and their failure paths (missing file, `None` values, special characters) are exercised:
+- Each metadata field (author_name, author_email, description, license, repository_url) has a dedicated test case covering presence and absence
+- License handling has separate tests for the present/absent cases
+- Special character handling (quotes and backslashes) is tested separately
+- File-missing case is tested to verify graceful degradation without raising
+
 ### Test Execution
 
 Tests run in parallel across all-but-one CPU cores (via `nproc --ignore=1`) using `pytest-xdist`. The default run excludes `e2e` marked tests, running only mocked unit tests. Coverage is aggregated transparently across parallel workers.
@@ -807,19 +921,55 @@ On a 1-core machine, `nproc --ignore=1` yields 0; `pytest-xdist` treats `-n 0` a
 
 ## Self-Replication Flow
 
-When a user runs `modernpackage my-cool.package`:
+When a user runs `modernpackage my-cool.package --author-name "Ada Lovelace" --license "MIT"`:
 
-1. `main()` parses arguments and validates that `my-cool.package` is a valid PEP 508 distribution name; calls `init_new_package('my-cool.package')`
+1. `main()` parses arguments and validates that `my-cool.package` is a valid PEP 508 distribution name; validates author name and calls `init_new_package('my-cool.package', author_name='Ada Lovelace', package_license='MIT', ...)`
 2. `init_new_package()` derives the module name: `module_name = normalize_module_name('my-cool.package')` → `'my_cool_package'`
 3. `init_new_package()` clones the official repo to `./my_cool_package`, capturing stderr for detailed error reporting
-4. On successful clone, the `just init` recipe (in the clone) transforms it:
+4. On successful clone, `_write_package_metadata()` is called to write metadata into the cloned package's `pyproject.toml`:
+   - Replaces `'Name Surname'` with `'Ada Lovelace'`
+   - Inserts `license = "MIT"` after the `readme` line
+   - Removes the hardcoded `"License :: OSI Approved :: MIT License"` classifier
+   - Any `None` values are skipped (placeholders remain untouched)
+5. On successful metadata writing, the `just init` recipe (in the clone) transforms it:
    - Renames all "modernpackage" → "my_cool_package"
    - Resets version to `0.0.1`
    - Reinitializes git
-5. On successful initialization, `just check` is run to validate the newly scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
-6. Result: a new, independent Python package ready for development, in a directory named `my_cool_package` with all import paths using underscores instead of hyphens/dots
+   - The metadata is already in place in the initial git commit
+6. On successful initialization, `just check` is run to validate the newly scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
+7. Result: a new, independent Python package ready for development, in a directory named `my_cool_package` with supplied metadata already written to `pyproject.toml` and included in the initial commit, all import paths using underscores instead of hyphens/dots
 
 This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup. The clone, initialization, and validation steps report detailed error output if they fail, making it easy to diagnose issues (network errors, missing dependencies, permission problems, etc.). The normalization of the distribution name to a module name ensures that the created directory and all import paths are valid Python identifiers.
+
+## Metadata Writing
+
+### Design Approach
+
+Metadata is written to `pyproject.toml` via targeted, TOML-escaped string replacement rather than a full TOML round-trip. This approach:
+- **Avoids new dependencies**: no TOML writer library required (e.g., `tomli-w`, `tomlkit`)
+- **Preserves template formatting**: template comments, ordering, and structure are maintained
+- **Is surgically precise**: only known placeholders are replaced, leaving unrelated keys untouched
+- **Handles special characters safely**: the `_toml_escape()` helper escapes backslashes and quotes before substitution, ensuring values containing these characters cannot produce invalid TOML
+
+### Hook Point: After Clone, Before `just init`
+
+Metadata writing happens in `init_new_package()` between the clone step and the `just init` recipe. This ensures:
+- The metadata is present when `just init` runs (included in the initial git commit)
+- Author name, email, description, and license are safe from the `just init` sed rewriting (they never contain the "modernpackage" token)
+- Repository URL may contain "modernpackage" (accepted risk; URLs with the literal token would be rewritten by sed; the e2e test deliberately uses token-free URLs)
+
+### Null Handling
+
+When a value is `None` (not resolved from any source), the corresponding placeholder is left untouched. For example:
+- If `author_name` is `None`, `'Name Surname'` remains in the file
+- If `package_license` is `None`, the MIT classifier remains and no license field is added
+- This allows partial scaffolding: users can supply only the metadata they care about and let the template defaults handle the rest
+
+### Complexity Constraint
+
+The metadata writing is split into two functions to maintain cyclomatic complexity ≤ 8 (enforced by `pyproject.toml`):
+- `_write_package_metadata()` handles all non-license fields (author_name, author_email, description, repository_url) and delegates license handling to the helper
+- `_apply_license()` is a separate private function that handles license insertion and classifier removal, keeping the parent function lean and readable
 
 ## Known Gaps & Deviations
 

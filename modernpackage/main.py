@@ -370,6 +370,79 @@ def parse_args() -> Namespace:
     return arguments
 
 
+def _toml_escape(value: str) -> str:
+    """Escape backslashes then double-quotes for safe TOML basic-string insertion."""
+    return value.replace('\\', '\\\\').replace('"', '\\"')
+
+
+def _write_package_metadata(  # noqa: PLR0913
+    package_path: Path,
+    *,
+    author_name: str | None,
+    author_email: str | None,
+    description: str | None,
+    package_license: str | None,
+    repository_url: str | None,
+) -> None:
+    """Replace template placeholders in the cloned pyproject.toml with supplied values.
+
+    Each non-None field is applied as a targeted, TOML-escaped str.replace of a
+    known template literal; None fields are skipped (design Decision 7). A missing
+    pyproject.toml prints a notice and returns without raising (graceful boundary
+    degradation, design Decision 8 — also lets the Popen-mocked unit tests, which
+    never create a real clone, pass unchanged). The file is rewritten only if a
+    substitution changed it.
+    """
+    pyproject_path = package_path / 'pyproject.toml'
+    try:
+        original = pyproject_path.read_text()
+    except FileNotFoundError:
+        print(  # noqa: T201
+            f'No pyproject.toml at {pyproject_path}; skipping metadata.',
+            file=sys.stderr,
+        )
+        return
+
+    updated = original
+    if author_name is not None:
+        updated = updated.replace('Name Surname', _toml_escape(author_name))
+    if author_email is not None:
+        updated = updated.replace('email@example.com', _toml_escape(author_email))
+    if description is not None:
+        updated = updated.replace(
+            'Package configuration example using bleeding edge toolset.',
+            _toml_escape(description),
+        )
+    if repository_url is not None:
+        updated = updated.replace(
+            'https://github.com/albertas/modernpackage',
+            _toml_escape(repository_url),
+        )
+    if package_license is not None:
+        updated = _apply_license(updated, package_license)
+
+    if updated != original:
+        pyproject_path.write_text(updated)
+
+
+def _apply_license(content: str, package_license: str) -> str:
+    """Insert a PEP 639 license key and drop the hardcoded MIT trove classifier.
+
+    Adds `license = "<value>"` to [project] after the stable `readme` key, and
+    removes the `License :: OSI Approved :: MIT License` classifier line so the
+    scaffold does not carry a contradictory hardcoded license.
+    """
+    license_line = f'license = "{_toml_escape(package_license)}"'
+    content = content.replace(
+        'readme = "README.md"',
+        f'readme = "README.md"\n{license_line}',
+    )
+    return content.replace(
+        '    "License :: OSI Approved :: MIT License",\n',
+        '',
+    )
+
+
 def init_new_package(  # noqa: PLR0913
     package_name: str,
     *,
@@ -380,10 +453,6 @@ def init_new_package(  # noqa: PLR0913
     repository_url: str | None = None,
 ) -> int:
     """Clone modernpackage files into `package_name` and run `just init` in it."""
-    # Threaded for later V4 work (writing metadata into pyproject.toml); not yet
-    # consumed. The `del` documents intent and satisfies ruff ARG001.
-    del author_name, author_email, description, package_license, repository_url
-
     module_name = normalize_module_name(package_name)
     new_package_path = Path.cwd() / module_name
 
@@ -401,6 +470,15 @@ def init_new_package(  # noqa: PLR0913
         friendly = humanize_git_clone_error(stderr_text)
         message = f'{friendly}\n\n{raw}' if friendly else raw
         raise RuntimeError(message)
+
+    _write_package_metadata(
+        new_package_path,
+        author_name=author_name,
+        author_email=author_email,
+        description=description,
+        package_license=package_license,
+        repository_url=repository_url,
+    )
 
     try:
         pipe = Popen(  # noqa: S603

@@ -1,3 +1,4 @@
+import tomllib
 from argparse import ArgumentTypeError, Namespace
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -12,6 +13,7 @@ from modernpackage.main import (
     _git_config_default,
     _load_config_file,
     _user_config_path,
+    _write_package_metadata,
     humanize_git_clone_error,
     init_new_package,
     main,
@@ -831,3 +833,109 @@ def test_parse_args_malformed_config_continues_with_none(
     assert arguments.description is None
     assert arguments.license is None
     assert 'config.toml' in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: _write_package_metadata helpers
+# ---------------------------------------------------------------------------
+
+
+def _seed_pyproject(tmp_path: Path) -> Path:
+    """Copy the real template pyproject.toml into tmp_path; return tmp_path."""
+    source = Path(__file__).resolve().parent.parent / 'pyproject.toml'
+    (tmp_path / 'pyproject.toml').write_text(source.read_text())
+    return tmp_path
+
+
+def test_write_package_metadata_replaces_all_fields(tmp_path: Path) -> None:
+    package_path = _seed_pyproject(tmp_path)
+    _write_package_metadata(
+        package_path,
+        author_name='Jane Doe',
+        author_email='jane@example.org',
+        description='A real package.',
+        package_license=None,
+        repository_url='https://example.org/repo',
+    )
+    result = (package_path / 'pyproject.toml').read_text()
+    assert 'Jane Doe' in result
+    assert 'jane@example.org' in result
+    assert 'A real package.' in result
+    assert 'https://example.org/repo' in result
+    assert 'Name Surname' not in result
+    assert 'email@example.com' not in result
+    assert 'Package configuration example using bleeding edge toolset.' not in result
+    assert 'https://github.com/albertas/modernpackage' not in result
+
+
+def test_write_package_metadata_none_is_noop(tmp_path: Path) -> None:
+    package_path = _seed_pyproject(tmp_path)
+    original = (package_path / 'pyproject.toml').read_text()
+    _write_package_metadata(
+        package_path,
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
+    assert (package_path / 'pyproject.toml').read_text() == original
+
+
+def test_write_package_metadata_missing_file(tmp_path: Path) -> None:
+    # No pyproject.toml seeded: must return without raising.
+    _write_package_metadata(
+        tmp_path,
+        author_name='Jane Doe',
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
+
+
+def test_write_package_metadata_escapes_quotes(tmp_path: Path) -> None:
+    package_path = _seed_pyproject(tmp_path)
+    _write_package_metadata(
+        package_path,
+        author_name='Acme "Inc"',
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
+    result = (package_path / 'pyproject.toml').read_text()
+    assert 'Acme \\"Inc\\"' in result
+    assert tomllib.loads(result)  # parses cleanly
+
+
+def test_write_package_metadata_writes_license(tmp_path: Path) -> None:
+    package_path = _seed_pyproject(tmp_path)
+    _write_package_metadata(
+        package_path,
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license='Apache-2.0',
+        repository_url=None,
+    )
+    result = (package_path / 'pyproject.toml').read_text()
+    assert 'license = "Apache-2.0"' in result
+    assert 'License :: OSI Approved :: MIT License' not in result
+    assert 'Natural Language :: English' in result  # other classifiers intact
+    assert tomllib.loads(result)
+
+
+def test_write_package_metadata_none_license_keeps_classifier(tmp_path: Path) -> None:
+    package_path = _seed_pyproject(tmp_path)
+    _write_package_metadata(
+        package_path,
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
+    result = (package_path / 'pyproject.toml').read_text()
+    assert 'License :: OSI Approved :: MIT License' in result
+    assert 'license = "' not in result

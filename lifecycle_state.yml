@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-18 10:21:43
+heart_beat: 2026-06-18 10:45:45
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T35-2026-06-18-v4-support-a-per-user-config-file-supplying-defaul
-    heart_beat: 2026-06-18 10:21:43
+  - artifact_dir: T36-2026-06-18-v4-populate-pyproject-toml-author-description-lice
+    heart_beat: 2026-06-18 10:45:45

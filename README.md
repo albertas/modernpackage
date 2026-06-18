@@ -108,7 +108,13 @@ repository_url = "https://github.com/example/my-package"
 
 The `--help` output advertises each environment variable, making the fallback mechanism discoverable. Environment variables set to empty strings are treated as unset, allowing fallback to the next source.
 
-The metadata is currently threaded through the initialization flow for foundation-building; writing it to `pyproject.toml` is deferred to later V4 work.
+The provided metadata is automatically written to the generated package's `pyproject.toml` file:
+- `--author-name` and `--author-email` populate the `[project].authors` field
+- `--description` populates the `[project].description` field
+- `--license` adds a `[project].license` SPDX field and removes the hardcoded MIT classifier
+- `--repository-url` populates the `[project.urls].homepage` field
+
+All values are TOML-escaped to safely handle special characters (quotes and backslashes).
 
 ### Exit Codes
 

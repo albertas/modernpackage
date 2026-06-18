@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from modernpackage import main
 from modernpackage.main import normalize_module_name
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
@@ -62,6 +63,15 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
     clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
     assert clone.returncode == 0, f'git clone failed:\n{clone.stdout}\n{clone.stderr}'
 
+    main._write_package_metadata(  # noqa: SLF001
+        destination,
+        author_name='Test Author',
+        author_email='test@example.org',
+        description='An e2e generated package.',
+        package_license='Apache-2.0',
+        repository_url='https://example.org/repo',
+    )
+
     init = _run(
         ['just', 'init', module_name],
         cwd=destination,
@@ -81,3 +91,13 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
 
     check = _run(['just', 'check'], cwd=destination)
     assert check.returncode == 0, f'just check failed:\n{check.stdout}\n{check.stderr}'
+
+    pyproject = (destination / 'pyproject.toml').read_text()
+    assert 'Test Author' in pyproject
+    assert 'test@example.org' in pyproject
+    assert 'An e2e generated package.' in pyproject
+    assert 'license = "Apache-2.0"' in pyproject
+    assert 'License :: OSI Approved :: MIT License' not in pyproject
+    assert 'Name Surname' not in pyproject
+    assert 'email@example.com' not in pyproject
+    assert 'Package configuration example using bleeding edge toolset.' not in pyproject
