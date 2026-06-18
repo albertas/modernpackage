@@ -9,10 +9,12 @@ from modernpackage import __version__
 from modernpackage.main import (
     _GIT_CONFIG_USER_EMAIL_KEY,
     _GIT_CONFIG_USER_NAME_KEY,
+    _REQUIRED_TOOLS,
     _config_file_default,
     _git_config_default,
     _load_config_file,
     _user_config_path,
+    _verify_required_tools,
     _write_package_metadata,
     humanize_git_clone_error,
     init_new_package,
@@ -339,6 +341,70 @@ def test_init_new_package_just_init_failure() -> None:
         popen_mock.side_effect = [git_clone_mock, just_init_mock]
         with pytest.raises(RuntimeError, match='just init failed with exit code 1'):
             init_new_package('mypackage')
+
+
+def test_verify_required_tools_missing_git() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == 'git' else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        patch('modernpackage.main.Popen') as popen_mock,
+        pytest.raises(RuntimeError, match='git'),
+    ):
+        init_new_package('mypackage')
+    assert popen_mock.call_count == 0
+
+
+def test_verify_required_tools_missing_just() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == 'just' else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        patch('modernpackage.main.Popen') as popen_mock,
+        pytest.raises(RuntimeError, match='just'),
+    ):
+        init_new_package('mypackage')
+    assert popen_mock.call_count == 0
+
+
+def test_verify_required_tools_missing_uv() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == 'uv' else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        patch('modernpackage.main.Popen') as popen_mock,
+        pytest.raises(RuntimeError, match='uv'),
+    ):
+        init_new_package('mypackage')
+    assert popen_mock.call_count == 0
+
+
+def test_verify_required_tools_all_present() -> None:
+    with patch(
+        'modernpackage.main.shutil.which', return_value='/usr/bin/tool'
+    ) as which_mock:
+        _verify_required_tools()
+    assert which_mock.call_count == len(_REQUIRED_TOOLS)
+
+
+def test_verify_required_tools_reports_all_missing() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool in {'git', 'uv'} else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        patch('modernpackage.main.Popen') as popen_mock,
+        pytest.raises(RuntimeError) as exc_info,
+    ):
+        init_new_package('mypackage')
+    error_message = str(exc_info.value)
+    assert 'git' in error_message
+    assert 'uv' in error_message
+    assert 'install' in error_message
+    assert popen_mock.call_count == 0
 
 
 def test_main_with_package_name() -> None:

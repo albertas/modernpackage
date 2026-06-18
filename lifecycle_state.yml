@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-18 11:04:01
+heart_beat: 2026-06-18 11:19:50
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T37-2026-06-18-v4-define-a-precedence-order-for-metadata-sources
-    heart_beat: 2026-06-18 11:04:01
+  - artifact_dir: T38-2026-06-18-v5-verify-git-just-and-uv-are-on-path-before-scaff
+    heart_beat: 2026-06-18 11:19:50

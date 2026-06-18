@@ -2,6 +2,7 @@
 
 import os
 import re
+import shutil
 import sys
 import tomllib
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
@@ -49,6 +50,10 @@ _GIT_CLONE_ERROR_MESSAGES: list[tuple[re.Pattern[str], str]] = [
         'cannot write to the destination directory — check filesystem permissions',
     ),
 ]
+
+
+# Required executables that must resolve on PATH before scaffolding begins.
+_REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
 
 
 def humanize_git_clone_error(stderr_text: str) -> str | None:
@@ -467,6 +472,18 @@ def _apply_license(content: str, package_license: str) -> str:
     )
 
 
+def _verify_required_tools() -> None:
+    """Raise RuntimeError if any required executable is absent from PATH."""
+    missing = [tool for tool in _REQUIRED_TOOLS if shutil.which(tool) is None]
+    if missing:
+        message = (
+            f'required tool(s) not found on PATH: {", ".join(missing)}'
+            ' — install the missing tool(s) before scaffolding.'
+            ' See https://github.com/casey/just#installation'
+        )
+        raise RuntimeError(message)
+
+
 def init_new_package(  # noqa: PLR0913
     package_name: str,
     *,
@@ -479,6 +496,8 @@ def init_new_package(  # noqa: PLR0913
     """Clone modernpackage files into `package_name` and run `just init` in it."""
     module_name = normalize_module_name(package_name)
     new_package_path = Path.cwd() / module_name
+
+    _verify_required_tools()
 
     pipe = Popen(  # noqa: S603
         ['git', 'clone', 'https://github.com/albertas/modernpackage', new_package_path],  # noqa: S607

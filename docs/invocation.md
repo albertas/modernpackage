@@ -123,9 +123,37 @@ After all steps complete, the outcome of `just check` is reported and the exit c
 
 The package directory is created in both cases; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory). However, the exit code now reflects the validation outcome, allowing CI/CD pipelines and automated tools to detect when the scaffolded package does not meet quality standards.
 
+#### Preflight check
+
+Before any subprocess is spawned or any directory is created, `init_new_package()` verifies that all required tools are available on `PATH`:
+
+```bash
+modernpackage my-package
+```
+
+If any required tool (`git`, `just`, or `uv`) is not found on `PATH`, the command exits immediately with exit code 1 and an error message:
+
+```
+required tool(s) not found on PATH: <tools> — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+```
+
+For example, if `git` is missing:
+
+```
+required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+```
+
+If multiple tools are missing (e.g., `git` and `uv`), they are all listed in a single message:
+
+```
+required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+```
+
+The preflight check ensures that scaffolding fails fast and clearly when required tools are unavailable, preventing confusing late failures or incomplete clones.
+
 #### Failure path
 
-If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1.
+If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1. This occurs only after the preflight check has passed, so the required tools are guaranteed to be present.
 
 For common failure modes, a friendly, actionable message is displayed first, followed by the raw stderr for diagnostics:
 

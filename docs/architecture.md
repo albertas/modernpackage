@@ -34,9 +34,21 @@ This constant is:
 
 ### `modernpackage/main.py`
 
-The main CLI orchestrator with type-annotated functions and module-level regex constants.
+The main CLI orchestrator with type-annotated functions and module-level constants for validation and tool checking.
 
 #### Module-Level Constants
+
+**`_REQUIRED_TOOLS: tuple[str, ...]`**
+
+Tuple of required external executables that must resolve on `PATH` before scaffolding begins:
+```python
+_REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
+```
+
+Used by `_verify_required_tools()` to check that all required tools are available. The set includes:
+- `git` — cloning the template repository
+- `just` — initializing and validating the scaffolded package
+- `uv` — invoked transitively by `just check` for dependency management, building, and publishing
 
 **`_PACKAGE_NAME_RE: re.Pattern[str]`**
 
@@ -179,6 +191,30 @@ Consulted by `_user_config_path()` to resolve the per-user config file location.
 #### Functions
 
 The main CLI orchestrator with type-annotated functions:
+
+#### `_verify_required_tools() -> None`
+
+A private helper that verifies all required executables resolve on `PATH` before scaffolding begins.
+
+- **Purpose**: Called at the start of `init_new_package()` to fail fast if any required tool is missing, preventing filesystem changes or subprocess calls when tools are unavailable.
+- **Parameters**: none
+- **Returns**: `None` (raises an exception on failure)
+- **Algorithm**: 
+  1. Iterates over `_REQUIRED_TOOLS` and calls `shutil.which(tool)` for each
+  2. Collects all tools where `shutil.which()` returns `None` (tool not found on PATH)
+  3. If any tools are missing, raises `RuntimeError` with a message naming all absent tools
+  4. If all tools are present, returns normally with no exception
+- **Error message**: Includes the missing tool names (comma-separated), an actionable remedy ("install the missing tool(s) before scaffolding"), and an install pointer (the `just` installation URL already used elsewhere in the codebase)
+
+Examples:
+- If `git` is missing: raises `RuntimeError("required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation")`
+- If both `git` and `uv` are missing: raises `RuntimeError("required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation")`
+- If all tools are present: returns normally with no exception
+
+**Design rationale:**
+- Checks all missing tools in a single pass, so the user sees all gaps at once rather than rerunning after each install
+- Raises `RuntimeError` to funnel through the existing `main()` exception handler (`except RuntimeError`) for clean error output
+- Called before any `Popen` subprocess or filesystem operation, ensuring a missing tool aborts scaffolding before the clone directory is created
 
 #### `_explain_invalid_package_name(value: str) -> str`
 
@@ -608,6 +644,7 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
    For example, if the user provides `my-cool.package`, the derived `module_name` is `my_cool_package`.
 4. **Process**:
    - Resolves target path using the module name: `Path.cwd() / module_name`
+   - **Step 0: Preflight check** — **Before any subprocess or filesystem operation**, calls `_verify_required_tools()` to verify that `git`, `just`, and `uv` all resolve on `PATH`. If any tool is missing, raises `RuntimeError` with an actionable message naming all absent tools, preventing the clone directory from being created and subprocess calls from being attempted.
    - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <module_name>` via `Popen` with `stderr=PIPE` (target directory uses underscores, not hyphens/dots)
      - Waits for completion via `communicate()` and captures both stdout and stderr
      - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:

@@ -8,6 +8,7 @@ Install and run:
 ```bash
 pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
+                                       # verifies git, just, and uv are on PATH
                                        # validates the name (rejects stdlib collisions before scaffolding)
                                        # creates a new package and validates it with just check
                                        # prints "just check passed" or "just check failed"
@@ -69,6 +70,16 @@ modernpackage my-package --author-email "not-an-email"  # Error: Invalid author 
 modernpackage my-package --repository-url "github.com/user/repo"  # Error: Invalid repository URL: 'github.com/user/repo' — expected http(s)://…
                                         # Exit code 2 (argument validation error)
                                         # No scaffolding occurs
+
+# Example: Required tool not found (missing git)
+modernpackage my-package                # Error: required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+                                        # Exit code 1 (preflight check fails)
+                                        # No scaffolding occurs, no directory created
+
+# Example: Multiple required tools missing (missing git and uv)
+modernpackage my-package                # Error: required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+                                        # Exit code 1 (preflight check fails)
+                                        # No scaffolding occurs, no directory created
 ```
 
 View the installed version:
