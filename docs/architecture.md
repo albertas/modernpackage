@@ -50,6 +50,19 @@ Used by `_verify_required_tools()` to check that all required tools are availabl
 - `just` — initializing and validating the scaffolded package
 - `uv` — invoked transitively by `just check` for dependency management, building, and publishing
 
+**`_TOOL_INSTALL_HINTS: dict[str, str]`**
+
+Canonical install page per required tool, keyed by tool name. Surfaced as a remediation hint when the tool is missing from PATH:
+```python
+_TOOL_INSTALL_HINTS: dict[str, str] = {
+    'git': 'https://git-scm.com/downloads',
+    'just': 'https://github.com/casey/just#installation',
+    'uv': 'https://docs.astral.sh/uv/getting-started/installation/',
+}
+```
+
+When `_verify_required_tools()` detects a missing tool, the error message includes one hint line per missing tool, each with its specific install URL. Iteration order is driven by `_REQUIRED_TOOLS`, not by the dict's internal order, ensuring consistent presentation.
+
 **`_TEMPLATE_REPOSITORY_URL: str`**
 
 The GitHub URL of the template repository cloned to scaffold a new package:
@@ -221,25 +234,36 @@ The main CLI orchestrator with type-annotated functions:
 
 #### `_verify_required_tools() -> None`
 
-A private helper that verifies all required executables resolve on `PATH` before scaffolding begins.
+A private helper that verifies all required executables resolve on `PATH` before scaffolding begins, emitting specific install URLs for each missing tool.
 
-- **Purpose**: Called at the start of `init_new_package()` to fail fast if any required tool is missing, preventing filesystem changes or subprocess calls when tools are unavailable.
+- **Purpose**: Called at the start of `init_new_package()` to fail fast if any required tool is missing, preventing filesystem changes or subprocess calls when tools are unavailable. Provides actionable remediation by pointing users to the install URL for each specific missing tool.
 - **Parameters**: none
 - **Returns**: `None` (raises an exception on failure)
 - **Algorithm**: 
   1. Iterates over `_REQUIRED_TOOLS` and calls `shutil.which(tool)` for each
   2. Collects all tools where `shutil.which()` returns `None` (tool not found on PATH)
-  3. If any tools are missing, raises `RuntimeError` with a message naming all absent tools
+  3. If any tools are missing:
+     - Constructs a header line: `f'required tool(s) not found on PATH: {", ".join(missing)} — install the missing tool(s) before scaffolding:'`
+     - Appends one hint line per missing tool: `f'\n  - {tool}: {_TOOL_INSTALL_HINTS[tool]}'`
+     - Raises `RuntimeError` with the header + concatenated hints
   4. If all tools are present, returns normally with no exception
-- **Error message**: Includes the missing tool names (comma-separated), an actionable remedy ("install the missing tool(s) before scaffolding"), and an install pointer (the `just` installation URL already used elsewhere in the codebase)
+- **Error message**: The message format is:
+  ```
+  required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding:
+    - git: https://git-scm.com/downloads
+    - uv: https://docs.astral.sh/uv/getting-started/installation/
+  ```
+  The tool order matches `_REQUIRED_TOOLS`, not the dict order.
 
 Examples:
-- If `git` is missing: raises `RuntimeError("required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation")`
-- If both `git` and `uv` are missing: raises `RuntimeError("required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation")`
+- If `git` is missing: raises `RuntimeError("required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding:\n  - git: https://git-scm.com/downloads")`
+- If both `git` and `uv` are missing: raises `RuntimeError("required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding:\n  - git: https://git-scm.com/downloads\n  - uv: https://docs.astral.sh/uv/getting-started/installation/")`
 - If all tools are present: returns normally with no exception
 
 **Design rationale:**
 - Checks all missing tools in a single pass, so the user sees all gaps at once rather than rerunning after each install
+- Each missing tool has its own hint line with the specific, canonical install URL, making remediation unambiguous
+- Iteration over `missing` (which is ordered by `_REQUIRED_TOOLS`) ensures consistent tool ordering in the message, not dict order
 - Raises `RuntimeError` to funnel through the existing `main()` exception handler (`except RuntimeError`) for clean error output
 - Called before any `Popen` subprocess or filesystem operation, ensuring a missing tool aborts scaffolding before the clone directory is created
 

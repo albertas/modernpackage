@@ -442,6 +442,63 @@ def test_verify_required_tools_reports_all_missing() -> None:
     assert popen_mock.call_count == 0
 
 
+def test_verify_required_tools_hint_points_at_git_install_docs() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == 'git' else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        pytest.raises(RuntimeError) as exc_info,
+    ):
+        _verify_required_tools()
+    message = str(exc_info.value)
+    assert 'git-scm.com/downloads' in message
+    assert 'docs.astral.sh/uv' not in message
+    assert 'github.com/casey/just#installation' not in message
+
+
+def test_verify_required_tools_hint_points_at_uv_install_docs() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == 'uv' else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        pytest.raises(RuntimeError) as exc_info,
+    ):
+        _verify_required_tools()
+    message = str(exc_info.value)
+    assert 'docs.astral.sh/uv' in message
+    assert 'git-scm.com/downloads' not in message
+    assert 'github.com/casey/just#installation' not in message
+
+
+def test_verify_required_tools_hint_points_at_just_install_docs() -> None:
+    def which(tool: str) -> str | None:
+        return None if tool == 'just' else f'/usr/bin/{tool}'
+
+    with (
+        patch('modernpackage.main.shutil.which', side_effect=which),
+        pytest.raises(RuntimeError) as exc_info,
+    ):
+        _verify_required_tools()
+    message = str(exc_info.value)
+    assert 'github.com/casey/just#installation' in message
+    assert 'git-scm.com/downloads' not in message
+    assert 'docs.astral.sh/uv' not in message
+
+
+def test_verify_required_tools_lists_all_install_hints_when_all_missing() -> None:
+    with (
+        patch('modernpackage.main.shutil.which', return_value=None),
+        pytest.raises(RuntimeError) as exc_info,
+    ):
+        _verify_required_tools()
+    message = str(exc_info.value)
+    assert 'git-scm.com/downloads' in message
+    assert 'docs.astral.sh/uv' in message
+    assert 'github.com/casey/just#installation' in message
+
+
 def test_main_with_package_name() -> None:
     with (
         patch('modernpackage.main.ArgumentParser') as argparse_mock,

@@ -60,7 +60,10 @@ Before any subprocess is spawned, run all preflight checks in order:
 1. **`_verify_required_tools()`**:
    - For each tool in `_REQUIRED_TOOLS` (git, just, uv)
    - Call `shutil.which(tool)` to check if on PATH
-   - If any missing: raise `RuntimeError` with actionable message (tools list + install link)
+   - If any missing: raise `RuntimeError` with actionable per-tool install hints:
+     - Header: `f'required tool(s) not found on PATH: {", ".join(missing)} — install the missing tool(s) before scaffolding:'`
+     - One line per missing tool: `f'\n  - {tool}: {_TOOL_INSTALL_HINTS[tool]}'`
+     - Each tool maps to its canonical install URL (git → git-scm.com, uv → docs.astral.sh/uv, just → github.com/casey/just)
 
 2. **`_verify_target_directory_absent(target_path)`**:
    - Call `Path.exists()` on the target path

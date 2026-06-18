@@ -176,7 +176,8 @@ Preflight checks:
 
 **Output (stderr):**
 ```
-required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding:
+  - git: https://git-scm.com/downloads
 ```
 
 **Exit code:** 1

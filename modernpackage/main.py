@@ -56,6 +56,16 @@ _GIT_CLONE_ERROR_MESSAGES: list[tuple[re.Pattern[str], str]] = [
 _REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
 
 
+# Canonical install page per required tool, surfaced as a remediation hint when
+# the tool is missing from PATH. Keyed by tool name; iteration order is driven by
+# `_REQUIRED_TOOLS`/`missing`, not by this dict.
+_TOOL_INSTALL_HINTS: dict[str, str] = {
+    'git': 'https://git-scm.com/downloads',
+    'just': 'https://github.com/casey/just#installation',
+    'uv': 'https://docs.astral.sh/uv/getting-started/installation/',
+}
+
+
 # Template repository cloned to scaffold a new package; used by the reachability
 # probe and the clone, and as the metadata-replacement target.
 _TEMPLATE_REPOSITORY_URL: str = 'https://github.com/albertas/modernpackage'
@@ -504,12 +514,14 @@ def _verify_required_tools() -> None:
     """Raise RuntimeError if any required executable is absent from PATH."""
     missing = [tool for tool in _REQUIRED_TOOLS if shutil.which(tool) is None]
     if missing:
-        message = (
+        header = (
             f'required tool(s) not found on PATH: {", ".join(missing)}'
-            ' — install the missing tool(s) before scaffolding.'
-            ' See https://github.com/casey/just#installation'
+            ' — install the missing tool(s) before scaffolding:'
         )
-        raise RuntimeError(message)
+        hints = ''.join(
+            f'\n  - {tool}: {_TOOL_INSTALL_HINTS[tool]}' for tool in missing
+        )
+        raise RuntimeError(header + hints)
 
 
 def _verify_target_directory_absent(target_path: Path) -> None:

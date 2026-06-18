@@ -94,7 +94,8 @@ modernpackage my-package
 #   [FAIL] required tools on PATH (git, just, uv)
 #
 # Output (stderr):
-# required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+# required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding:
+#   - git: https://git-scm.com/downloads
 # Exit code 1 (preflight check fails)
 # No scaffolding occurs, no directory created
 
@@ -114,7 +115,9 @@ modernpackage my-package
 # No scaffolding occurs
 
 # Example: Multiple required tools missing (missing git and uv)
-modernpackage my-package                # Error: required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
+modernpackage my-package                # Error: required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding:
+                                        #   - git: https://git-scm.com/downloads
+                                        #   - uv: https://docs.astral.sh/uv/getting-started/installation/
                                         # Exit code 1 (preflight check fails)
                                         # No scaffolding occurs, no directory created
 
