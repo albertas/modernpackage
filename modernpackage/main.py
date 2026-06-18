@@ -355,6 +355,12 @@ def parse_args() -> Namespace:
         default=False,
     )
     parser.add_argument(
+        '--dry-run',
+        help='Preview what scaffolding would do without making any changes.',
+        action='store_true',
+        default=False,
+    )
+    parser.add_argument(
         'package_name',
         help='Name of a new package to initialise in a local directory.',
         nargs='?',
@@ -502,12 +508,76 @@ class PreflightCheck:
 
 
 _PREFLIGHT_HEADER: str = 'Preflight checks:'
+_DRY_RUN_HEADER: str = 'Dry run — no changes will be made:'
 
 
 def _format_check_line(label: str, *, ok: bool) -> str:
     """Return one indented checklist line; marker padded to 6 chars so labels align."""
     marker = '[ok]' if ok else '[FAIL]'
     return f'  {marker:<6} {label}'
+
+
+def _format_dry_run_plan(  # noqa: PLR0913
+    module_name: str,
+    target_path: Path,
+    *,
+    author_name: str | None,
+    author_email: str | None,
+    description: str | None,
+    package_license: str | None,
+    repository_url: str | None,
+) -> str:
+    """Return the multi-line dry-run preview (design Decision 3).
+
+    Reports the actions a real run would take at the level the code knows:
+    target directory, template clone URL, pyproject.toml metadata
+    substitutions (None fields keep the template default), and the documented
+    `just init` outcomes (directory rename, version reset).
+    """
+    metadata_fields = (
+        ('author name', author_name),
+        ('author email', author_email),
+        ('description', description),
+        ('license', package_license),
+        ('repository URL', repository_url),
+    )
+    lines = [
+        _DRY_RUN_HEADER,
+        f'  clone {_TEMPLATE_REPOSITORY_URL} into {target_path}',
+        '  update pyproject.toml metadata:',
+    ]
+    for label, value in metadata_fields:
+        if value is None:
+            lines.append(f'    {label}: keeps template default')
+        else:
+            lines.append(f'    {label}: {value}')
+    lines.append(f'  run just init: rename modernpackage/ -> {module_name}/')
+    lines.append('  run just init: reset version to 0.0.1')
+    return '\n'.join(lines)
+
+
+def _print_dry_run_plan(  # noqa: PLR0913
+    module_name: str,
+    target_path: Path,
+    *,
+    author_name: str | None,
+    author_email: str | None,
+    description: str | None,
+    package_license: str | None,
+    repository_url: str | None,
+) -> None:
+    """Print the formatted dry-run plan to stdout (output convention, main.py:592)."""
+    print(  # noqa: T201
+        _format_dry_run_plan(
+            module_name,
+            target_path,
+            author_name=author_name,
+            author_email=author_email,
+            description=description,
+            package_license=package_license,
+            repository_url=repository_url,
+        )
+    )
 
 
 def _verify_required_tools() -> None:
@@ -607,12 +677,25 @@ def init_new_package(  # noqa: PLR0913
     description: str | None = None,
     package_license: str | None = None,
     repository_url: str | None = None,
+    dry_run: bool = False,
 ) -> int:
     """Clone modernpackage files into `package_name` and run `just init` in it."""
     module_name = normalize_module_name(package_name)
     new_package_path = Path.cwd() / module_name
 
     _run_preflight_checks(new_package_path)
+
+    if dry_run:
+        _print_dry_run_plan(
+            module_name,
+            new_package_path,
+            author_name=author_name,
+            author_email=author_email,
+            description=description,
+            package_license=package_license,
+            repository_url=repository_url,
+        )
+        return 0
 
     pipe = Popen(  # noqa: S603
         ['git', 'clone', _TEMPLATE_REPOSITORY_URL, new_package_path],  # noqa: S607
@@ -695,6 +778,7 @@ def main() -> int:
                 description=parsed_args.description,
                 package_license=parsed_args.license,
                 repository_url=parsed_args.repository_url,
+                dry_run=parsed_args.dry_run,
             )
         except RuntimeError as error:
             print(error, file=sys.stderr)  # noqa: T201

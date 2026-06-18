@@ -42,6 +42,50 @@ modernpackage <version>
 
 The version is read from `modernpackage/__version__` at runtime.
 
+### Dry-run flag
+
+```bash
+modernpackage <package_name> --dry-run
+modernpackage <package_name> --dry-run --author-name "Ada Lovelace" --description "My package"
+```
+
+Previews what scaffolding would do without making any changes. Runs preflight checks (same as a normal run), then exits cleanly with exit code 0 and prints a high-level plan showing:
+- The target directory that would be created
+- The template URL that would be cloned
+- Per-field metadata substitutions (fields with values, fields keeping the template default)
+- The well-known `just init` outcomes (rename `modernpackage/ → <module>/`, version reset to `0.0.1`)
+
+No directory is created, no clone occurs, no subprocess is spawned beyond preflight.
+
+**Example: Dry-run with metadata**
+
+```bash
+modernpackage my-package --dry-run --author-name "Ada Lovelace" --description "A cool package"
+```
+
+**Output (stdout):**
+```
+Preflight checks:
+  [ok]   package name valid
+  [ok]   required tools on PATH (git, just, uv)
+  [ok]   target directory available
+  [ok]   template remote reachable
+Dry run — no changes will be made:
+  clone https://github.com/albertas/modernpackage into /home/user/my_package
+  update pyproject.toml metadata:
+    author name: Ada Lovelace
+    author email: keeps template default
+    description: A cool package
+    license: keeps template default
+    repository URL: keeps template default
+  run just init: rename modernpackage/ -> my_package/
+  run just init: reset version to 0.0.1
+```
+
+**Exit code:** 0
+
+**Important**: The dry-run still performs preflight checks (including a network probe to verify the template repository is reachable). If preflight fails, the dry-run returns exit code 1 and no plan is printed.
+
 ### Package initialization
 
 ```bash

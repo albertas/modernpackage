@@ -27,6 +27,7 @@ modernpackage PACKAGE_NAME [FLAGS] [ENV_VARS] [CONFIG_FILE]
 
 **Returned namespace fields:**
 - `version`: bool (True if `--version` flag present)
+- `dry_run`: bool (True if `--dry-run` flag present)
 - `package_name`: str | None (None if not provided)
 - `author_name`, `author_email`, `description`, `license`, `repository_url`: str | None each
 
@@ -77,6 +78,26 @@ Before any subprocess is spawned, run all preflight checks in order:
    - If the probe times out: catch `TimeoutExpired` and raise `RuntimeError` with the network-friendly message
 
 **All three checks are synchronous and fail-fast; all must pass before proceeding to the clone. A user sees all preflight validation errors together before any filesystem mutation.**
+
+### Step 4.5: Dry-run Short-Circuit (conditional)
+
+**If `--dry-run` flag is set:**
+
+1. After preflight checks pass (stdout shows full `[ok]` checklist)
+2. Call `_print_dry_run_plan()` with the normalized module name and all metadata fields (author_name, author_email, description, license, repository_url)
+3. Print to stdout:
+   - Header: `'Dry run — no changes will be made:'`
+   - Target directory line: `f'  clone {_TEMPLATE_REPOSITORY_URL} into {new_package_path}'`
+   - Metadata section header: `'  update pyproject.toml metadata:'`
+   - For each metadata field:
+     - If non-None: `f'    {field_label}: {value}'`
+     - If None: `f'    {field_label}: keeps template default'`
+   - Just init rename outcome: `f'  run just init: rename modernpackage/ -> {module_name}/'`
+   - Just init version outcome: `'  run just init: reset version to 0.0.1'`
+4. Return exit code 0 immediately (short-circuit, skip Steps 5-8)
+5. No directory is created, no clone occurs, no subprocess is spawned beyond preflight
+
+**If `--dry-run` flag is not set:** skip this step and proceed to Step 5 (Clone).
 
 ### Step 5: Git Clone
 

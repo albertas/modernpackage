@@ -27,6 +27,48 @@ modernpackage my-package
 #   [ok]   template remote reachable
 # just check passed — my_package scaffold is valid.
 
+# Example: Preview what scaffolding would do without making changes
+modernpackage my-package --dry-run
+
+# Output:
+# Preflight checks:
+#   [ok]   package name valid
+#   [ok]   required tools on PATH (git, just, uv)
+#   [ok]   target directory available
+#   [ok]   template remote reachable
+# Dry run — no changes will be made:
+#   clone https://github.com/albertas/modernpackage into /home/user/my_package
+#   update pyproject.toml metadata:
+#     author name: keeps template default
+#     author email: keeps template default
+#     description: keeps template default
+#     license: keeps template default
+#     repository URL: keeps template default
+#   run just init: rename modernpackage/ -> my_package/
+#   run just init: reset version to 0.0.1
+# Exit code 0
+
+# Example: Dry-run with metadata
+modernpackage my-package --dry-run --author-name "Ada Lovelace" --description "A cool package"
+
+# Output:
+# Preflight checks:
+#   [ok]   package name valid
+#   [ok]   required tools on PATH (git, just, uv)
+#   [ok]   target directory available
+#   [ok]   template remote reachable
+# Dry run — no changes will be made:
+#   clone https://github.com/albertas/modernpackage into /home/user/my_package
+#   update pyproject.toml metadata:
+#     author name: Ada Lovelace
+#     author email: keeps template default
+#     description: A cool package
+#     license: keeps template default
+#     repository URL: keeps template default
+#   run just init: rename modernpackage/ -> my_package/
+#   run just init: reset version to 0.0.1
+# Exit code 0
+
 # Example: Create a package with a name containing hyphens and dots
 modernpackage my-cool.package           # Valid PEP 508 distribution name
                                         # Creates directory: my_cool_package

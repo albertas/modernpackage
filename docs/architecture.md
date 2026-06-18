@@ -90,6 +90,15 @@ _PREFLIGHT_HEADER: str = 'Preflight checks:'
 
 Printed to stdout by `_run_preflight_checks()` before any check lines, establishing the section heading for the checklist.
 
+**`_DRY_RUN_HEADER: str`**
+
+The header line printed at the start of the dry-run plan:
+```python
+_DRY_RUN_HEADER: str = 'Dry run — no changes will be made:'
+```
+
+Printed to stdout by `_print_dry_run_plan()` when the `--dry-run` flag is set, establishing the section heading for the preview plan.
+
 **`_PACKAGE_NAME_RE: re.Pattern[str]`**
 
 Compiled regex pattern for PEP 508 / PyPI distribution names:
@@ -353,6 +362,53 @@ A private helper that formats one checklist line with a status marker and label.
 - `_format_check_line('package name valid', ok=True)` → `'  [ok]   package name valid'`
 - `_format_check_line('required tools on PATH (git, just, uv)', ok=True)` → `'  [ok]   required tools on PATH (git, just, uv)'`
 - `_format_check_line('target directory available', ok=False)` → `'  [FAIL] target directory available'`
+
+#### `_format_dry_run_plan(module_name: str, target_path: Path, *, author_name: str | None, author_email: str | None, description: str | None, package_license: str | None, repository_url: str | None) -> str`
+
+A private helper that formats the dry-run preview plan into a multi-line string.
+
+- **Purpose**: Called by `_print_dry_run_plan()` to format the dry-run preview into a human-readable plan. Reports only what the code knows (not what the template will do beyond the documented `just init` outcomes).
+- **Parameters**:
+  - `module_name: str` — the normalized module name (e.g., `'my_cool_package'`)
+  - `target_path: Path` — the computed target directory path
+  - `author_name: str | None` — author name (keyword-only)
+  - `author_email: str | None` — author email (keyword-only)
+  - `description: str | None` — package description (keyword-only)
+  - `package_license: str | None` — license identifier (keyword-only)
+  - `repository_url: str | None` — repository URL (keyword-only)
+- **Returns**: `str` — a multi-line formatted plan with a header, clone action, metadata substitutions, and `just init` outcomes
+- **Format**: Uses the `_DRY_RUN_HEADER` constant for the header line, followed by action lines with two-space indentation (matching `_format_check_line` aesthetic). For each metadata field, reports either the value (if non-`None`) or a note that it "keeps template default" (if `None`).
+- **Example output**:
+  ```
+  Dry run — no changes will be made:
+    clone https://github.com/albertas/modernpackage into /home/user/my_package
+    update pyproject.toml metadata:
+      author name: Ada Lovelace
+      author email: keeps template default
+      description: A cool package
+      license: keeps template default
+      repository URL: keeps template default
+    run just init: rename modernpackage/ -> my_package/
+    run just init: reset version to 0.0.1
+  ```
+
+**Design rationale**:
+- Reports the target directory, template URL, and per-field metadata (with `None` → "keeps template default") so the user knows what values will be written
+- Includes the well-known `just init` outcomes (rename, version reset) drawn from the template recipe's documented behavior
+- Does not attempt to enumerate the exact file list or parse the template `Justfile` (that would require a clone, which the dry-run forbids)
+- Extracted into a separate function so the plan is independently testable and `_print_dry_run_plan()` remains a thin output wrapper
+
+#### `_print_dry_run_plan(module_name: str, target_path: Path, *, author_name: str | None, author_email: str | None, description: str | None, package_license: str | None, repository_url: str | None) -> None`
+
+A private helper that prints the dry-run preview plan to stdout.
+
+- **Purpose**: Called by `init_new_package()` when `dry_run=True` after preflight checks pass. Prints the formatted plan to stdout and lets the caller return.
+- **Parameters**: Same as `_format_dry_run_plan()` (forwarded directly)
+- **Returns**: `None`
+- **Behavior**: 
+  1. Calls `_format_dry_run_plan()` with all parameters
+  2. Prints the result to stdout via `print(... )  # noqa: T201`
+- **Output convention**: Matches the existing output convention (progress/informational text to stdout; design Decision 10, `main.py:592`).
 
 #### `_run_preflight_checks(target_path: Path) -> None`
 
@@ -776,7 +832,8 @@ Examples:
 Parses command-line arguments using `argparse.ArgumentParser`, applies environment variable defaults for omitted flags, applies git config defaults for certain omitted env vars, applies config file defaults as the weakest source, and validates email and URL values.
 
 - **Arguments**:
-  - `-v` / `--version`: optional flag (default `False`)
+  - `-v` / `--version`: optional flag (default `False`) — prints the package version and exits
+  - `--dry-run`: optional flag (default `False`) — previews what scaffolding would do without making changes; runs preflight, then prints a plan and exits
   - `package_name`: optional positional argument (validated via `validate_package_name`)
   - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_NAME_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_NAME_KEY)`, then `_config_file_default(config, 'author_name')`.
   - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_EMAIL_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)`, then `_config_file_default(config, 'author_email')`, then validates via `_validated_or_error()`.
@@ -795,6 +852,7 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 
 - **Returns**: `Namespace` — an `argparse.Namespace` object with fields:
   - `version` (bool) — whether `--version` was provided
+  - `dry_run` (bool) — whether `--dry-run` was provided
   - `package_name` (str | None) — the package name (from flag or `None`)
   - `author_name` (str | None) — author name (from flag, env var, git config, config file, or `None`)
   - `author_email` (str | None) — author email (from flag, env var, git config, config file, or `None`, validated)
@@ -812,18 +870,19 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 
 **Complexity**: The function has a McCabe cyclomatic complexity of ≤ 10 (enforced by `pyproject.toml:tool.ruff.lint.mccabe.max-complexity`), with the validation logic extracted into the `_validated_or_error()` helper and the config file helpers extracted into `_load_config_file()` and `_config_file_default()` to keep the post-parse block clear and maintainable.
 
-#### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None) -> int`
+#### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None, dry_run: bool = False) -> int`
 
-Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name.
+Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name. When `dry_run=True`, performs preflight checks and prints a preview plan, then exits without cloning or making any changes.
 
 1. **Positional Parameter**: `package_name: str` — name of the new package to create (validated distribution name, may contain `.` or `-`)
-2. **Keyword Parameters** (optional, all default to `None`):
+2. **Keyword Parameters** (optional, all default to `None` or `False`):
    - `author_name: str | None = None` — author name to include in the package metadata (free string, not yet written to files)
    - `author_email: str | None = None` — author email to include in the package metadata (validated via `validate_author_email`, not yet written to files)
    - `description: str | None = None` — package description to include in metadata (free string, not yet written to files)
    - `package_license: str | None = None` — license identifier to include in metadata (free string, not yet written to files)
    - `repository_url: str | None = None` — repository URL to include in metadata (validated via `validate_repository_url`, not yet written to files)
-3. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails)
+   - `dry_run: bool = False` — if `True`, preview what scaffolding would do without making changes (no clone, no directory creation)
+3. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails, or 0 if dry-run succeeds)
 
 **Metadata writing**: The metadata parameters are automatically written to the generated package's `pyproject.toml` file via `_write_package_metadata()`, called after the successful clone and before `just init`. This ensures the metadata is included in the package's initial git commit.
 3. **Derivation**: Converts the package name to a module name:
@@ -839,6 +898,7 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
      3. Target directory available — calls `_verify_target_directory_absent(target_path)` to verify that the computed target directory does not already exist (file or directory). If the path exists, raises `RuntimeError` with an actionable message suggesting the user choose a different package name or remove the existing directory, preventing git clone from failing with a cryptic error.
      4. Template remote reachable — calls `_verify_template_remote_reachable()` to verify the template is reachable via `git ls-remote` with a timeout. If unreachable, raises `RuntimeError` with a friendly message and diagnostic details.
      The checklist is printed to stdout showing each check as `[ok]` or `[FAIL]`. If any check fails, the checklist up to the failure is printed, the error is re-raised to be caught in `main()` for stderr printing, and subsequent checks never run.
+   - **Step 0.5: Dry-run short-circuit** — **If `dry_run=True`**: after preflight checks pass, calls `_print_dry_run_plan()` to print a high-level preview plan to stdout, then returns `0` immediately without proceeding to the clone. The plan includes the target directory, template URL, per-field metadata substitutions (showing which fields have values and which keep the template default), and the well-known `just init` outcomes (rename `modernpackage/ → <module>/`, version reset to `0.0.1`). No directory is created, no clone occurs, and no other subprocess is spawned. If preflight checks fail, the dry-run returns `1` via the standard error path (error message printed to stderr by `main()`).
    - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <module_name>` via `Popen` with `stderr=PIPE` (target directory uses underscores, not hyphens/dots)
      - Waits for completion via `communicate()` and captures both stdout and stderr
      - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:
@@ -893,10 +953,10 @@ The CLI entry point (orchestrator):
 
 - **Returns**: `int` — a process exit code (0 for success, 1 for failure)
 - **Flow**:
-  1. Calls `parse_args()` to get user input (including the five new metadata flags)
+  1. Calls `parse_args()` to get user input (including the `--dry-run` flag and five metadata flags)
   2. **If** `version` flag is set: prints `modernpackage <__version__>` and returns `0`
   3. **Elif** `package_name` is provided:
-     - Calls `init_new_package()` with the package name and all metadata keyword arguments inside a `try`/`except RuntimeError` block:
+     - Calls `init_new_package()` with the package name, all metadata keyword arguments, and the `dry_run` flag inside a `try`/`except RuntimeError` block:
        ```python
        init_new_package(
            package_name=parsed_args.package_name,
@@ -905,10 +965,11 @@ The CLI entry point (orchestrator):
            description=parsed_args.description,
            package_license=parsed_args.license,
            repository_url=parsed_args.repository_url,
+           dry_run=parsed_args.dry_run,
        )
        ```
      - **If** `RuntimeError` is raised: catches it, prints the error message to `sys.stderr` (which includes captured stderr from the failed subprocess), and returns `1`
-     - **If** no error: returns the value from `init_new_package()` (which is `0` if `just check` passed, or `1` if it failed)
+     - **If** no error: returns the value from `init_new_package()` (which is `0` if `just check` passed, `1` if it failed, or `0` if dry-run succeeded)
   4. **Else**: silent no-op (no error, no message) and returns `0`
 
 The error handling ensures that subprocess failures (from `git clone` or `just init`) are surfaced to the user as clean, readable messages on stderr instead of Python tracebacks. The returned exit code is translated to the process exit status by the console script wrapper (which calls `sys.exit(main())`), allowing shell scripts and CI/CD pipelines to detect failures properly. Validation failures (from `just check`) are now also reflected in the process exit code.

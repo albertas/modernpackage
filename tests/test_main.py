@@ -12,6 +12,7 @@ from modernpackage.main import (
     _GIT_CONFIG_USER_NAME_KEY,
     _REQUIRED_TOOLS,
     _config_file_default,
+    _format_dry_run_plan,
     _git_config_default,
     _load_config_file,
     _user_config_path,
@@ -512,6 +513,7 @@ def test_main_with_package_name() -> None:
         argparse_mock().parse_args().description = None
         argparse_mock().parse_args().license = None
         argparse_mock().parse_args().repository_url = None
+        argparse_mock().parse_args().dry_run = False
         init_mock.return_value = 0
         result = main()
     init_mock.assert_called_once_with(
@@ -521,6 +523,7 @@ def test_main_with_package_name() -> None:
         description=None,
         package_license=None,
         repository_url=None,
+        dry_run=False,
     )
     assert result == 0
 
@@ -1284,3 +1287,90 @@ def test_verify_template_remote_reachable_raises_on_timeout() -> None:
     message = str(exc_info.value)
     assert 'check your network' in message
     assert 'timed out' in message
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: --dry-run flag wiring
+# ---------------------------------------------------------------------------
+
+
+def test_init_new_package_dry_run_performs_no_subprocess() -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        result = init_new_package('mypackage', dry_run=True)
+    assert result == 0
+    assert popen_mock.call_count == 0
+
+
+def test_parse_args_dry_run_flag() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--dry-run']):
+        result = parse_args()
+    assert result.dry_run is True
+
+
+def test_parse_args_dry_run_defaults_false() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.dry_run is False
+
+
+def test_main_threads_dry_run() -> None:
+    with (
+        patch('modernpackage.main.ArgumentParser') as argparse_mock,
+        patch('modernpackage.main.init_new_package') as init_mock,
+        patch('modernpackage.main._git_config_default', return_value=None),
+    ):
+        argparse_mock().parse_args().version = False
+        argparse_mock().parse_args().package_name = 'mypackage'
+        argparse_mock().parse_args().author_name = None
+        argparse_mock().parse_args().author_email = None
+        argparse_mock().parse_args().description = None
+        argparse_mock().parse_args().license = None
+        argparse_mock().parse_args().repository_url = None
+        argparse_mock().parse_args().dry_run = True
+        init_mock.return_value = 0
+        result = main()
+    assert init_mock.call_args.kwargs['dry_run'] is True
+    assert result == 0
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: _format_dry_run_plan and _print_dry_run_plan
+# ---------------------------------------------------------------------------
+
+
+def test_format_dry_run_plan_reports_known_actions() -> None:
+    plan = _format_dry_run_plan(
+        'foo',
+        Path('/tmp/foo'),  # noqa: S108
+        author_name='Ada Lovelace',
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
+    assert '/tmp/foo' in plan  # noqa: S108
+    assert 'https://github.com/albertas/modernpackage' in plan
+    assert 'Ada Lovelace' in plan
+    assert 'keeps template default' in plan
+    assert 'modernpackage/ -> foo/' in plan
+    assert '0.0.1' in plan
+
+
+def test_init_new_package_dry_run_prints_plan(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        result = init_new_package('foo', dry_run=True, author_name='Ada')
+    assert result == 0
+    assert popen_mock.call_count == 0
+    captured = capsys.readouterr()
+    assert 'Dry run — no changes will be made:' in captured.out
+    assert 'Ada' in captured.out
