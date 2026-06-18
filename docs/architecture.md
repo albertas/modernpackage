@@ -216,6 +216,30 @@ Examples:
 - Raises `RuntimeError` to funnel through the existing `main()` exception handler (`except RuntimeError`) for clean error output
 - Called before any `Popen` subprocess or filesystem operation, ensuring a missing tool aborts scaffolding before the clone directory is created
 
+#### `_verify_target_directory_absent(target_path: Path) -> None`
+
+A private helper that verifies the target package directory does not already exist before scaffolding begins.
+
+- **Purpose**: Called in `init_new_package()` right after `_verify_required_tools()` to fail fast if the computed target directory already exists, preventing git clone from failing with a cryptic error and ensuring the user is aware of the conflict before any filesystem mutation.
+- **Parameter**: `target_path: Path` — the computed target directory path (e.g., `Path.cwd() / 'my_cool_package'`)
+- **Returns**: `None` (raises an exception on failure)
+- **Algorithm**: 
+  1. Calls `target_path.exists()` to check if the path exists (file or directory)
+  2. If the path exists: raises `RuntimeError` with an actionable message
+  3. If the path does not exist: returns normally with no exception
+- **Error message**: Includes the target path and an actionable remedy ("choose a different package name or remove the existing directory")
+
+Examples:
+- If `/home/user/my_cool_package/` directory exists: raises `RuntimeError("target directory already exists: /home/user/my_cool_package — choose a different package name or remove the existing directory")`
+- If `/home/user/my_cool_package` file exists: raises `RuntimeError("target directory already exists: /home/user/my_cool_package — choose a different package name or remove the existing directory")`
+- If the path does not exist: returns normally with no exception
+
+**Design rationale:**
+- Checks for both files and directories (broad check via `Path.exists()`) to handle all conflict cases
+- Runs after `_verify_required_tools()` but before git clone, ensuring all preflight checks are grouped together
+- Raises `RuntimeError` to funnel through the existing `main()` exception handler for clean error output
+- Provides the full path in the error message so the user knows exactly what exists and where
+
 #### `_explain_invalid_package_name(value: str) -> str`
 
 A private helper that returns a precise reason why a package name failed validation.
@@ -644,7 +668,9 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
    For example, if the user provides `my-cool.package`, the derived `module_name` is `my_cool_package`.
 4. **Process**:
    - Resolves target path using the module name: `Path.cwd() / module_name`
-   - **Step 0: Preflight check** — **Before any subprocess or filesystem operation**, calls `_verify_required_tools()` to verify that `git`, `just`, and `uv` all resolve on `PATH`. If any tool is missing, raises `RuntimeError` with an actionable message naming all absent tools, preventing the clone directory from being created and subprocess calls from being attempted.
+   - **Step 0: Preflight checks** — **Before any subprocess or filesystem operation**, runs two preflight checks:
+     1. Calls `_verify_required_tools()` to verify that `git`, `just`, and `uv` all resolve on `PATH`. If any tool is missing, raises `RuntimeError` with an actionable message naming all absent tools, preventing the clone directory from being created and subprocess calls from being attempted.
+     2. Calls `_verify_target_directory_absent(target_path)` to verify that the computed target directory does not already exist (file or directory). If the path exists, raises `RuntimeError` with an actionable message suggesting the user choose a different package name or remove the existing directory, preventing git clone from failing with a cryptic error.
    - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <module_name>` via `Popen` with `stderr=PIPE` (target directory uses underscores, not hyphens/dots)
      - Waits for completion via `communicate()` and captures both stdout and stderr
      - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:

@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V5] Refuse to proceed when the target directory already exists
 - [ ] [V5] Check that the GitHub template remote is reachable before cloning
 - [ ] [V5] Print a concise preflight checklist of all environment checks
 - [ ] [V5] Abort early with a specific remediation hint when any precondition fails
@@ -15,6 +14,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T39] [V5] Refuse to proceed when the target directory already exists
 - [x] [T38] [V5] Verify git, just, and uv are on PATH before scaffolding
 - [x] [T37] [V4] Define a precedence order for metadata sources (CLI flags > env vars > git config > config file)
 - [x] [T36] [V4] Populate pyproject.toml author, description, license, and repository URL during init

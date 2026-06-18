@@ -484,6 +484,16 @@ def _verify_required_tools() -> None:
         raise RuntimeError(message)
 
 
+def _verify_target_directory_absent(target_path: Path) -> None:
+    """Raise RuntimeError if the target package directory already exists."""
+    if target_path.exists():
+        message = (
+            f'target directory already exists: {target_path}'
+            ' — choose a different package name or remove the existing directory'
+        )
+        raise RuntimeError(message)
+
+
 def init_new_package(  # noqa: PLR0913
     package_name: str,
     *,
@@ -498,6 +508,7 @@ def init_new_package(  # noqa: PLR0913
     new_package_path = Path.cwd() / module_name
 
     _verify_required_tools()
+    _verify_target_directory_absent(new_package_path)
 
     pipe = Popen(  # noqa: S603
         ['git', 'clone', 'https://github.com/albertas/modernpackage', new_package_path],  # noqa: S607

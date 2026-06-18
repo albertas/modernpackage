@@ -15,6 +15,7 @@ from modernpackage.main import (
     _load_config_file,
     _user_config_path,
     _verify_required_tools,
+    _verify_target_directory_absent,
     _write_package_metadata,
     humanize_git_clone_error,
     init_new_package,
@@ -1008,3 +1009,49 @@ def test_write_package_metadata_none_license_keeps_classifier(tmp_path: Path) ->
     result = (package_path / 'pyproject.toml').read_text()
     assert 'License :: OSI Approved :: MIT License' in result
     assert 'license = "' not in result
+
+
+# ---------------------------------------------------------------------------
+# _verify_target_directory_absent preflight check
+# ---------------------------------------------------------------------------
+
+
+def test_init_new_package_aborts_when_target_directory_exists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / 'mypackage').mkdir()
+    with (
+        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
+        patch('modernpackage.main.Popen') as popen_mock,
+        pytest.raises(RuntimeError, match='already exists'),
+    ):
+        init_new_package('mypackage')
+    assert popen_mock.call_count == 0
+
+
+def test_init_new_package_proceeds_when_target_directory_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    with (
+        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
+        patch('modernpackage.main.Popen') as popen_mock,
+    ):
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        result = init_new_package('mypackage')
+    assert result == 0
+    assert popen_mock.call_count == 3  # noqa: PLR2004
+
+
+def test_verify_target_directory_absent_raises_when_exists(tmp_path: Path) -> None:
+    existing = tmp_path / 'existing'
+    existing.mkdir()
+    with pytest.raises(RuntimeError, match='already exists'):
+        _verify_target_directory_absent(existing)
+
+
+def test_verify_target_directory_absent_passes_when_absent(tmp_path: Path) -> None:
+    absent = tmp_path / 'absent'
+    _verify_target_directory_absent(absent)  # must not raise

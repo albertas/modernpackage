@@ -123,9 +123,13 @@ After all steps complete, the outcome of `just check` is reported and the exit c
 
 The package directory is created in both cases; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory). However, the exit code now reflects the validation outcome, allowing CI/CD pipelines and automated tools to detect when the scaffolded package does not meet quality standards.
 
-#### Preflight check
+#### Preflight checks
 
-Before any subprocess is spawned or any directory is created, `init_new_package()` verifies that all required tools are available on `PATH`:
+Before any subprocess is spawned or any directory is created, `init_new_package()` performs two preflight checks:
+
+##### 1. Required Tools Check
+
+Verifies that all required tools are available on `PATH`:
 
 ```bash
 modernpackage my-package
@@ -149,7 +153,30 @@ If multiple tools are missing (e.g., `git` and `uv`), they are all listed in a s
 required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
 ```
 
-The preflight check ensures that scaffolding fails fast and clearly when required tools are unavailable, preventing confusing late failures or incomplete clones.
+##### 2. Target Directory Check
+
+Verifies that the target package directory does not already exist:
+
+```bash
+mkdir my-package
+modernpackage my-package
+```
+
+If the target directory (named after the normalized module name) already exists, the command exits immediately with exit code 1 and an error message:
+
+```
+target directory already exists: /path/to/my_package — choose a different package name or remove the existing directory
+```
+
+For example, if you try to create a package with a name that already exists:
+
+```
+target directory already exists: /home/user/my_cool_package — choose a different package name or remove the existing directory
+```
+
+**Important**: The target directory name is derived by normalizing the package name (replacing hyphens and dots with underscores). For example, `my-cool.package` becomes `my_cool_package`. This check verifies that a directory with this normalized name does not exist before attempting to clone.
+
+These preflight checks ensure that scaffolding fails fast and clearly when requirements are not met, preventing confusing late failures or incomplete clones.
 
 #### Failure path
 

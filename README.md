@@ -9,6 +9,7 @@ Install and run:
 pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # verifies git, just, and uv are on PATH
+                                       # checks that target directory does not already exist
                                        # validates the name (rejects stdlib collisions before scaffolding)
                                        # creates a new package and validates it with just check
                                        # prints "just check passed" or "just check failed"
@@ -80,6 +81,12 @@ modernpackage my-package                # Error: required tool(s) not found on P
 modernpackage my-package                # Error: required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding. See https://github.com/casey/just#installation
                                         # Exit code 1 (preflight check fails)
                                         # No scaffolding occurs, no directory created
+
+# Example: Target directory already exists
+mkdir my-package
+modernpackage my-package                # Error: target directory already exists: /path/to/my_package — choose a different package name or remove the existing directory
+                                        # Exit code 1 (preflight check fails)
+                                        # No scaffolding occurs
 ```
 
 View the installed version:
