@@ -69,6 +69,17 @@ def validate_package_name(value: str) -> str:
     return value
 
 
+def normalize_module_name(value: str) -> str:
+    """Return an import-safe module name: `.` and `-` replaced by `_`.
+
+    Input is already validated by `validate_package_name`, so this never
+    returns None. `_` is preserved; case is unchanged. Leading-digit names
+    (e.g. `9lives`) and Python keywords (e.g. `class`) remain invalid module
+    names — out of scope (see plan Open Risks / design Open Risks).
+    """
+    return value.replace('.', '_').replace('-', '_')
+
+
 def parse_args() -> Namespace:
     """Parse CLI options and return them as Namespace (object instance)."""
     parser = ArgumentParser()
@@ -90,7 +101,8 @@ def parse_args() -> Namespace:
 
 def init_new_package(package_name: str) -> int:
     """Clone modernpackage files into `package_name` and run `just init` in it."""
-    new_package_path = Path.cwd() / package_name
+    module_name = normalize_module_name(package_name)
+    new_package_path = Path.cwd() / module_name
 
     pipe = Popen(  # noqa: S603
         ['git', 'clone', 'https://github.com/albertas/modernpackage', new_package_path],  # noqa: S607
@@ -109,7 +121,7 @@ def init_new_package(package_name: str) -> int:
 
     try:
         pipe = Popen(  # noqa: S603
-            ['just', 'init', package_name],  # noqa: S607
+            ['just', 'init', module_name],  # noqa: S607
             stdin=PIPE,
             stdout=PIPE,
             stderr=PIPE,
@@ -138,11 +150,11 @@ def init_new_package(package_name: str) -> int:
     pipe.communicate()
 
     if pipe.returncode == 0:
-        print(f'just check passed — {package_name} scaffold is valid.')  # noqa: T201
+        print(f'just check passed — {module_name} scaffold is valid.')  # noqa: T201
         return 0
     print(  # noqa: T201
         f'just check failed with exit code {pipe.returncode}'
-        f' — review the output in {package_name}.',
+        f' — review the output in {module_name}.',
         file=sys.stderr,
     )
     return 1

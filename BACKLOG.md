@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V3] Normalize an accepted distribution name into an import-safe module name
 - [ ] [V3] Reject names that collide with Python standard-library module names
 - [ ] [V3] Return a precise explanation of why a package name was refused
 - [ ] [V4] Add CLI flags for author name, email, description, license, and repository URL
@@ -25,6 +24,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T29] [V3] Normalize an accepted distribution name into an import-safe module name
 - [x] [T28] [V3] Relax name validation to accept valid PEP 508 / PyPI distribution names including hyphens and underscores
 - [x] [T27] [V2] Add an e2e test that scaffolds a package and asserts just check passes
 - [x] [T26] [V2] Exit non-zero when just check fails in the generated package

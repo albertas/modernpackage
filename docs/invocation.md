@@ -64,11 +64,23 @@ modernpackage: error: argument package_name: Invalid package name: '<name>'
 Examples of valid names: `mypackage`, `my-package`, `my_package`, `my.package`, `a`
 Examples of invalid names: `-bad`, `bad-`, `has space`, empty string
 
+**Important**: The provided `package_name` may contain hyphens and dots (e.g., `my-cool.package`), but the created directory will use underscores instead (e.g., `my_cool_package`). This normalization ensures that the directory name and all import paths are valid Python identifiers. For example:
+
+```bash
+modernpackage my-cool.package    # valid PEP 508 distribution name
+# Creates a directory named: my_cool_package
+# All Python imports use: from my_cool_package import ...
+```
+
 #### Success path
 
-Upon success, a new directory named `<package_name>` is created in the current working directory, containing a complete, ready-to-use Python package with:
+Upon success, a new directory is created in the current working directory containing a complete, ready-to-use Python package. The directory name is derived from the provided package name by replacing hyphens and dots with underscores (ensuring a valid Python module identifier).
+
+**Example**: When you run `modernpackage my-cool.package`, a directory named `my_cool_package` is created (not `my-cool.package`).
+
+The created directory contains:
 - All source files cloned from `https://github.com/albertas/modernpackage`
-- All occurrences of "modernpackage" renamed to the new package name
+- All occurrences of "modernpackage" renamed to the derived module name (e.g., "my_cool_package")
 - Version reset to `0.0.1`
 - Git repository reinitialized
 - Quality validation run via `just check` to verify the scaffolded package passes all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
@@ -76,15 +88,17 @@ Upon success, a new directory named `<package_name>` is created in the current w
 After all steps complete, the outcome of `just check` is reported and the exit code reflects the result:
 - **If `just check` passes** (all quality gates succeed), a message is printed to stdout and exit code 0 is returned:
   ```
-  just check passed — <package_name> scaffold is valid.
+  just check passed — <module_name> scaffold is valid.
   ```
   Exit code: 0
+  (where `<module_name>` is the normalized directory name with underscores)
   
 - **If `just check` fails** (any quality gate fails), a message is printed to stderr and exit code 1 is returned:
   ```
-  just check failed with exit code <code> — review the output in <package_name>.
+  just check failed with exit code <code> — review the output in <module_name>.
   ```
   Exit code: 1
+  (where `<module_name>` is the normalized directory name with underscores)
 
 The package directory is created in both cases; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory). However, the exit code now reflects the validation outcome, allowing CI/CD pipelines and automated tools to detect when the scaffolded package does not meet quality standards.
 

@@ -9,6 +9,7 @@ from modernpackage.main import (
     humanize_git_clone_error,
     init_new_package,
     main,
+    normalize_module_name,
     parse_args,
     validate_package_name,
 )
@@ -23,6 +24,18 @@ def test_show_version() -> None:
         result = main()
         print_mock.assert_called_once_with(f'modernpackage {__version__}')
     assert result == 0
+
+
+def test_normalize_module_name() -> None:
+    cases = {
+        'my-cool.package': 'my_cool_package',
+        'my_package': 'my_package',
+        'a': 'a',
+        'my-cool_pkg.v2': 'my_cool_pkg_v2',
+        'a--b': 'a__b',  # runs are preserved, not collapsed (design intent)
+    }
+    for value, expected in cases.items():
+        assert normalize_module_name(value) == expected
 
 
 def test_validate_package_name_valid() -> None:
@@ -57,6 +70,21 @@ def test_init_new_package() -> None:
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
     assert popen_mock.call_count == 3  # noqa: PLR2004
+
+
+def test_init_new_package_normalizes_name() -> None:
+    with patch('modernpackage.main.Popen') as popen_mock:
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('my-cool.package')
+
+    clone_call = popen_mock.call_args_list[0]
+    clone_target = clone_call.args[0][-1]
+    assert Path(clone_target).name == 'my_cool_package'
+
+    init_call = popen_mock.call_args_list[1]
+    assert init_call.args[0] == ['just', 'init', 'my_cool_package']
+    assert init_call.kwargs['cwd'] == Path.cwd() / 'my_cool_package'
 
 
 def test_init_new_package_runs_just_check() -> None:

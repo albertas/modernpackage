@@ -21,6 +21,8 @@ from pathlib import Path
 
 import pytest
 
+from modernpackage.main import normalize_module_name
+
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
 
@@ -53,20 +55,27 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
         if shutil.which(tool) is None:
             pytest.skip(f'required tool not on PATH: {tool}')
 
-    package_name = 'scaffoldcheck'
-    destination = tmp_path / package_name
+    package_name = 'scaffold-check.pkg'
+    module_name = normalize_module_name(package_name)
+    destination = tmp_path / module_name
 
     clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
     assert clone.returncode == 0, f'git clone failed:\n{clone.stdout}\n{clone.stderr}'
 
     init = _run(
-        ['just', 'init', package_name],
+        ['just', 'init', module_name],
         cwd=destination,
         env=os.environ | _GIT_IDENTITY_ENV,
     )
     assert init.returncode == 0, f'just init failed:\n{init.stdout}\n{init.stderr}'
 
-    init_file = destination / package_name / '__init__.py'
+    source_dir = destination / module_name
+    assert source_dir.is_dir()
+    assert '-' not in module_name
+    assert '.' not in module_name
+    assert '_' in module_name
+
+    init_file = source_dir / '__init__.py'
     assert init_file.exists()
     assert '0.0.1' in init_file.read_text()
 

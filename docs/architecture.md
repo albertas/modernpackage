@@ -34,7 +34,7 @@ This constant is:
 
 ### `modernpackage/main.py`
 
-The main CLI orchestrator with four fully type-annotated functions:
+The main CLI orchestrator with five fully type-annotated functions:
 
 #### `validate_package_name(value: str) -> str`
 
@@ -67,6 +67,34 @@ Examples:
 - `validate_package_name('bad-')` → raises `ArgumentTypeError` (trailing hyphen is invalid)
 - `validate_package_name('has space')` → raises `ArgumentTypeError` (space is invalid)
 
+#### `normalize_module_name(value: str) -> str`
+
+Converts a validated distribution name into an import-safe Python module identifier by replacing `.` and `-` with `_`.
+
+- **Purpose**: The `validate_package_name` validator accepts PEP 508 / PyPI distribution names containing `.` and `-` (e.g., `my-cool.package`). However, these characters are not valid in Python import statements; this helper transforms the distribution name into a valid module identifier.
+- **Input**: `value: str` — a distribution name already validated by `validate_package_name` (guaranteed to match the PEP 508 pattern)
+- **Returns**: `str` — the module name with `.` and `-` replaced by `_`, other characters unchanged
+  - `.` → `_`
+  - `-` → `_`
+  - `_` → `_` (preserved)
+  - Case unchanged (uppercase remains uppercase, lowercase remains lowercase)
+  - Runs of underscores are preserved (e.g., `a--b` → `a__b`, not collapsed to `a_b`)
+
+Examples:
+- `normalize_module_name('mypackage')` → `'mypackage'` (no change)
+- `normalize_module_name('my-package')` → `'my_package'`
+- `normalize_module_name('my_package')` → `'my_package'` (no change)
+- `normalize_module_name('my.package')` → `'my_package'`
+- `normalize_module_name('my-cool.package')` → `'my_cool_package'`
+- `normalize_module_name('my_cool_pkg.v2')` → `'my_cool_pkg_v2'`
+- `normalize_module_name('a')` → `'a'`
+- `normalize_module_name('a--b')` → `'a__b'`
+
+**Notes and limitations:**
+- Input is expected to be already validated by `validate_package_name`, so this never returns `None`
+- Uppercase letters in the input are preserved (e.g., `MyPackage` remains `MyPackage`, not lowercased)
+- This mapping does not handle Python keywords (`class`, `import`, etc.) or names starting with digits (e.g., `9lives`) — these remain invalid module names. Such names should be rejected at validation time (currently out of scope).
+
 #### `parse_args() -> Namespace`
 
 Parses command-line arguments using `argparse.ArgumentParser`.
@@ -78,27 +106,32 @@ Parses command-line arguments using `argparse.ArgumentParser`.
 
 #### `init_new_package(package_name: str) -> int`
 
-Orchestrates the package initialization flow by cloning, rewriting, and validating:
+Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name.
 
-1. **Parameter**: `package_name: str` — name of the new package to create
+1. **Parameter**: `package_name: str` — name of the new package to create (validated distribution name, may contain `.` or `-`)
 2. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails)
-3. **Process**:
-   - Resolves target path: `Path.cwd() / package_name`
-   - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen` with `stderr=PIPE`
+3. **Derivation**: Converts the package name to a module name:
+   ```python
+   module_name = normalize_module_name(package_name)
+   ```
+   For example, if the user provides `my-cool.package`, the derived `module_name` is `my_cool_package`.
+4. **Process**:
+   - Resolves target path using the module name: `Path.cwd() / module_name`
+   - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <module_name>` via `Popen` with `stderr=PIPE` (target directory uses underscores, not hyphens/dots)
      - Waits for completion via `communicate()` and captures both stdout and stderr
      - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:
        - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
        - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
-   - **Step 2: Initialize** — **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory) with `stderr=PIPE`
+   - **Step 2: Initialize** — **If `returncode == 0`**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
      - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
        - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
        - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
          - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
          - **If `returncode == 0`**: continues to Step 3
-   - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check <package_name>` (cwd: the cloned directory) via `Popen` and reports the outcome
+   - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check` (cwd: the cloned directory) via `Popen` and reports the outcome using the module name
      - Spawns the subprocess and captures both stdout and stderr via `communicate()`
-     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {package_name} scaffold is valid.'` and returns `0`
-     - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {package_name}.'` and returns `1`
+     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {module_name} scaffold is valid.'` (using the normalized module name) and returns `0`
+     - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {module_name}.'` (using the normalized module name) and returns `1`
      - Does not raise an error on non-zero exit code; `just check` failure is reported but does not block the function; the failure is propagated via the return code instead
 
 Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes. The `just init` missing-command error path is caught at the point of spawning the subprocess, before any execution attempts, and provides a clear, actionable installation instruction.
@@ -153,7 +186,8 @@ The error handling ensures that subprocess failures (from `git clone` or `just i
 
 All public functions in `modernpackage/main.py` carry complete type annotations:
 
-- **`validate_package_name(value: str) -> str`** — parameter and return types specified
+- **`validate_package_name(value: str) -> str`** — parameter and return types specified (validation-only, returns input unchanged)
+- **`normalize_module_name(value: str) -> str`** — parameter and return types specified (pure string transform)
 - **`parse_args() -> Namespace`** — return type specified (no parameters)
 - **`init_new_package(package_name: str) -> int`** — parameter type and return type specified
 - **`main() -> int`** — return type specified (no parameters)
@@ -190,9 +224,9 @@ just check-typecheck  # runs: uv run mypy modernpackage tests
 
 **Current status**: ✅ **All 4 source files pass strict mypy**
 - `modernpackage/__init__.py` — version constant
-- `modernpackage/main.py` — CLI orchestrator with 4 functions
+- `modernpackage/main.py` — CLI orchestrator with 5 functions (including the new `normalize_module_name` helper)
 - `tests/__init__.py` — test package marker
-- `tests/test_main.py` — comprehensive test suite
+- `tests/test_main.py` — comprehensive test suite (including tests for `normalize_module_name` and normalization wiring)
 
 Result: `Success: no issues found in 4 source files`
 
@@ -369,18 +403,19 @@ On a 1-core machine, `nproc --ignore=1` yields 0; `pytest-xdist` treats `-n 0` a
 
 ## Self-Replication Flow
 
-When a user runs `modernpackage mypackage`:
+When a user runs `modernpackage my-cool.package`:
 
-1. `main()` parses arguments and calls `init_new_package('mypackage')`
-2. `init_new_package()` clones the official repo to `./mypackage`, capturing stderr for detailed error reporting
-3. On successful clone, the `just init` recipe (in the clone) transforms it:
-   - Renames all "modernpackage" → "mypackage"
+1. `main()` parses arguments and validates that `my-cool.package` is a valid PEP 508 distribution name; calls `init_new_package('my-cool.package')`
+2. `init_new_package()` derives the module name: `module_name = normalize_module_name('my-cool.package')` → `'my_cool_package'`
+3. `init_new_package()` clones the official repo to `./my_cool_package`, capturing stderr for detailed error reporting
+4. On successful clone, the `just init` recipe (in the clone) transforms it:
+   - Renames all "modernpackage" → "my_cool_package"
    - Resets version to `0.0.1`
    - Reinitializes git
-4. On successful initialization, `just check` is run to validate the newly scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
-5. Result: a new, independent Python package ready for development
+5. On successful initialization, `just check` is run to validate the newly scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
+6. Result: a new, independent Python package ready for development, in a directory named `my_cool_package` with all import paths using underscores instead of hyphens/dots
 
-This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup. The clone, initialization, and validation steps report detailed error output if they fail, making it easy to diagnose issues (network errors, missing dependencies, permission problems, etc.).
+This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup. The clone, initialization, and validation steps report detailed error output if they fail, making it easy to diagnose issues (network errors, missing dependencies, permission problems, etc.). The normalization of the distribution name to a module name ensures that the created directory and all import paths are valid Python identifiers.
 
 ## Known Gaps & Deviations
 

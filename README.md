@@ -10,6 +10,11 @@ pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # creates a new package and validates it with just check
                                        # prints "just check passed" or "just check failed"
+
+# Example: Create a package with a name containing hyphens and dots
+modernpackage my-cool.package           # Valid PEP 508 distribution name
+                                        # Creates directory: my_cool_package
+                                        # All Python imports: from my_cool_package import ...
 ```
 
 View the installed version:
@@ -25,10 +30,14 @@ When `git clone` fails, the error message is enhanced with a friendly, actionabl
 
 ## After Initialization
 
-Once your new package is created and validated, you can begin development. The initialization process automatically runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed"). To continue development:
+Once your new package is created and validated, you can begin development. The initialization process automatically runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed"). 
+
+**Note**: If you provided a package name with hyphens or dots (e.g., `my-cool.package`), the created directory will use underscores instead (e.g., `my_cool_package`). This ensures the directory name and all Python imports are valid identifiers.
+
+To continue development:
 
 ```bash
-cd <your-package-name>
+cd my_cool_package              # Use the directory name (with underscores)
 just check    # Run tests and linters (already run during scaffolding; use for ongoing validation)
 just fix      # Auto-fix linting and formatting issues
 just publish  # Publish your package to PyPI.org
@@ -36,7 +45,7 @@ just publish  # Publish your package to PyPI.org
 
 To push to a Git repository (create the project on GitLab/GitHub first):
 ```bash
-git remote add origin git@gitlab.com:<your-username>/<your-package-name>.git
+git remote add origin git@gitlab.com:<your-username>/<directory-name>.git
 git push
 ```
 
