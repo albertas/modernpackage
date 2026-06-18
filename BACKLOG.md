@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V4] Read author name and email from the user's git config (user.name / user.email)
 - [ ] [V4] Support a per-user config file supplying default metadata values
 - [ ] [V4] Populate pyproject.toml author, description, license, and repository URL during init
 - [ ] [V4] Define a precedence order for metadata sources (CLI flags > env vars > git config > config file)
@@ -20,6 +19,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T34] [V4] Read author name and email from the user's git config (user.name / user.email)
 - [x] [T33] [V4] Read author metadata defaults from environment variables
 - [x] [T32] [V4] Add CLI flags for author name, email, description, license, and repository URL
 - [x] [T31] [V3] Return a precise explanation of why a package name was refused

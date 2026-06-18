@@ -5,7 +5,7 @@ import re
 import sys
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from pathlib import Path
-from subprocess import PIPE, Popen
+from subprocess import PIPE, Popen, run
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -89,6 +89,12 @@ _DESCRIPTION_ENV: str = 'MODERNPACKAGE_DESCRIPTION'
 _LICENSE_ENV: str = 'MODERNPACKAGE_LICENSE'
 _REPOSITORY_URL_ENV: str = 'MODERNPACKAGE_REPOSITORY_URL'
 
+# Git config keys consulted as the weakest metadata default for author name /
+# email when the matching flag and env var are both absent
+# (precedence: flag > env > git config > None).
+_GIT_CONFIG_USER_NAME_KEY: str = 'user.name'
+_GIT_CONFIG_USER_EMAIL_KEY: str = 'user.email'
+
 
 def _explain_invalid_package_name(value: str) -> str:
     """Return a precise reason a name failed `_PACKAGE_NAME_RE`.
@@ -158,6 +164,29 @@ def validate_repository_url(value: str) -> str:
 def _environment_default(variable_name: str) -> str | None:
     """Return the env var value, treating a set-but-empty value as unset."""
     return os.environ.get(variable_name) or None
+
+
+def _git_config_default(key: str) -> str | None:
+    """Return the effective `git config <key>` value, or None.
+
+    Reads the merged (local-over-global) git config the way a commit would
+    resolve it (design Decision 6). Degrades silently to None — never raises —
+    when git is missing, the key is unset (git exits 1), the value is empty, or
+    the command otherwise fails. An absent git default is expected, not an
+    error, so no notice is printed (design Decision 4).
+    """
+    try:
+        result = run(  # noqa: S603
+            ['git', 'config', key],  # noqa: S607
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
 
 
 def _validated_or_error(
@@ -243,6 +272,10 @@ def parse_args() -> Namespace:
         arguments.author_email = _environment_default(_AUTHOR_EMAIL_ENV)
     if arguments.repository_url is None:
         arguments.repository_url = _environment_default(_REPOSITORY_URL_ENV)
+    if arguments.author_name is None:
+        arguments.author_name = _git_config_default(_GIT_CONFIG_USER_NAME_KEY)
+    if arguments.author_email is None:
+        arguments.author_email = _git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)
     arguments.author_email = _validated_or_error(
         parser, arguments.author_email, validate_author_email
     )

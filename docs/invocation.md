@@ -221,6 +221,8 @@ The e2e test gracefully skips if the required tools are not available on `PATH`:
 
 If any tool is missing, the test skips with a diagnostic message instead of failing. This allows developers to run the test on machines that have the tools (e.g., for final validation) and skip gracefully on machines that don't.
 
+**Note on git config in e2e**: The e2e test sets git author/committer identity via environment variables (`GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`, etc.), not via `git config`. These environment variables do not populate `git config user.*` keys, so the git config fallback is not exercised by the e2e test. This is intentional — the e2e test exercises the git clone and init workflow, while unit tests verify the git config fallback behavior in isolation via mocked git calls.
+
 ### Test Duration & Network Requirements
 
 The e2e test takes several minutes to complete because the inner `just check` runs:
@@ -244,23 +246,29 @@ The test scaffolds a package from the local template and validates:
 - **Skip**: Required tools are missing from `PATH` (e.g., `just` not installed). Exit code 0, but the test report shows `1 skipped`. This is an honest outcome on machines without the required tools.
 - **Fail**: The scaffolding process failed or the scaffolded package does not pass `just check`. Exit code 1. This indicates a regression in the local template.
 
-## Environment Variable Defaults
+## Metadata Defaults Resolution
 
-When any of the five metadata flags are omitted, `parse_args()` consults corresponding environment variables as defaults:
+When any of the five metadata flags are omitted, `parse_args()` consults defaults in a specific precedence order. For `author_name` and `author_email`, the fallback chain is **flag > env > git config > None**. For other fields, it is **flag > env > None** (no git config fallback).
 
-| Flag | Environment Variable | Example |
-|------|----------------------|---------|
-| `--author-name` | `MODERNPACKAGE_AUTHOR_NAME` | `MODERNPACKAGE_AUTHOR_NAME="Ada Lovelace"` |
-| `--author-email` | `MODERNPACKAGE_AUTHOR_EMAIL` | `MODERNPACKAGE_AUTHOR_EMAIL="ada@example.com"` |
-| `--description` | `MODERNPACKAGE_DESCRIPTION` | `MODERNPACKAGE_DESCRIPTION="A cool package"` |
-| `--license` | `MODERNPACKAGE_LICENSE` | `MODERNPACKAGE_LICENSE="MIT"` |
-| `--repository-url` | `MODERNPACKAGE_REPOSITORY_URL` | `MODERNPACKAGE_REPOSITORY_URL="https://github.com/example/repo"` |
+| Flag | Environment Variable | Git Config Key | Fallback Chain |
+|------|----------------------|---|---|
+| `--author-name` | `MODERNPACKAGE_AUTHOR_NAME` | `user.name` | env → git config → None |
+| `--author-email` | `MODERNPACKAGE_AUTHOR_EMAIL` | `user.email` | env → git config → None |
+| `--description` | `MODERNPACKAGE_DESCRIPTION` | (none) | env → None |
+| `--license` | `MODERNPACKAGE_LICENSE` | (none) | env → None |
+| `--repository-url` | `MODERNPACKAGE_REPOSITORY_URL` | (none) | env → None |
 
-**Precedence**: Command-line flags take precedence over environment variables. If a flag is provided, the environment variable is ignored. If neither the flag nor the environment variable is set, the value defaults to `None`.
+**Precedence**: Command-line flags take precedence over all other sources. If a flag is provided, all fallback sources are ignored.
 
-**Empty environment variables**: An environment variable that is set to an empty string (`export MODERNPACKAGE_LICENSE=`) is treated as unset and defaults to `None`.
+**Environment variable fallback**: When a flag is omitted, the corresponding environment variable is consulted. If the environment variable is unset or empty, the next fallback source is consulted.
 
-### Environment Variable Examples
+**Git config fallback** (for `author_name` and `author_email` only): When both a flag and its environment variable are absent (or empty), the user's git config is consulted via `git config user.name` (or `user.email`). The git config is read as the user's effective configuration (merged local-over-global, the same way `git commit` would resolve it). If git is not installed, the key is unset, or the command fails, the fallback returns `None` silently (no error message).
+
+**Empty environment variables**: An environment variable that is set to an empty string (`export MODERNPACKAGE_LICENSE=`) is treated as unset and allows the next fallback source (git config for author fields, or `None` for others) to be consulted.
+
+**Validation**: Email and URL values are validated regardless of their source (flag, env var, or git config). Invalid values cause the command to exit with code 2 and a clean error message (no traceback).
+
+### Metadata Defaults Examples
 
 ```bash
 # Use env vars for all metadata
@@ -288,6 +296,33 @@ echo $?                        # Exit code: 2
 export MODERNPACKAGE_DESCRIPTION=""
 modernpackage my-package --description "From flag"   # uses "From flag" (empty env ignored)
 modernpackage my-package                             # no description (None)
+
+# Git config fallback (flag and env both absent/empty)
+unset MODERNPACKAGE_AUTHOR_NAME
+unset MODERNPACKAGE_AUTHOR_EMAIL
+git config user.name "Ada Lovelace"
+git config user.email "ada@example.com"
+modernpackage my-package      # author_name and author_email come from git config
+
+# Precedence: flag > env > git config > None
+export MODERNPACKAGE_AUTHOR_NAME="Env Name"
+git config user.name "Git Name"
+modernpackage my-package --author-name "Flag Name"  # uses "Flag Name" (flag wins)
+modernpackage my-package                            # uses "Env Name" (env beats git config)
+
+# All sources absent
+unset MODERNPACKAGE_AUTHOR_NAME
+unset MODERNPACKAGE_AUTHOR_EMAIL
+git config --global --unset user.name 2>/dev/null || true
+git config --local --unset user.name 2>/dev/null || true
+git config --global --unset user.email 2>/dev/null || true
+git config --local --unset user.email 2>/dev/null || true
+modernpackage my-package      # author_name and author_email are None
+
+# Git config email is validated (must be valid format)
+git config user.email "not-an-email"
+modernpackage my-package      # Error: Invalid author email: 'not-an-email' — expected name@domain.tld
+echo $?                        # Exit code: 2
 ```
 
 ## Argument Parser

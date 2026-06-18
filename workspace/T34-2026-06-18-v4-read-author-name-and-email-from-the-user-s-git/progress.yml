@@ -1,0 +1,136 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 93064
+    cost_usd: 0.42483825
+    input_tokens: 5252
+    output_tokens: 3729
+    cache_read_tokens: 139479
+    cache_creation_tokens: 16681
+    model: Haiku 4.5, opus 4.8, sonnet 4.6
+    context_used: 21933
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 105868
+    cost_usd: 0.6352380000000002
+    input_tokens: 3017
+    output_tokens: 7482
+    cache_read_tokens: 228598
+    cache_creation_tokens: 31573
+    model: Haiku 4.5, opus 4.8
+    context_used: 34590
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 109447
+    cost_usd: 0.5444765
+    input_tokens: 3144
+    output_tokens: 7038
+    cache_read_tokens: 191727
+    cache_creation_tokens: 25379
+    model: Haiku 4.5, opus 4.8
+    context_used: 28523
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 71787
+    cost_usd: 0.43286
+    input_tokens: 3142
+    output_tokens: 4287
+    cache_read_tokens: 167642
+    cache_creation_tokens: 22287
+    model: Haiku 4.5, opus 4.8
+    context_used: 25429
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 88688
+    cost_usd: 0.6159545
+    input_tokens: 3142
+    output_tokens: 7646
+    cache_read_tokens: 186391
+    cache_creation_tokens: 31251
+    model: Haiku 4.5, opus 4.8
+    context_used: 34393
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 135528
+    cost_usd: 0.3040291
+    input_tokens: 6074
+    output_tokens: 13362
+    cache_read_tokens: 986641
+    cache_creation_tokens: 63930
+    model: Haiku 4.5
+    context_used: 70004
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 303694
+    cost_usd: 1.0781392000000003
+    input_tokens: 23
+    output_tokens: 11865
+    cache_read_tokens: 1554944
+    cache_creation_tokens: 67154
+    model: Haiku 4.5, sonnet 4.6
+    context_used: 67177
+    context_max: 200000
+    lines_of_code: 281
+  sub_phases:
+  - num: 1
+    title: '`_git_config_default` helper + constants'
+    done: true
+    metrics:
+      duration_ms: 122103
+      cost_usd: 0.6740835000000001
+      input_tokens: 15
+      output_tokens: 4319
+      cache_read_tokens: 825285
+      cache_creation_tokens: 55165
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 55180
+      context_max: 200000
+      lines_of_code: 179
+  - num: 2
+    title: Wire git-config fallback into `parse_args()` precedence ladder
+    done: true
+    metrics:
+      duration_ms: 303694
+      cost_usd: 1.0781392000000003
+      input_tokens: 23
+      output_tokens: 11865
+      cache_read_tokens: 1554944
+      cache_creation_tokens: 67154
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 67177
+      context_max: 200000
+      lines_of_code: 281
+cumulative:
+  total_cost: 4.0355355500000005
+  total_ms: 908076
+  total_cache_read: 3455422
+  total_cache_write: 258255
+  total_loc: 281
+  total_input_tokens: 23794
+  total_output_tokens: 55409
+  version: 0.0.8
+  completed_at: 2026-06-18 09:54:57.448838

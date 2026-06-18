@@ -39,6 +39,12 @@ export MODERNPACKAGE_DESCRIPTION="Default description"
 modernpackage my-package --author-name "Babbage"   # flag wins; uses "Babbage"
                                                    # uses "Default description" from env
 
+# Example: Use git config when flags and env vars are absent
+git config user.name "Ada Lovelace"
+git config user.email "ada@example.com"
+modernpackage my-package                           # author_name and author_email from git config
+                                                   # (when neither flag nor env var is set)
+
 # Example: Invalid package name (leading separator)
 modernpackage -bad                      # Error: Invalid package name: '-bad' — name must start and end with a letter or digit
                                         # Exit code 2 (argument validation error)
@@ -74,15 +80,22 @@ modernpackage --version               # or `mp -v`
 
 The CLI accepts five optional flags for package metadata:
 
-- **`--author-name`**: Author name to include in the package (free string). Defaults to `$MODERNPACKAGE_AUTHOR_NAME` if omitted.
-- **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`). Defaults to `$MODERNPACKAGE_AUTHOR_EMAIL` if omitted.
+- **`--author-name`**: Author name to include in the package (free string). Defaults in order: `$MODERNPACKAGE_AUTHOR_NAME` → `git config user.name` → `None`.
+- **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`). Defaults in order: `$MODERNPACKAGE_AUTHOR_EMAIL` → `git config user.email` → `None`.
 - **`--description`**: Short description of the package (free string). Defaults to `$MODERNPACKAGE_DESCRIPTION` if omitted.
 - **`--license`**: License identifier (free string; commonly SPDX identifiers like `MIT`, `Apache-2.0`, etc.). Defaults to `$MODERNPACKAGE_LICENSE` if omitted.
 - **`--repository-url`**: Repository URL (must start with `http://` or `https://`). Defaults to `$MODERNPACKAGE_REPOSITORY_URL` if omitted.
 
-All metadata flags are optional and default to `None`. When provided via command-line flags, they are validated at parse time (email and URL shapes are checked). When values are sourced from environment variables, they are validated with the same rules as flag-supplied values. Invalid metadata (from either source) causes the command to exit with code 2 before any scaffolding occurs. Command-line flags take precedence over environment variables: if a flag is provided, the corresponding environment variable is ignored.
+All metadata flags are optional and default to `None`. When provided via command-line flags, they are validated at parse time (email and URL shapes are checked). When values are sourced from environment variables or git config, they are validated with the same rules as flag-supplied values. Invalid metadata (from any source) causes the command to exit with code 2 before any scaffolding occurs.
 
-The `--help` output advertises each environment variable, making the fallback mechanism discoverable. Environment variables set to empty strings are treated as unset.
+**Precedence**: Command-line flags take highest precedence, followed by environment variables, followed (for `author-name` and `author-email` only) by git config, and finally `None` if no source is set.
+
+- For `author_name` and `author_email`: **flag > env > git config > None**
+- For other fields: **flag > env > None** (no git config fallback)
+
+When git config values are used, they come from the user's effective git configuration (merged local-over-global, the way `git commit` resolves them). If git is not installed or the config key is unset, the fallback returns `None` silently.
+
+The `--help` output advertises each environment variable, making the fallback mechanism discoverable. Environment variables set to empty strings are treated as unset, allowing fallback to the next source.
 
 The metadata is currently threaded through the initialization flow for foundation-building; writing it to `pyproject.toml` is deferred to later V4 work.
 

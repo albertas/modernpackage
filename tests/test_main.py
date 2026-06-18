@@ -6,6 +6,9 @@ import pytest
 
 from modernpackage import __version__
 from modernpackage.main import (
+    _GIT_CONFIG_USER_EMAIL_KEY,
+    _GIT_CONFIG_USER_NAME_KEY,
+    _git_config_default,
     humanize_git_clone_error,
     init_new_package,
     main,
@@ -219,7 +222,10 @@ def test_parse_args_metadata_defaults_none(monkeypatch: pytest.MonkeyPatch) -> N
         'MODERNPACKAGE_REPOSITORY_URL',
     ):
         monkeypatch.delenv(variable_name, raising=False)
-    with patch('sys.argv', ['modernpackage', 'mypackage']):
+    with (
+        patch('sys.argv', ['modernpackage', 'mypackage']),
+        patch('modernpackage.main._git_config_default', return_value=None),
+    ):
         result = parse_args()
     assert result.author_name is None
     assert result.author_email is None
@@ -331,6 +337,7 @@ def test_main_with_package_name() -> None:
     with (
         patch('modernpackage.main.ArgumentParser') as argparse_mock,
         patch('modernpackage.main.init_new_package') as init_mock,
+        patch('modernpackage.main._git_config_default', return_value=None),
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = 'mypackage'
@@ -498,3 +505,118 @@ def test_init_new_package_git_clone_network_failure() -> None:
     assert 'check your network' in error_message
     assert 'git clone failed with exit code 1' in error_message
     assert 'Could not resolve host' in error_message
+
+
+def test_git_config_default_returns_trimmed_value() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.return_value = MagicMock(returncode=0, stdout='Ada Lovelace\n')
+        assert _git_config_default('user.name') == 'Ada Lovelace'
+
+
+def test_git_config_default_returns_none_when_key_unset() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.return_value = MagicMock(returncode=1, stdout='')
+        assert _git_config_default('user.name') is None
+
+
+def test_git_config_default_treats_empty_value_as_none() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.return_value = MagicMock(returncode=0, stdout='\n')
+        assert _git_config_default('user.email') is None
+
+
+def test_git_config_default_returns_none_when_git_missing() -> None:
+    with patch('modernpackage.main.run') as run_mock:
+        run_mock.side_effect = FileNotFoundError('git not found')
+        assert _git_config_default('user.name') is None
+
+
+def test_parse_args_flag_beats_git_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_NAME', raising=False)
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_EMAIL', raising=False)
+    with (
+        patch('sys.argv', ['modernpackage', 'pkg', '--author-name', 'Flag Name']),
+        patch('modernpackage.main._git_config_default') as git_mock,
+    ):
+        # Return a valid name for user.name, None for user.email to avoid
+        # email validation failure (the test is only about author_name precedence).
+        git_mock.side_effect = lambda key: (
+            'Git Name' if key == _GIT_CONFIG_USER_NAME_KEY else None
+        )
+        arguments = parse_args()
+    assert arguments.author_name == 'Flag Name'
+    # name was never None after the flag, so git config is not consulted for it
+    assert _GIT_CONFIG_USER_NAME_KEY not in [
+        call.args[0] for call in git_mock.call_args_list
+    ]
+
+
+def test_parse_args_env_beats_git_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_AUTHOR_NAME', 'Env Name')
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_EMAIL', raising=False)
+    with (
+        patch('sys.argv', ['modernpackage', 'pkg']),
+        patch('modernpackage.main._git_config_default') as git_mock,
+    ):
+        # Return a valid name for user.name, None for user.email to avoid
+        # email validation failure (the test is only about author_name precedence).
+        git_mock.side_effect = lambda key: (
+            'Git Name' if key == _GIT_CONFIG_USER_NAME_KEY else None
+        )
+        arguments = parse_args()
+    assert arguments.author_name == 'Env Name'
+    assert _GIT_CONFIG_USER_NAME_KEY not in [
+        call.args[0] for call in git_mock.call_args_list
+    ]
+
+
+def test_parse_args_git_config_fills_when_flag_and_env_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_NAME', raising=False)
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_EMAIL', raising=False)
+    with (
+        patch('sys.argv', ['modernpackage', 'pkg']),
+        patch('modernpackage.main._git_config_default') as git_mock,
+    ):
+        git_mock.side_effect = lambda key: {
+            _GIT_CONFIG_USER_NAME_KEY: 'Ada Lovelace',
+            _GIT_CONFIG_USER_EMAIL_KEY: 'ada@example.com',
+        }[key]
+        arguments = parse_args()
+    assert arguments.author_name == 'Ada Lovelace'
+    assert arguments.author_email == 'ada@example.com'
+
+
+def test_parse_args_all_sources_absent_stays_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_NAME', raising=False)
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_EMAIL', raising=False)
+    with (
+        patch('sys.argv', ['modernpackage', 'pkg']),
+        patch('modernpackage.main._git_config_default') as git_mock,
+    ):
+        git_mock.return_value = None
+        arguments = parse_args()
+    assert arguments.author_name is None
+    assert arguments.author_email is None
+
+
+def test_parse_args_malformed_git_config_email_exits_two(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Documents design Decision 7 / Open Risk: a malformed git-config email
+    # flows through _validated_or_error and aborts the run with exit code 2.
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_NAME', raising=False)
+    monkeypatch.delenv('MODERNPACKAGE_AUTHOR_EMAIL', raising=False)
+    with (
+        patch('sys.argv', ['modernpackage', 'pkg']),
+        patch('modernpackage.main._git_config_default') as git_mock,
+    ):
+        git_mock.side_effect = lambda key: (
+            'bad' if key == _GIT_CONFIG_USER_EMAIL_KEY else None
+        )
+        with pytest.raises(SystemExit) as exit_info:
+            parse_args()
+    assert exit_info.value.code == 2  # noqa: PLR2004

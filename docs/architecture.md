@@ -131,6 +131,24 @@ _REPOSITORY_URL_ENV: str = 'MODERNPACKAGE_REPOSITORY_URL'
 
 Consulted by `parse_args()` when `--repository-url` is omitted.
 
+**`_GIT_CONFIG_USER_NAME_KEY: str`**
+
+Git config key for the author name default:
+```python
+_GIT_CONFIG_USER_NAME_KEY: str = 'user.name'
+```
+
+Consulted by `_git_config_default()` when reading the user's git config for `author-name`.
+
+**`_GIT_CONFIG_USER_EMAIL_KEY: str`**
+
+Git config key for the author email default:
+```python
+_GIT_CONFIG_USER_EMAIL_KEY: str = 'user.email'
+```
+
+Consulted by `_git_config_default()` when reading the user's git config for `author-email`.
+
 #### Functions
 
 The main CLI orchestrator with type-annotated functions:
@@ -295,6 +313,27 @@ Examples:
 - `_environment_default('MODERNPACKAGE_DESCRIPTION')` with env var unset → `None`
 - `_environment_default('MODERNPACKAGE_LICENSE')` with env var set to `''` (empty string) → `None`
 
+#### `_git_config_default(key: str) -> str | None`
+
+A private helper that reads an effective git config value, treating missing/unset/empty values as `None`.
+
+- **Purpose**: Used by `parse_args()` to resolve `author-name` and `author-email` defaults from the user's git config when both corresponding flags and environment variables are omitted. Reads the merged (local-over-global) git config the way a commit would resolve it.
+- **Parameter**: `key: str` — the git config key to read (e.g., `'user.name'` or `'user.email'`)
+- **Returns**: `str | None` — the trimmed git config value if present and non-empty, or `None` if git is missing, the key is unset (git exits 1), the value is empty, or the command otherwise fails
+- **Algorithm**: 
+  1. Spawns `git config <key>` via `subprocess.run(check=False, capture_output=True, text=True)`
+  2. Catches `FileNotFoundError` (git command not found) and returns `None` silently
+  3. If return code is non-zero (key unset or other git failure), returns `None`
+  4. If return code is zero, returns the trimmed stdout value, or `None` if stdout is empty
+  5. Never raises; always degrades gracefully to `None`
+- **Calls**: `subprocess.run()` with `check=False` to degrade silently on non-zero exit codes (design Decision 4 — an absent git default is expected, not an error)
+
+Examples:
+- `_git_config_default('user.name')` when git is installed and `user.name` is set to `'Ada Lovelace\n'` → `'Ada Lovelace'`
+- `_git_config_default('user.name')` when git is installed and `user.name` is unset (git exits 1) → `None`
+- `_git_config_default('user.email')` when git is not found → `None`
+- `_git_config_default('user.name')` when the key exists but stdout is empty → `None`
+
 #### `_validated_or_error(parser: ArgumentParser, value: str | None, validator: Callable[[str], str]) -> str | None`
 
 A private helper that validates a non-`None` value using a validator function, converting `ArgumentTypeError` to `parser.error()` for clean CLI error exits.
@@ -318,35 +357,38 @@ Examples:
 
 #### `parse_args() -> Namespace`
 
-Parses command-line arguments using `argparse.ArgumentParser`, applies environment variable defaults for omitted flags, and validates email and URL values sourced from the environment.
+Parses command-line arguments using `argparse.ArgumentParser`, applies environment variable defaults for omitted flags, applies git config defaults for certain omitted env vars, and validates email and URL values.
 
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`)
   - `package_name`: optional positional argument (validated via `validate_package_name`)
-  - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_AUTHOR_NAME_ENV)`.
-  - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, substitutes `_environment_default(_AUTHOR_EMAIL_ENV)`, then validates via `_validated_or_error()`.
+  - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_NAME_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_NAME_KEY)`.
+  - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_EMAIL_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)`, then validates via `_validated_or_error()`.
   - `--description`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_DESCRIPTION_ENV)`.
   - `--license`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_LICENSE_ENV)`.
   - `--repository-url`: optional flag (default `None`, validated via `validate_repository_url`). If omitted, substitutes `_environment_default(_REPOSITORY_URL_ENV)`, then validates via `_validated_or_error()`.
 
 - **Process**:
   1. **Parse**: creates `ArgumentParser`, defines all arguments with `default=None`, calls `parser.parse_args()` to get initial `Namespace`
-  2. **Substitute**: for each of the five metadata fields, if the namespace value is `None` (flag was omitted), substitutes the environment variable value via `_environment_default()`
-  3. **Validate**: for email and repository URL, calls `_validated_or_error()` to validate the final (possibly env-sourced) value; invalid env values exit cleanly with code 2 and a CLI-style error message instead of a traceback
-  4. **Return**: returns the fully resolved namespace
+  2. **Environment fallback**: for each of the five metadata fields, if the namespace value is `None` (flag was omitted), substitutes the environment variable value via `_environment_default()`
+  3. **Git config fallback** (for `author_name` and `author_email` only): if the value is still `None` after the environment fallback, consults git config via `_git_config_default()` to establish the precedence ladder: **flag > env > git config > None**
+  4. **Validate**: for email and repository URL, calls `_validated_or_error()` to validate the final (possibly env-sourced or git-config-sourced) value; invalid values exit cleanly with code 2 and a CLI-style error message instead of a traceback
+  5. **Return**: returns the fully resolved namespace
 
 - **Returns**: `Namespace` — an `argparse.Namespace` object with fields:
   - `version` (bool) — whether `--version` was provided
   - `package_name` (str | None) — the package name (from flag or `None`)
-  - `author_name` (str | None) — author name (from flag, env var, or `None`)
-  - `author_email` (str | None) — author email (from flag, env var, or `None`, validated)
+  - `author_name` (str | None) — author name (from flag, env var, git config, or `None`)
+  - `author_email` (str | None) — author email (from flag, env var, git config, or `None`, validated)
   - `description` (str | None) — description (from flag, env var, or `None`)
   - `license` (str | None) — license identifier (from flag, env var, or `None`)
   - `repository_url` (str | None) — repository URL (from flag, env var, or `None`, validated)
 
-**Precedence**: Command-line flags take precedence over environment variables. If a flag is provided, the environment variable is ignored.
+**Precedence for `author_name` and `author_email`**: **flag > env > git config > None**. For other fields, precedence is **flag > env > None** (no git config fallback).
 
-**Empty environment variables**: An environment variable set to an empty string (`''`) is treated as unset and returns `None`.
+**Git config fallback**: When both flag and environment variable are absent, `author_name` and `author_email` fall back to the user's git config (`user.name` and `user.email` respectively), reading the merged (local-over-global) configuration. Git config values flow through the same validation as env values: email addresses must match the basic email pattern, or the command exits with code 2 and a CLI error.
+
+**Empty environment variables**: An environment variable set to an empty string (`''`) is treated as unset and returns `None`, allowing the next fallback level (git config) to be consulted.
 
 **Complexity**: The function has a McCabe cyclomatic complexity of ≤ 8 (enforced by `pyproject.toml:tool.ruff.lint.mccabe.max-complexity`), with the validation logic extracted into the `_validated_or_error()` helper to keep the post-parse block clear and maintainable.
 
