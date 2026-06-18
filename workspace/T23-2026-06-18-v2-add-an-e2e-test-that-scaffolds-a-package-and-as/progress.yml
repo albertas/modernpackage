@@ -1,0 +1,164 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 59572
+    cost_usd: 0.408559
+    input_tokens: 3019
+    output_tokens: 3413
+    cache_read_tokens: 235186
+    cache_creation_tokens: 18633
+    model: Haiku 4.5, opus 4.8
+    context_used: 21652
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 106535
+    cost_usd: 0.6236815
+    input_tokens: 3144
+    output_tokens: 8191
+    cache_read_tokens: 198773
+    cache_creation_tokens: 30070
+    model: Haiku 4.5, opus 4.8
+    context_used: 33214
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 106562
+    cost_usd: 0.5268285
+    input_tokens: 3142
+    output_tokens: 7255
+    cache_read_tokens: 164907
+    cache_creation_tokens: 24410
+    model: Haiku 4.5, opus 4.8
+    context_used: 27552
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 76185
+    cost_usd: 0.396022
+    input_tokens: 3007
+    output_tokens: 5726
+    cache_read_tokens: 65348
+    cache_creation_tokens: 20186
+    model: Haiku 4.5, opus 4.8
+    context_used: 23193
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 123858
+    cost_usd: 0.637168
+    input_tokens: 3140
+    output_tokens: 9948
+    cache_read_tokens: 142294
+    cache_creation_tokens: 29821
+    model: Haiku 4.5, opus 4.8
+    context_used: 32961
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 157084
+    cost_usd: 0.3451546000000001
+    input_tokens: 233
+    output_tokens: 11458
+    cache_read_tokens: 1517046
+    cache_creation_tokens: 65635
+    model: Haiku 4.5
+    context_used: 65868
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 104093
+    cost_usd: 0.3618554
+    input_tokens: 10
+    output_tokens: 3995
+    cache_read_tokens: 338828
+    cache_creation_tokens: 30406
+    model: Haiku 4.5, sonnet 4.6
+    context_used: 30416
+    context_max: 200000
+    lines_of_code: 0
+  sub_phases:
+  - num: 1
+    title: "Test skeleton \u2014 marker, tool guards, repo-root resolution"
+    done: true
+    metrics:
+      duration_ms: 88727
+      cost_usd: 0.48166359999999997
+      input_tokens: 13
+      output_tokens: 3971
+      cache_read_tokens: 456962
+      cache_creation_tokens: 44527
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 44540
+      context_max: 200000
+      lines_of_code: 49
+  - num: 2
+    title: Scaffold from the local checkout (`git clone` + `just init`)
+    done: true
+    metrics:
+      duration_ms: 189659
+      cost_usd: 0.5368026
+      input_tokens: 14
+      output_tokens: 9393
+      cache_read_tokens: 536122
+      cache_creation_tokens: 36197
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 36211
+      context_max: 200000
+      lines_of_code: 50
+  - num: 3
+    title: Assert the gate is green (`just check`)
+    done: true
+    metrics:
+      duration_ms: 100375
+      cost_usd: 0.32477759999999994
+      input_tokens: 10
+      output_tokens: 2335
+      cache_read_tokens: 339332
+      cache_creation_tokens: 28352
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 28362
+      context_max: 200000
+      lines_of_code: 50
+  - num: 4
+    title: "Gating proof \u2014 exclusion, coverage, and defect injection"
+    done: true
+    metrics:
+      duration_ms: 104093
+      cost_usd: 0.3618554
+      input_tokens: 10
+      output_tokens: 3995
+      cache_read_tokens: 338828
+      cache_creation_tokens: 30406
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 30416
+      context_max: 200000
+      lines_of_code: 0
+cumulative:
+  total_cost: 3.2992690000000002
+  total_ms: 733889
+  total_cache_read: 2662382
+  total_cache_write: 219161
+  total_loc: 0
+  total_input_tokens: 15695
+  total_output_tokens: 49986
+  version: 0.0.8
+  completed_at: 2026-06-18 06:53:06.384637

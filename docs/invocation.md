@@ -63,6 +63,7 @@ Upon success, a new directory named `<package_name>` is created in the current w
 - All occurrences of "modernpackage" renamed to the new package name
 - Version reset to `0.0.1`
 - Git repository reinitialized
+- Quality validation run via `just check` to verify the scaffolded package passes all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
 
 #### Failure path
 

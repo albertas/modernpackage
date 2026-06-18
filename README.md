@@ -8,6 +8,7 @@ Install and run:
 ```bash
 pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
+                                       # creates a new package and validates it with just check
 ```
 
 View the installed version:
@@ -23,11 +24,11 @@ When `git clone` fails, the error message is enhanced with a friendly, actionabl
 
 ## After Initialization
 
-Once your new package is created, you can begin development:
+Once your new package is created (and after `just check` has validated the initial scaffold), you can begin development:
 
 ```bash
 cd <your-package-name>
-just check    # Run tests and linters
+just check    # Run tests and linters (already run during scaffolding; use for ongoing validation)
 just fix      # Auto-fix linting and formatting issues
 just publish  # Publish your package to PyPI.org
 ```

@@ -120,6 +120,15 @@ def init_new_package(package_name: str) -> None:
         message = f'just init failed with exit code {pipe.returncode}: {stderr_text}'
         raise RuntimeError(message)
 
+    pipe = Popen(
+        ['just', 'check'],  # noqa: S607
+        stdin=PIPE,
+        stdout=PIPE,
+        stderr=PIPE,
+        cwd=new_package_path,
+    )
+    pipe.communicate()
+
 
 def main() -> int:
     """Orchestrate CLI commands; return 0 on success or 1 on scaffolding failure."""

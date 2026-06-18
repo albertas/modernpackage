@@ -1,4 +1,5 @@
 from argparse import ArgumentTypeError
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -50,7 +51,17 @@ def test_init_new_package() -> None:
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
-    assert popen_mock.call_count == 2  # noqa: PLR2004
+    assert popen_mock.call_count == 3  # noqa: PLR2004
+
+
+def test_init_new_package_runs_just_check() -> None:
+    with patch('modernpackage.main.Popen') as popen_mock:
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage')
+    third_call = popen_mock.call_args_list[2]
+    assert third_call.args[0] == ['just', 'check']
+    assert third_call.kwargs['cwd'] == Path.cwd() / 'mypackage'
 
 
 def test_init_new_package_git_clone_failure() -> None:

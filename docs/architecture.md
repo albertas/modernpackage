@@ -55,24 +55,27 @@ Parses command-line arguments using `argparse.ArgumentParser`.
 
 #### `init_new_package(package_name: str) -> None`
 
-Orchestrates the package initialization flow by cloning and rewriting:
+Orchestrates the package initialization flow by cloning, rewriting, and validating:
 
 1. **Parameter**: `package_name: str` — name of the new package to create
 2. **Returns**: `None` — no return value; operates via side effects
 3. **Process**:
    - Resolves target path: `Path.cwd() / package_name`
-   - Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen` with `stderr=PIPE`
-   - Waits for completion via `communicate()` and captures both stdout and stderr
-   - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:
-     - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
-     - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
-   - **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory) with `stderr=PIPE`
-   - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
-     - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message, for example:
-       - `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
-     - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
-       - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
-       - **If `returncode == 0`**: completes successfully
+   - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <path>` via `Popen` with `stderr=PIPE`
+     - Waits for completion via `communicate()` and captures both stdout and stderr
+     - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:
+       - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
+       - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
+   - **Step 2: Initialize** — **If `returncode == 0`**: continues to spawn `just init <package_name>` (cwd: the cloned directory) with `stderr=PIPE`
+     - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
+       - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
+       - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
+         - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
+         - **If `returncode == 0`**: continues to Step 3
+   - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check <package_name>` (cwd: the cloned directory) via `Popen` with the same error-handling pattern as `just init`
+     - Spawns the subprocess and captures both stdout and stderr via `communicate()`
+     - Does not raise an error on non-zero exit code; `just check` output is captured but validation failure does not block the function (per plan scope)
+     - Returns successfully whether or not `just check` passes
 
 Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes. The `just init` missing-command error path is caught at the point of spawning the subprocess, before any execution attempts, and provides a clear, actionable installation instruction.
 
@@ -81,6 +84,8 @@ The `just init` recipe (in the cloned repo) performs the actual transformation:
 - Resets the version to `0.0.1`
 - Renames the package directory (`modernpackage/` → `<name>/`)
 - Reinitializes git (clears `.git`, runs `git init`, commits initial state)
+
+The `just check` recipe (in the cloned repo) validates the newly scaffolded package by running all quality gates: format check, ruff lint, complexity audit, mypy type check, unit tests, pip-audit security scan, and deadcode detection.
 
 #### `humanize_git_clone_error(stderr_text: str) -> str | None`
 
@@ -320,9 +325,10 @@ When a user runs `modernpackage mypackage`:
    - Renames all "modernpackage" → "mypackage"
    - Resets version to `0.0.1`
    - Reinitializes git
-4. Result: a new, independent Python package ready for development
+4. On successful initialization, `just check` is run to validate the newly scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
+5. Result: a new, independent Python package ready for development
 
-This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup. Both the clone and initialization steps report detailed error output if they fail, making it easy to diagnose issues (network errors, missing dependencies, permission problems, etc.).
+This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup. The clone, initialization, and validation steps report detailed error output if they fail, making it easy to diagnose issues (network errors, missing dependencies, permission problems, etc.).
 
 ## Known Gaps & Deviations
 
