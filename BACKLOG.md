@@ -1,6 +1,5 @@
 # ToDo
 
-- [ ] [V6] Print a post-init summary with the created path, package name, and reset version
 - [ ] [V6] Print the next commands to run (cd <name> && just check) after a successful run
 - [ ] [V7] Bundle the template inside the published wheel
 - [ ] [V7] Cache the last successful clone for reuse
@@ -10,6 +9,7 @@
 - [ ] Remove scaffolding/initialization related code programatically from the resulting project 
 
 # Done
+- [x] [T44] [V6] Print a post-init summary with the created path, package name, and reset version
 - [x] [T43] [V6] Add a --dry-run flag that previews what would be created and renamed without touching disk
 - [x] [T42] [V5] Abort early with a specific remediation hint when any precondition fails
 - [x] [T41] [V5] Print a concise preflight checklist of all environment checks

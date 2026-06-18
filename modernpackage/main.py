@@ -509,6 +509,10 @@ class PreflightCheck:
 
 _PREFLIGHT_HEADER: str = 'Preflight checks:'
 _DRY_RUN_HEADER: str = 'Dry run — no changes will be made:'
+# Version the template is reset to by `just init` (mirrors the Justfile sed
+# value at Justfile:67; coupled by convention, not programmatically).
+_RESET_VERSION: str = '0.0.1'
+_INIT_SUMMARY_HEADER: str = 'Created package:'
 
 
 def _format_check_line(label: str, *, ok: bool) -> str:
@@ -552,7 +556,7 @@ def _format_dry_run_plan(  # noqa: PLR0913
         else:
             lines.append(f'    {label}: {value}')
     lines.append(f'  run just init: rename modernpackage/ -> {module_name}/')
-    lines.append('  run just init: reset version to 0.0.1')
+    lines.append(f'  run just init: reset version to {_RESET_VERSION}')
     return '\n'.join(lines)
 
 
@@ -578,6 +582,26 @@ def _print_dry_run_plan(  # noqa: PLR0913
             repository_url=repository_url,
         )
     )
+
+
+def _format_init_summary(package_name: str, created_path: Path) -> str:
+    """Return the multi-line post-scaffold summary (design Decision 1).
+
+    Reports the package/distribution name, the created directory path, and the
+    version the template was reset to (`_RESET_VERSION`).
+    """
+    lines = [
+        _INIT_SUMMARY_HEADER,
+        f'  package name: {package_name}',
+        f'  path: {created_path}',
+        f'  version: {_RESET_VERSION}',
+    ]
+    return '\n'.join(lines)
+
+
+def _print_init_summary(package_name: str, created_path: Path) -> None:
+    """Print the formatted init summary to stdout."""
+    print(_format_init_summary(package_name, created_path))  # noqa: T201
 
 
 def _verify_required_tools() -> None:
@@ -753,6 +777,7 @@ def init_new_package(  # noqa: PLR0913
 
     if pipe.returncode == 0:
         print(f'just check passed — {module_name} scaffold is valid.')  # noqa: T201
+        _print_init_summary(package_name, new_package_path)
         return 0
     print(  # noqa: T201
         f'just check failed with exit code {pipe.returncode}'

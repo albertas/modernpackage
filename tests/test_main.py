@@ -13,6 +13,7 @@ from modernpackage.main import (
     _REQUIRED_TOOLS,
     _config_file_default,
     _format_dry_run_plan,
+    _format_init_summary,
     _git_config_default,
     _load_config_file,
     _user_config_path,
@@ -638,6 +639,33 @@ def test_init_new_package_reports_check_passed() -> None:
         result = init_new_package('mypackage')
     printed_calls = [str(call) for call in print_mock.call_args_list]
     assert any('just check passed' in call for call in printed_calls)
+    assert result == 0
+
+
+def test_format_init_summary_contains_all_fields(tmp_path: Path) -> None:
+    demo_path = tmp_path / 'demo_pkg'
+    summary = _format_init_summary('demo-pkg', demo_path)
+    assert 'demo-pkg' in summary
+    assert str(demo_path) in summary
+    assert '0.0.1' in summary
+
+
+def test_init_new_package_prints_summary_on_success() -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main.print') as print_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        result = init_new_package('mypackage')
+    printed_calls = [str(call) for call in print_mock.call_args_list]
+    assert any('just check passed' in call for call in printed_calls)
+    assert any('mypackage' in call for call in printed_calls)
+    assert any(str(Path.cwd() / 'mypackage') in call for call in printed_calls)
+    assert any('0.0.1' in call for call in printed_calls)
+    assert popen_mock.call_count == 3  # noqa: PLR2004
     assert result == 0
 
 

@@ -14,9 +14,9 @@ modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # probes template repository reachability (fails fast on network issues)
                                        # validates the name (rejects stdlib collisions before scaffolding)
                                        # creates a new package and validates it with just check
-                                       # prints "just check passed" or "just check failed"
+                                       # prints "just check passed" with a summary block, or "just check failed"
 
-# Example: Preflight checklist (on success)
+# Example: Preflight checklist and success summary (on success)
 modernpackage my-package
 
 # Output:
@@ -26,6 +26,10 @@ modernpackage my-package
 #   [ok]   target directory available
 #   [ok]   template remote reachable
 # just check passed — my_package scaffold is valid.
+# Created package:
+#   package name: my-package
+#   path: /home/user/my_package
+#   version: 0.0.1
 
 # Example: Preview what scaffolding would do without making changes
 modernpackage my-package --dry-run

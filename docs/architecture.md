@@ -99,6 +99,24 @@ _DRY_RUN_HEADER: str = 'Dry run — no changes will be made:'
 
 Printed to stdout by `_print_dry_run_plan()` when the `--dry-run` flag is set, establishing the section heading for the preview plan.
 
+**`_RESET_VERSION: str`**
+
+The version string the template is reset to by `just init` (mirrors the `Justfile` sed value at line 67; coupled by convention, not programmatically):
+```python
+_RESET_VERSION: str = '0.0.1'
+```
+
+Used by both the dry-run formatter (`_format_dry_run_plan()` at line 555) and the init summary formatter (`_format_init_summary()`) to report the version the newly scaffolded package is reset to. This is the single source of truth for the reset version, avoiding duplication of the `'0.0.1'` literal.
+
+**`_INIT_SUMMARY_HEADER: str`**
+
+The header line printed at the start of the post-scaffold summary block:
+```python
+_INIT_SUMMARY_HEADER: str = 'Created package:'
+```
+
+Printed to stdout by `_print_init_summary()` after `just check` passes on a successful scaffolding, establishing the section heading for the summary of created artifacts.
+
 **`_PACKAGE_NAME_RE: re.Pattern[str]`**
 
 Compiled regex pattern for PEP 508 / PyPI distribution names:
@@ -409,6 +427,47 @@ A private helper that prints the dry-run preview plan to stdout.
   1. Calls `_format_dry_run_plan()` with all parameters
   2. Prints the result to stdout via `print(... )  # noqa: T201`
 - **Output convention**: Matches the existing output convention (progress/informational text to stdout; design Decision 10, `main.py:592`).
+
+#### `_format_init_summary(package_name: str, created_path: Path) -> str`
+
+A private helper that formats the post-scaffold summary block into a multi-line string.
+
+- **Purpose**: Called by `_print_init_summary()` to format the post-scaffold summary after `just check` passes. Returns text that is independently testable without capturing stdout. Reports the created package name (distribution name), directory path, and the version the template was reset to (`_RESET_VERSION`).
+- **Parameters**:
+  - `package_name: str` — the validated PEP 508 distribution name (e.g., `'my-cool.package'`)
+  - `created_path: Path` — the created directory path (absolute path, e.g., `Path.cwd() / module_name`)
+- **Returns**: `str` — a multi-line formatted summary with a header line (`_INIT_SUMMARY_HEADER`), followed by 2-space-indented fields
+- **Format**: Uses the `_INIT_SUMMARY_HEADER` constant for the header line, followed by three indented lines:
+  - `f'  package name: {package_name}'`
+  - `f'  path: {created_path}'`
+  - `f'  version: {_RESET_VERSION}'`
+- **Example output**:
+  ```
+  Created package:
+    package name: my-cool.package
+    path: /home/user/my_cool_package
+    version: 0.0.1
+  ```
+
+**Design rationale**:
+- Extracted into a separate function so the summary is independently testable (returns a string, not printing directly)
+- Matches the formatter/printer split pattern used by `_format_dry_run_plan()` / `_print_dry_run_plan()`
+- Uses 2-space indentation to match the dry-run plan body indentation aesthetic
+- Reports all three values (distribution name, directory path, reset version) that are known at the time of the success branch
+
+#### `_print_init_summary(package_name: str, created_path: Path) -> None`
+
+A private helper that prints the formatted post-scaffold summary to stdout.
+
+- **Purpose**: Called by `init_new_package()` in the success branch immediately after `just check` passes, to print a human-readable summary of what was created.
+- **Parameters**:
+  - `package_name: str` — the validated PEP 508 distribution name (passed through from the caller)
+  - `created_path: Path` — the created directory path (passed through from the caller)
+- **Returns**: `None`
+- **Behavior**: 
+  1. Calls `_format_init_summary(package_name, created_path)` to get the formatted block
+  2. Prints the result to stdout via `print(...) # noqa: T201`
+- **Output convention**: Matches the existing output convention (progress/informational text to stdout)
 
 #### `_run_preflight_checks(target_path: Path) -> None`
 
@@ -913,7 +972,7 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
          - **If `returncode == 0`**: continues to Step 3
    - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check` (cwd: the cloned directory) via `Popen` and reports the outcome using the module name
      - Spawns the subprocess and captures both stdout and stderr via `communicate()`
-     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {module_name} scaffold is valid.'` (using the normalized module name) and returns `0`
+     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {module_name} scaffold is valid.'` (using the normalized module name), then calls `_print_init_summary(package_name, new_package_path)` to print a summary block showing the created package name, directory path, and reset version (`_RESET_VERSION`), then returns `0`
      - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {module_name}.'` (using the normalized module name) and returns `1`
      - Does not raise an error on non-zero exit code; `just check` failure is reported but does not block the function; the failure is propagated via the return code instead
 

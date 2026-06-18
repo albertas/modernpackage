@@ -133,13 +133,21 @@ Spawn subprocess via `Popen(['just', 'init', module_name], cwd=new_package_path,
 - If returncode != 0: raise `RuntimeError` with message "just init failed with exit code {code}: {stderr}"
 - If FileNotFoundError (just not on PATH): raise `RuntimeError` with install message
 
-### Step 8: Just Check
+### Step 8: Just Check and Summary
 
 Spawn subprocess via `Popen(['just', 'check'], cwd=new_package_path, ...)`:
 - Capture stdout and stderr
 - Communicate (wait for process to finish)
 - If returncode == 0:
   - Print "just check passed — {module_name} scaffold is valid." to stdout
+  - Call `_print_init_summary(package_name, new_package_path)` to output a multi-line summary block to stdout:
+    ```
+    Created package:
+      package name: <package_name>
+      path: <created_path>
+      version: 0.0.1
+    ```
+    (where the version is the constant `_RESET_VERSION`)
   - Return exit code 0
 - If returncode != 0:
   - Print "just check failed with exit code {code} — review the output in {module_name}." to stderr
