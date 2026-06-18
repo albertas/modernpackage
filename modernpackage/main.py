@@ -513,6 +513,7 @@ _DRY_RUN_HEADER: str = 'Dry run — no changes will be made:'
 # value at Justfile:67; coupled by convention, not programmatically).
 _RESET_VERSION: str = '0.0.1'
 _INIT_SUMMARY_HEADER: str = 'Created package:'
+_NEXT_COMMANDS_HEADER: str = 'Next steps:'
 
 
 def _format_check_line(label: str, *, ok: bool) -> str:
@@ -602,6 +603,21 @@ def _format_init_summary(package_name: str, created_path: Path) -> str:
 def _print_init_summary(package_name: str, created_path: Path) -> None:
     """Print the formatted init summary to stdout."""
     print(_format_init_summary(package_name, created_path))  # noqa: T201
+
+
+def _format_next_commands(module_name: str) -> str:
+    """Return the next-steps hint block shown after a successful scaffold."""
+    return '\n'.join(
+        [
+            _NEXT_COMMANDS_HEADER,
+            f'  cd {module_name} && just check',
+        ]
+    )
+
+
+def _print_next_commands(module_name: str) -> None:
+    """Print the formatted next-steps hint to stdout."""
+    print(_format_next_commands(module_name))  # noqa: T201
 
 
 def _verify_required_tools() -> None:
@@ -778,6 +794,7 @@ def init_new_package(  # noqa: PLR0913
     if pipe.returncode == 0:
         print(f'just check passed — {module_name} scaffold is valid.')  # noqa: T201
         _print_init_summary(package_name, new_package_path)
+        _print_next_commands(module_name)
         return 0
     print(  # noqa: T201
         f'just check failed with exit code {pipe.returncode}'

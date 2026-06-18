@@ -30,6 +30,8 @@ modernpackage my-package
 #   package name: my-package
 #   path: /home/user/my_package
 #   version: 0.0.1
+# Next steps:
+#   cd my_package && just check
 
 # Example: Preview what scaffolding would do without making changes
 modernpackage my-package --dry-run

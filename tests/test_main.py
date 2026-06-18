@@ -14,6 +14,7 @@ from modernpackage.main import (
     _config_file_default,
     _format_dry_run_plan,
     _format_init_summary,
+    _format_next_commands,
     _git_config_default,
     _load_config_file,
     _user_config_path,
@@ -650,6 +651,13 @@ def test_format_init_summary_contains_all_fields(tmp_path: Path) -> None:
     assert '0.0.1' in summary
 
 
+def test_format_next_commands_contains_cd_and_just_check() -> None:
+    result = _format_next_commands('my_package')
+    assert 'cd my_package' in result
+    assert 'just check' in result
+    assert '&&' in result
+
+
 def test_init_new_package_prints_summary_on_success() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
@@ -665,6 +673,7 @@ def test_init_new_package_prints_summary_on_success() -> None:
     assert any('mypackage' in call for call in printed_calls)
     assert any(str(Path.cwd() / 'mypackage') in call for call in printed_calls)
     assert any('0.0.1' in call for call in printed_calls)
+    assert any('cd mypackage && just check' in call for call in printed_calls)
     assert popen_mock.call_count == 3  # noqa: PLR2004
     assert result == 0
 

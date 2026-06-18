@@ -151,13 +151,15 @@ The created directory contains:
 - Quality validation run via `just check` to verify the scaffolded package passes all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
 
 After all steps complete, the outcome of `just check` is reported and the exit code reflects the result:
-- **If `just check` passes** (all quality gates succeed), a success message followed by a summary block are printed to stdout and exit code 0 is returned:
+- **If `just check` passes** (all quality gates succeed), a success message followed by a summary block and next steps hint are printed to stdout and exit code 0 is returned:
   ```
   just check passed — <module_name> scaffold is valid.
   Created package:
     package name: <package_name>
     path: <created_path>
     version: 0.0.1
+  Next steps:
+    cd <module_name> && just check
   ```
   Exit code: 0
   (where `<module_name>` is the normalized directory name with underscores, `<package_name>` is the validated distribution name, and `<created_path>` is the absolute path to the created directory)
