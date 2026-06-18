@@ -23,6 +23,8 @@ def test_show_version() -> None:
         patch('modernpackage.main.print') as print_mock,
     ):
         argparse_mock().parse_args().version = True
+        argparse_mock().parse_args().author_email = None
+        argparse_mock().parse_args().repository_url = None
         result = main()
         print_mock.assert_called_once_with(f'modernpackage {__version__}')
     assert result == 0
@@ -154,7 +156,69 @@ def test_parse_args_repository_url() -> None:
     assert result.repository_url == 'https://x.com/r'
 
 
-def test_parse_args_metadata_defaults_none() -> None:
+def test_parse_args_author_email_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_AUTHOR_EMAIL', 'a@b.co')
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.author_email == 'a@b.co'
+
+
+def test_parse_args_flag_overrides_env_author_email(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_AUTHOR_EMAIL', 'env@b.co')
+    with patch(
+        'sys.argv',
+        ['modernpackage', 'mypackage', '--author-email', 'cli@b.co'],
+    ):
+        result = parse_args()
+    assert result.author_email == 'cli@b.co'
+
+
+def test_parse_args_repository_url_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_REPOSITORY_URL', 'https://x.com/r')
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.repository_url == 'https://x.com/r'
+
+
+def test_parse_args_invalid_env_author_email_exits(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_AUTHOR_EMAIL', 'nope')
+    with (
+        patch('sys.argv', ['modernpackage', 'mypackage']),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        parse_args()
+    assert excinfo.value.code == 2  # noqa: PLR2004
+    assert 'Invalid author email' in capsys.readouterr().err
+
+
+def test_parse_args_invalid_env_repository_url_exits(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_REPOSITORY_URL', 'not-a-url')
+    with (
+        patch('sys.argv', ['modernpackage', 'mypackage']),
+        pytest.raises(SystemExit) as excinfo,
+    ):
+        parse_args()
+    assert excinfo.value.code == 2  # noqa: PLR2004
+    assert 'Invalid repository URL' in capsys.readouterr().err
+
+
+def test_parse_args_metadata_defaults_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    for variable_name in (
+        'MODERNPACKAGE_AUTHOR_NAME',
+        'MODERNPACKAGE_AUTHOR_EMAIL',
+        'MODERNPACKAGE_DESCRIPTION',
+        'MODERNPACKAGE_LICENSE',
+        'MODERNPACKAGE_REPOSITORY_URL',
+    ):
+        monkeypatch.delenv(variable_name, raising=False)
     with patch('sys.argv', ['modernpackage', 'mypackage']):
         result = parse_args()
     assert result.author_name is None
@@ -162,6 +226,41 @@ def test_parse_args_metadata_defaults_none() -> None:
     assert result.description is None
     assert result.license is None
     assert result.repository_url is None
+
+
+def test_parse_args_description_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_DESCRIPTION', 'from-env')
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.description == 'from-env'
+
+
+def test_parse_args_flag_overrides_env_description(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_DESCRIPTION', 'from-env')
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--description', 'cli']):
+        result = parse_args()
+    assert result.description == 'cli'
+
+
+def test_parse_args_empty_env_license_is_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv('MODERNPACKAGE_LICENSE', '')
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.license is None
+
+
+def test_parse_args_help_advertises_env_vars(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with patch('sys.argv', ['modernpackage', '--help']), pytest.raises(SystemExit):
+        parse_args()
+    help_text = capsys.readouterr().out
+    assert 'MODERNPACKAGE_AUTHOR_NAME' in help_text
+    assert 'MODERNPACKAGE_REPOSITORY_URL' in help_text
 
 
 def test_init_new_package() -> None:
@@ -260,6 +359,8 @@ def test_main_returns_one_when_just_check_fails() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = 'mypackage'
+        argparse_mock().parse_args().author_email = None
+        argparse_mock().parse_args().repository_url = None
         init_mock.return_value = 1
         result = main()
     assert result == 1
@@ -273,6 +374,8 @@ def test_main_surfaces_stderr_on_failure() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = 'mypackage'
+        argparse_mock().parse_args().author_email = None
+        argparse_mock().parse_args().repository_url = None
         init_mock.side_effect = RuntimeError('git clone failed with exit code 1: boom')
         main()  # must not raise
     # error message (with captured stderr) was shown to the user
@@ -288,6 +391,8 @@ def test_main_returns_one_on_failure() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = 'mypackage'
+        argparse_mock().parse_args().author_email = None
+        argparse_mock().parse_args().repository_url = None
         init_mock.side_effect = RuntimeError('git clone failed with exit code 1: boom')
         result = main()
     assert result == 1
@@ -301,6 +406,8 @@ def test_main_no_args() -> None:
     ):
         argparse_mock().parse_args().version = False
         argparse_mock().parse_args().package_name = None
+        argparse_mock().parse_args().author_email = None
+        argparse_mock().parse_args().repository_url = None
         result = main()
     print_mock.assert_not_called()
     init_mock.assert_not_called()

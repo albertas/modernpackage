@@ -244,26 +244,72 @@ The test scaffolds a package from the local template and validates:
 - **Skip**: Required tools are missing from `PATH` (e.g., `just` not installed). Exit code 0, but the test report shows `1 skipped`. This is an honest outcome on machines without the required tools.
 - **Fail**: The scaffolding process failed or the scaffolded package does not pass `just check`. Exit code 1. This indicates a regression in the local template.
 
+## Environment Variable Defaults
+
+When any of the five metadata flags are omitted, `parse_args()` consults corresponding environment variables as defaults:
+
+| Flag | Environment Variable | Example |
+|------|----------------------|---------|
+| `--author-name` | `MODERNPACKAGE_AUTHOR_NAME` | `MODERNPACKAGE_AUTHOR_NAME="Ada Lovelace"` |
+| `--author-email` | `MODERNPACKAGE_AUTHOR_EMAIL` | `MODERNPACKAGE_AUTHOR_EMAIL="ada@example.com"` |
+| `--description` | `MODERNPACKAGE_DESCRIPTION` | `MODERNPACKAGE_DESCRIPTION="A cool package"` |
+| `--license` | `MODERNPACKAGE_LICENSE` | `MODERNPACKAGE_LICENSE="MIT"` |
+| `--repository-url` | `MODERNPACKAGE_REPOSITORY_URL` | `MODERNPACKAGE_REPOSITORY_URL="https://github.com/example/repo"` |
+
+**Precedence**: Command-line flags take precedence over environment variables. If a flag is provided, the environment variable is ignored. If neither the flag nor the environment variable is set, the value defaults to `None`.
+
+**Empty environment variables**: An environment variable that is set to an empty string (`export MODERNPACKAGE_LICENSE=`) is treated as unset and defaults to `None`.
+
+### Environment Variable Examples
+
+```bash
+# Use env vars for all metadata
+export MODERNPACKAGE_AUTHOR_NAME="Ada Lovelace"
+export MODERNPACKAGE_AUTHOR_EMAIL="ada@example.com"
+export MODERNPACKAGE_DESCRIPTION="A cool package"
+export MODERNPACKAGE_LICENSE="MIT"
+export MODERNPACKAGE_REPOSITORY_URL="https://github.com/example/my-package"
+modernpackage my-package      # uses all five env defaults
+
+# Override one env var with a flag
+export MODERNPACKAGE_AUTHOR_NAME="Ada Lovelace"
+modernpackage my-package --author-name "Babbage"    # flag wins; uses "Babbage"
+
+# Valid env email flows through
+export MODERNPACKAGE_AUTHOR_EMAIL="a@b.co"
+modernpackage my-package      # uses "a@b.co"
+
+# Invalid env email exits cleanly with code 2 (no traceback)
+export MODERNPACKAGE_AUTHOR_EMAIL="nope"
+modernpackage my-package      # Error: Invalid author email: 'nope' — expected name@domain.tld
+echo $?                        # Exit code: 2
+
+# Empty env var is treated as unset
+export MODERNPACKAGE_DESCRIPTION=""
+modernpackage my-package --description "From flag"   # uses "From flag" (empty env ignored)
+modernpackage my-package                             # no description (None)
+```
+
 ## Argument Parser
 
 The CLI uses `argparse.ArgumentParser` with the following configuration:
 
 - **`-v` / `--version`**: optional flag, `action='store_true'`, default `False` — prints package version
 - **`package_name`**: optional positional argument, `nargs='?'`, validated via `type=validate_package_name()` — name of package to initialize (must be a valid PEP 508 / PyPI distribution name)
-- **`--author-name`**: optional flag, default `None` — author name to record in the new package (free string, no validation)
-- **`--author-email`**: optional flag, default `None`, validated via `type=validate_author_email()` — author email to record in the new package (must be a basic email shape: `name@domain.tld`)
-- **`--description`**: optional flag, default `None` — short description of the new package (free string, no validation)
-- **`--license`**: optional flag, default `None` — license identifier for the new package (free string, no validation)
-- **`--repository-url`**: optional flag, default `None`, validated via `type=validate_repository_url()` — repository URL to record in the new package (must be an `http(s)://` URL)
+- **`--author-name`**: optional flag, default `None` — author name to record in the new package (free string, no validation). If omitted, falls back to `$MODERNPACKAGE_AUTHOR_NAME`.
+- **`--author-email`**: optional flag, default `None`, validated via `type=validate_author_email()` — author email to record in the new package (must be a basic email shape: `name@domain.tld`). If omitted, falls back to `$MODERNPACKAGE_AUTHOR_EMAIL`.
+- **`--description`**: optional flag, default `None` — short description of the new package (free string, no validation). If omitted, falls back to `$MODERNPACKAGE_DESCRIPTION`.
+- **`--license`**: optional flag, default `None` — license identifier for the new package (free string, no validation). If omitted, falls back to `$MODERNPACKAGE_LICENSE`.
+- **`--repository-url`**: optional flag, default `None`, validated via `type=validate_repository_url()` — repository URL to record in the new package (must be an `http(s)://` URL). If omitted, falls back to `$MODERNPACKAGE_REPOSITORY_URL`.
 
 The parser is created and invoked in `parse_args()`, which returns an `argparse.Namespace` object with type-annotated fields:
 - `version: bool` — whether the `--version` flag was provided
 - `package_name: str | None` — the package name (if provided), or `None` if omitted
-- `author_name: str | None` — author name (if provided), or `None` if omitted
-- `author_email: str | None` — author email (if provided), or `None` if omitted
-- `description: str | None` — package description (if provided), or `None` if omitted
-- `license: str | None` — license identifier (if provided), or `None` if omitted
-- `repository_url: str | None` — repository URL (if provided), or `None` if omitted
+- `author_name: str | None` — author name (from flag, environment variable `$MODERNPACKAGE_AUTHOR_NAME`, or `None`)
+- `author_email: str | None` — author email (from flag, environment variable `$MODERNPACKAGE_AUTHOR_EMAIL`, or `None`)
+- `description: str | None` — package description (from flag, environment variable `$MODERNPACKAGE_DESCRIPTION`, or `None`)
+- `license: str | None` — license identifier (from flag, environment variable `$MODERNPACKAGE_LICENSE`, or `None`)
+- `repository_url: str | None` — repository URL (from flag, environment variable `$MODERNPACKAGE_REPOSITORY_URL`, or `None`)
 
 ### Type Safety
 

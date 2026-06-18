@@ -86,6 +86,51 @@ _REPOSITORY_URL_RE: re.Pattern[str] = re.compile(r'^https?://\S+$')
 
 Matches: `http://` or `https://`, followed by one or more non-whitespace characters. Used by `validate_repository_url()`. Does not perform network reachability checks.
 
+**`_AUTHOR_NAME_ENV: str`**
+
+Environment variable name for the author name default:
+```python
+_AUTHOR_NAME_ENV: str = 'MODERNPACKAGE_AUTHOR_NAME'
+```
+
+Consulted by `parse_args()` when `--author-name` is omitted.
+
+**`_AUTHOR_EMAIL_ENV: str`**
+
+Environment variable name for the author email default:
+```python
+_AUTHOR_EMAIL_ENV: str = 'MODERNPACKAGE_AUTHOR_EMAIL'
+```
+
+Consulted by `parse_args()` when `--author-email` is omitted.
+
+**`_DESCRIPTION_ENV: str`**
+
+Environment variable name for the description default:
+```python
+_DESCRIPTION_ENV: str = 'MODERNPACKAGE_DESCRIPTION'
+```
+
+Consulted by `parse_args()` when `--description` is omitted.
+
+**`_LICENSE_ENV: str`**
+
+Environment variable name for the license default:
+```python
+_LICENSE_ENV: str = 'MODERNPACKAGE_LICENSE'
+```
+
+Consulted by `parse_args()` when `--license` is omitted.
+
+**`_REPOSITORY_URL_ENV: str`**
+
+Environment variable name for the repository URL default:
+```python
+_REPOSITORY_URL_ENV: str = 'MODERNPACKAGE_REPOSITORY_URL'
+```
+
+Consulted by `parse_args()` when `--repository-url` is omitted.
+
 #### Functions
 
 The main CLI orchestrator with type-annotated functions:
@@ -236,28 +281,74 @@ Examples:
 - Uppercase letters in the input are preserved (e.g., `MyPackage` remains `MyPackage`, not lowercased)
 - This mapping does not handle Python keywords (`class`, `import`, etc.) or names starting with digits (e.g., `9lives`) — these remain invalid module names. Such names should be rejected at validation time (currently out of scope)
 
+#### `_environment_default(variable_name: str) -> str | None`
+
+A private helper that retrieves an environment variable value, treating empty strings as unset.
+
+- **Purpose**: Used by `parse_args()` to resolve metadata defaults from the environment when corresponding flags are omitted.
+- **Parameter**: `variable_name: str` — the name of the environment variable (e.g., `'MODERNPACKAGE_AUTHOR_NAME'`)
+- **Returns**: `str | None` — the environment variable value if present and non-empty, or `None` if absent or empty
+- **Algorithm**: uses `os.environ.get(variable_name) or None` to collapse both missing (`None`) and empty-string values to `None`
+
+Examples:
+- `_environment_default('MODERNPACKAGE_AUTHOR_NAME')` with env var set to `'Ada'` → `'Ada'`
+- `_environment_default('MODERNPACKAGE_DESCRIPTION')` with env var unset → `None`
+- `_environment_default('MODERNPACKAGE_LICENSE')` with env var set to `''` (empty string) → `None`
+
+#### `_validated_or_error(parser: ArgumentParser, value: str | None, validator: Callable[[str], str]) -> str | None`
+
+A private helper that validates a non-`None` value using a validator function, converting `ArgumentTypeError` to `parser.error()` for clean CLI error exits.
+
+- **Purpose**: Used by `parse_args()` to validate email and repository URL values sourced from the environment, ensuring they follow the same rules as flag-supplied values. Routes validation failures through `parser.error()` so they exit cleanly (code 2) instead of raising a raw traceback.
+- **Parameters**:
+  - `parser: ArgumentParser` — the argument parser instance (used to call `parser.error()` on validation failure)
+  - `value: str | None` — the value to validate (if `None`, returns `None` immediately)
+  - `validator: Callable[[str], str]` — a validator function that either returns the input unchanged or raises `ArgumentTypeError` on validation failure
+- **Returns**: `str | None` — the input value unchanged if it is `None` or validates successfully; does not return if validation fails (raises `SystemExit`)
+- **Behavior**: If `value is not None`, calls `validator(value)`. If the validator raises `ArgumentTypeError`, catches it and calls `parser.error(error_message)`, which prints to stderr and raises `SystemExit(2)`. If the validator returns successfully, returns the validated value.
+
+Examples:
+- `_validated_or_error(parser, None, validate_author_email)` → `None` (no validation needed)
+- `_validated_or_error(parser, 'a@b.co', validate_author_email)` → `'a@b.co'` (valid)
+- `_validated_or_error(parser, 'nope', validate_author_email)` → raises `SystemExit(2)` with message `'Invalid author email: 'nope' — expected name@domain.tld'` printed to stderr
+
+**Notes:**
+- Re-validating a flag-supplied value (which was already validated by the `type=` handler at parse time) is idempotent and harmless, so validation may be applied uniformly to the final non-`None` value regardless of its source.
+- `ArgumentParser.error()` is typed `NoReturn`, so mypy and ruff (`RET503`) remain clean (no explicit return needed after calling it).
+
 #### `parse_args() -> Namespace`
 
-Parses command-line arguments using `argparse.ArgumentParser`.
+Parses command-line arguments using `argparse.ArgumentParser`, applies environment variable defaults for omitted flags, and validates email and URL values sourced from the environment.
 
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`)
   - `package_name`: optional positional argument (validated via `validate_package_name`)
-  - `--author-name`: optional flag (default `None`, free string, no validation)
-  - `--author-email`: optional flag (default `None`, validated via `validate_author_email`)
-  - `--description`: optional flag (default `None`, free string, no validation)
-  - `--license`: optional flag (default `None`, free string, no validation)
-  - `--repository-url`: optional flag (default `None`, validated via `validate_repository_url`)
+  - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_AUTHOR_NAME_ENV)`.
+  - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, substitutes `_environment_default(_AUTHOR_EMAIL_ENV)`, then validates via `_validated_or_error()`.
+  - `--description`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_DESCRIPTION_ENV)`.
+  - `--license`: optional flag (default `None`, free string, no validation). If omitted, substitutes `_environment_default(_LICENSE_ENV)`.
+  - `--repository-url`: optional flag (default `None`, validated via `validate_repository_url`). If omitted, substitutes `_environment_default(_REPOSITORY_URL_ENV)`, then validates via `_validated_or_error()`.
+
+- **Process**:
+  1. **Parse**: creates `ArgumentParser`, defines all arguments with `default=None`, calls `parser.parse_args()` to get initial `Namespace`
+  2. **Substitute**: for each of the five metadata fields, if the namespace value is `None` (flag was omitted), substitutes the environment variable value via `_environment_default()`
+  3. **Validate**: for email and repository URL, calls `_validated_or_error()` to validate the final (possibly env-sourced) value; invalid env values exit cleanly with code 2 and a CLI-style error message instead of a traceback
+  4. **Return**: returns the fully resolved namespace
+
 - **Returns**: `Namespace` — an `argparse.Namespace` object with fields:
   - `version` (bool) — whether `--version` was provided
-  - `package_name` (str | None) — the package name
-  - `author_name` (str | None) — author name from `--author-name`
-  - `author_email` (str | None) — author email from `--author-email` 
-  - `description` (str | None) — description from `--description`
-  - `license` (str | None) — license identifier from `--license`
-  - `repository_url` (str | None) — repository URL from `--repository-url`
+  - `package_name` (str | None) — the package name (from flag or `None`)
+  - `author_name` (str | None) — author name (from flag, env var, or `None`)
+  - `author_email` (str | None) — author email (from flag, env var, or `None`, validated)
+  - `description` (str | None) — description (from flag, env var, or `None`)
+  - `license` (str | None) — license identifier (from flag, env var, or `None`)
+  - `repository_url` (str | None) — repository URL (from flag, env var, or `None`, validated)
 
-All metadata fields default to `None` when not provided.
+**Precedence**: Command-line flags take precedence over environment variables. If a flag is provided, the environment variable is ignored.
+
+**Empty environment variables**: An environment variable set to an empty string (`''`) is treated as unset and returns `None`.
+
+**Complexity**: The function has a McCabe cyclomatic complexity of ≤ 8 (enforced by `pyproject.toml:tool.ruff.lint.mccabe.max-complexity`), with the validation logic extracted into the `_validated_or_error()` helper to keep the post-parse block clear and maintainable.
 
 #### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None) -> int`
 

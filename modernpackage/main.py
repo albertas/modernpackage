@@ -1,10 +1,15 @@
 """Example package configuration using bleeding edge toolset."""
 
+import os
 import re
 import sys
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from pathlib import Path
 from subprocess import PIPE, Popen
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from modernpackage import __version__
 
@@ -76,6 +81,14 @@ _EMAIL_RE: re.Pattern[str] = re.compile(r'^\S+@\S+\.\S+$')
 # Require an http(s):// scheme; no network/reachability check (design Decision 5).
 _REPOSITORY_URL_RE: re.Pattern[str] = re.compile(r'^https?://\S+$')
 
+# Environment variables consulted as metadata defaults when the matching flag
+# is omitted (precedence: flag > env > None).
+_AUTHOR_NAME_ENV: str = 'MODERNPACKAGE_AUTHOR_NAME'
+_AUTHOR_EMAIL_ENV: str = 'MODERNPACKAGE_AUTHOR_EMAIL'
+_DESCRIPTION_ENV: str = 'MODERNPACKAGE_DESCRIPTION'
+_LICENSE_ENV: str = 'MODERNPACKAGE_LICENSE'
+_REPOSITORY_URL_ENV: str = 'MODERNPACKAGE_REPOSITORY_URL'
+
 
 def _explain_invalid_package_name(value: str) -> str:
     """Return a precise reason a name failed `_PACKAGE_NAME_RE`.
@@ -142,6 +155,25 @@ def validate_repository_url(value: str) -> str:
     return value
 
 
+def _environment_default(variable_name: str) -> str | None:
+    """Return the env var value, treating a set-but-empty value as unset."""
+    return os.environ.get(variable_name) or None
+
+
+def _validated_or_error(
+    parser: ArgumentParser,
+    value: str | None,
+    validator: Callable[[str], str],
+) -> str | None:
+    """Validate a non-None value, converting ArgumentTypeError to parser.error."""
+    if value is None:
+        return None
+    try:
+        return validator(value)
+    except ArgumentTypeError as error:
+        parser.error(str(error))
+
+
 def parse_args() -> Namespace:
     """Parse CLI options and return them as Namespace (object instance)."""
     parser = ArgumentParser()
@@ -160,32 +192,64 @@ def parse_args() -> Namespace:
     )
     parser.add_argument(
         '--author-name',
-        help='Author name to record in the new package.',
+        help=(
+            'Author name to record in the new package.'
+            ' Defaults to $MODERNPACKAGE_AUTHOR_NAME.'
+        ),
         default=None,
     )
     parser.add_argument(
         '--description',
-        help='Short description of the new package.',
+        help=(
+            'Short description of the new package.'
+            ' Defaults to $MODERNPACKAGE_DESCRIPTION.'
+        ),
         default=None,
     )
     parser.add_argument(
         '--author-email',
-        help='Author email to record in the new package.',
+        help=(
+            'Author email to record in the new package.'
+            ' Defaults to $MODERNPACKAGE_AUTHOR_EMAIL.'
+        ),
         type=validate_author_email,
         default=None,
     )
     parser.add_argument(
         '--license',
-        help='License identifier for the new package.',
+        help=(
+            'License identifier for the new package.'
+            ' Defaults to $MODERNPACKAGE_LICENSE.'
+        ),
         default=None,
     )
     parser.add_argument(
         '--repository-url',
-        help='Repository URL to record in the new package.',
+        help=(
+            'Repository URL to record in the new package.'
+            ' Defaults to $MODERNPACKAGE_REPOSITORY_URL.'
+        ),
         type=validate_repository_url,
         default=None,
     )
-    return parser.parse_args()
+    arguments = parser.parse_args()
+    if arguments.author_name is None:
+        arguments.author_name = _environment_default(_AUTHOR_NAME_ENV)
+    if arguments.description is None:
+        arguments.description = _environment_default(_DESCRIPTION_ENV)
+    if arguments.license is None:
+        arguments.license = _environment_default(_LICENSE_ENV)
+    if arguments.author_email is None:
+        arguments.author_email = _environment_default(_AUTHOR_EMAIL_ENV)
+    if arguments.repository_url is None:
+        arguments.repository_url = _environment_default(_REPOSITORY_URL_ENV)
+    arguments.author_email = _validated_or_error(
+        parser, arguments.author_email, validate_author_email
+    )
+    arguments.repository_url = _validated_or_error(
+        parser, arguments.repository_url, validate_repository_url
+    )
+    return arguments
 
 
 def init_new_package(  # noqa: PLR0913

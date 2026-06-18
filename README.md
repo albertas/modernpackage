@@ -25,6 +25,20 @@ modernpackage my-package \
   --license "MIT" \
   --repository-url "https://github.com/example/my-package"
 
+# Example: Create a package using environment variable defaults
+export MODERNPACKAGE_AUTHOR_NAME="Ada Lovelace"
+export MODERNPACKAGE_AUTHOR_EMAIL="ada@example.com"
+export MODERNPACKAGE_DESCRIPTION="A cool package"
+export MODERNPACKAGE_LICENSE="MIT"
+export MODERNPACKAGE_REPOSITORY_URL="https://github.com/example/my-package"
+modernpackage my-package           # uses all five env defaults
+
+# Example: Mix environment variables with command-line flags
+export MODERNPACKAGE_AUTHOR_NAME="Ada Lovelace"
+export MODERNPACKAGE_DESCRIPTION="Default description"
+modernpackage my-package --author-name "Babbage"   # flag wins; uses "Babbage"
+                                                   # uses "Default description" from env
+
 # Example: Invalid package name (leading separator)
 modernpackage -bad                      # Error: Invalid package name: '-bad' — name must start and end with a letter or digit
                                         # Exit code 2 (argument validation error)
@@ -60,13 +74,17 @@ modernpackage --version               # or `mp -v`
 
 The CLI accepts five optional flags for package metadata:
 
-- **`--author-name`**: Author name to include in the package (free string)
-- **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`)
-- **`--description`**: Short description of the package (free string)
-- **`--license`**: License identifier (free string; commonly SPDX identifiers like `MIT`, `Apache-2.0`, etc.)
-- **`--repository-url`**: Repository URL (must start with `http://` or `https://`)
+- **`--author-name`**: Author name to include in the package (free string). Defaults to `$MODERNPACKAGE_AUTHOR_NAME` if omitted.
+- **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`). Defaults to `$MODERNPACKAGE_AUTHOR_EMAIL` if omitted.
+- **`--description`**: Short description of the package (free string). Defaults to `$MODERNPACKAGE_DESCRIPTION` if omitted.
+- **`--license`**: License identifier (free string; commonly SPDX identifiers like `MIT`, `Apache-2.0`, etc.). Defaults to `$MODERNPACKAGE_LICENSE` if omitted.
+- **`--repository-url`**: Repository URL (must start with `http://` or `https://`). Defaults to `$MODERNPACKAGE_REPOSITORY_URL` if omitted.
 
-All metadata flags are optional and default to `None`. When provided, they are validated at parse time (email and URL shapes are checked). Invalid metadata causes the command to exit with code 2 before any scaffolding occurs. The metadata is currently threaded through the initialization flow for foundation-building; writing it to `pyproject.toml` is deferred to later V4 work.
+All metadata flags are optional and default to `None`. When provided via command-line flags, they are validated at parse time (email and URL shapes are checked). When values are sourced from environment variables, they are validated with the same rules as flag-supplied values. Invalid metadata (from either source) causes the command to exit with code 2 before any scaffolding occurs. Command-line flags take precedence over environment variables: if a flag is provided, the corresponding environment variable is ignored.
+
+The `--help` output advertises each environment variable, making the fallback mechanism discoverable. Environment variables set to empty strings are treated as unset.
+
+The metadata is currently threaded through the initialization flow for foundation-building; writing it to `pyproject.toml` is deferred to later V4 work.
 
 ### Exit Codes
 
