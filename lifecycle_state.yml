@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-18 07:30:39
+heart_beat: 2026-06-18 07:49:10
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T26-2026-06-18-v2-exit-non-zero-when-just-check-fails-in-the-gene
-    heart_beat: 2026-06-18 07:30:39
+  - artifact_dir: T27-2026-06-18-v2-add-an-e2e-test-that-scaffolds-a-package-and-as
+    heart_beat: 2026-06-18 07:49:10

@@ -14,7 +14,7 @@ test *args: sync
   uv run pytest -n "$(nproc --ignore=1)" {{args}}
 
 test-e2e *args: sync
-  uv run pytest -m e2e {{args}}
+  uv run pytest -m e2e --no-cov {{args}}
 
 format: sync
   uv run ruff format modernpackage tests

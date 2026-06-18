@@ -42,11 +42,13 @@ git push
 
 ## Development
 Commonly used commands for package development:
-- `just check` - run unit tests and linters.
+- `just check` - run unit tests and linters (format, lint, complexity, typecheck, tests, security audit, dead code detection). Primary quality gate; excludes e2e tests.
+- `just test` - run unit tests only (mocked, parallel, excludes e2e).
+- `just test-e2e` - run end-to-end test that scaffolds a package and validates it with `just check` (slow, requires network and git/just/uv on PATH; skips gracefully if tools missing).
 - `just fix` - format code and fix detected fixable issues.
 - `just publish` - publishes current package version to pypi.org.
-- `just compile` - bump and freeze dependency versions in requirements*.txt files
-- `just sync` - upgrade installed dependencies in Virtual Environment (executed after `just compile`)
+- `just compile` - bump and freeze dependency versions in requirements*.txt files.
+- `just sync` - upgrade installed dependencies in Virtual Environment (executed after `just compile`).
 
 ## Toolset
 This package uses these cutting edge tools:

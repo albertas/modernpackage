@@ -155,6 +155,52 @@ The command exits with exit code 1 and the `<package_name>` directory is left in
 
 All errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users.
 
+## End-to-End Testing
+
+### Running the End-to-End Test
+
+The package includes an end-to-end test that validates the scaffolding workflow by cloning the local template, running `just init`, and verifying the scaffolded package passes `just check`. This test is excluded from the default `just check` run because it requires network access and several minutes to complete.
+
+To run the e2e test explicitly:
+
+```bash
+just test-e2e
+```
+
+This command runs only the test marked `@pytest.mark.e2e` in `tests/test_e2e.py`.
+
+### Test Requirements & Graceful Skipping
+
+The e2e test gracefully skips if the required tools are not available on `PATH`:
+- `git` — version control system
+- `just` — command runner / task automation
+- `uv` — Python package manager and virtual environment tool
+
+If any tool is missing, the test skips with a diagnostic message instead of failing. This allows developers to run the test on machines that have the tools (e.g., for final validation) and skip gracefully on machines that don't.
+
+### Test Duration & Network Requirements
+
+The e2e test takes several minutes to complete because the inner `just check` runs:
+- `uv sync` — downloads and installs dependencies from PyPI and the internal GitLab index
+- `pip-audit` — queries the vulnerability database over the network
+- Full unit test suite with coverage measurement
+
+The test requires network connectivity; offline environments fail at the `uv sync` step.
+
+### What the Test Verifies
+
+The test scaffolds a package from the local template and validates:
+1. `git clone` succeeds and produces a copy of the template
+2. `just init <package_name>` succeeds and renames all "modernpackage" occurrences to the new name
+3. The renamed `__init__.py` exists and contains the version `0.0.1`
+4. `just check` passes, meaning the scaffolded package satisfies all quality gates (formatting, linting, complexity, type checking, unit tests, security audit, dead code detection)
+
+### Test Outcome
+
+- **Pass**: The scaffolded package is valid and passes all quality gates. Exit code 0.
+- **Skip**: Required tools are missing from `PATH` (e.g., `just` not installed). Exit code 0, but the test report shows `1 skipped`. This is an honest outcome on machines without the required tools.
+- **Fail**: The scaffolding process failed or the scaffolded package does not pass `just check`. Exit code 1. This indicates a regression in the local template.
+
 ## Argument Parser
 
 The CLI uses `argparse.ArgumentParser` with the following configuration:

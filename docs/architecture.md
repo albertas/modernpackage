@@ -272,20 +272,46 @@ Tests run in parallel across `nproc --ignore=1` CPU cores using `pytest-xdist`. 
 
 ### Test Organization
 
-Tests live in `tests/test_main.py` using:
+Tests live in `tests/test_main.py` (mocked unit tests) and `tests/test_e2e.py` (end-to-end test) using:
 
 - Plain `def test_*` functions (no test classes)
 - `unittest.mock.patch` for dependency injection (mocking `ArgumentParser`, `print`, `Popen`, etc.)
 - `pytest.raises` for exception testing
-- No real subprocess/network calls; all external dependencies mocked
-- Unit tests are unmarked (default, included in `just test`)
-- End-to-end tests use `@pytest.mark.e2e` (excluded from default run, included only in `just test-e2e`)
+- Unit tests (`tests/test_main.py`): no real subprocess/network calls; all external dependencies mocked
+- End-to-end tests (`tests/test_e2e.py`): real subprocess calls, network access, filesystem operations
 
 ### Test Markers
 
 The `e2e` marker is registered in `pyproject.toml` to categorize tests:
 
 - **`e2e`**: marks tests that perform real external calls (network, subprocess, filesystem). These are excluded from the default `just test` run (which runs only mocked unit tests) and are reserved for an explicit `just test-e2e` invocation. Pre-registering the marker prevents future `filterwarnings = error` strictness from breaking on unregistered marker usage.
+
+### End-to-End Test: Scaffolding Validation
+
+The e2e test (`tests/test_e2e.py:test_scaffolded_package_passes_check`, marked with `@pytest.mark.e2e`) validates the core scaffolding workflow by:
+
+1. **Skipping gracefully** if required tools are missing: checks `git`, `just`, and `uv` are on `PATH`; skips the test with a diagnostic message if any are missing
+2. **Cloning the local template** from the repo root into a temporary directory (intentionally **not** the GitHub URL, so local template regressions are caught)
+3. **Running `just init <package_name>`** to replicate the package (rename all "modernpackage" occurrences, reset version to `0.0.1`, reinitialize git)
+4. **Verifying the result** by checking that the renamed `__init__.py` file exists and contains the pinned version `0.0.1`
+5. **Validating all quality gates** by running `just check` against the scaffolded package and asserting exit code 0 (passes format, lint, complexity, typecheck, unit tests, security audit, dead code detection)
+
+**Why this test is excluded by default:**
+- It requires network access for `uv sync` and `pip-audit` (slow, unreliable in offline/CI environments)
+- It requires `git`, `just`, and `uv` on `PATH` (extra tool dependencies)
+- It takes several minutes to complete (vs. ~1 second for mocked unit tests)
+- It is opt-in for developer workflow (`just test-e2e` for manual verification) and not enforced in default CI/CD (`just check`)
+
+**What it guarantees:**
+- The local template scaffolds correctly and produces a valid package
+- The scaffolded package passes all quality gates (same bar as production)
+- Regressions in the template code are caught end-to-end, not just in unit tests
+
+**Intentional design choices:**
+- Clones the **local committed checkout** (not the GitHub URL) so template uncommitted edits are not exercised, matching CI behavior
+- Uses `subprocess.run(..., check=False, capture_output=True, text=True)` to gracefully capture and surface errors rather than crash on subprocess failure
+- Injects git author/committer identity (`GIT_AUTHOR_NAME`, etc.) because the inner `just init` runs `git commit` and requires a configured identity
+- Documents deviations in the module docstring to explain the intentional differences from production (`modernpackage.main:init_new_package`, which clones from GitHub)
 
 ### Coverage Measurement
 
@@ -304,6 +330,8 @@ markers = [
 - `--no-cov-on-fail`: skips coverage reporting if tests fail (speeds up failure diagnosis)
 - `-m 'not e2e'`: default run excludes `e2e` marked tests (mocked unit tests only)
 
+The coverage gate is measured **against mocked unit tests only** (the default `just test` run); the e2e test is not included in the coverage measurement because it exercises the public CLI (which is already covered by unit test mocks).
+
 ### Test Execution
 
 Tests run in parallel across all-but-one CPU cores (via `nproc --ignore=1`) using `pytest-xdist`. The default run excludes `e2e` marked tests, running only mocked unit tests. Coverage is aggregated transparently across parallel workers.
@@ -311,7 +339,7 @@ Tests run in parallel across all-but-one CPU cores (via `nproc --ignore=1`) usin
 ```bash
 just test              # run parallel unit tests (mocked, excludes e2e) with coverage
 just test-e2e         # run only e2e marked tests (real external calls)
-just check             # run all quality gates (including parallel tests)
+just check             # run all quality gates (including parallel tests, excludes e2e)
 ```
 
 On a 1-core machine, `nproc --ignore=1` yields 0; `pytest-xdist` treats `-n 0` as single-process (acceptable fallback).

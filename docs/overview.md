@@ -32,7 +32,7 @@ After cloning and `cd`-ing into the created package directory, developers use `j
 - **`just fix`** — format code and auto-fix linting issues.
 - **`just compile`** — regenerate and upgrade all dependency artifacts: `requirements.txt`, `requirements-dev.txt`, and `uv.lock` to the latest versions available.
 - **`just test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
-- **`just test-e2e`** — run only tests marked `@pytest.mark.e2e` (reserved for real external calls).
+- **`just test-e2e`** — run only the end-to-end test marked `@pytest.mark.e2e` (real external calls: scaffolds a package and runs `just check` on it).
 - **`just lint`** — check for linting violations.
 - **`just format`** — reformat code with ruff.
 - **`just typecheck`** — run type checker (mypy in strict mode).

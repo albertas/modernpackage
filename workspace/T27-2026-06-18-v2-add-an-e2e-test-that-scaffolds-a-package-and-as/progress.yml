@@ -1,0 +1,150 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 59973
+    cost_usd: 0.4056035
+    input_tokens: 3142
+    output_tokens: 4298
+    cache_read_tokens: 150815
+    cache_creation_tokens: 20282
+    model: Haiku 4.5, opus 4.8
+    context_used: 23424
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 96236
+    cost_usd: 0.5303145
+    input_tokens: 3146
+    output_tokens: 6250
+    cache_read_tokens: 207629
+    cache_creation_tokens: 25145
+    model: Haiku 4.5, opus 4.8
+    context_used: 28291
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 100495
+    cost_usd: 0.462129
+    input_tokens: 3009
+    output_tokens: 6891
+    cache_read_tokens: 94528
+    cache_creation_tokens: 22436
+    model: Haiku 4.5, opus 4.8
+    context_used: 25445
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 51998
+    cost_usd: 0.35846049999999996
+    input_tokens: 3009
+    output_tokens: 3768
+    cache_read_tokens: 97565
+    cache_creation_tokens: 19713
+    model: Haiku 4.5, opus 4.8
+    context_used: 22722
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 74921
+    cost_usd: 0.487294
+    input_tokens: 3138
+    output_tokens: 5918
+    cache_read_tokens: 105756
+    cache_creation_tokens: 26738
+    model: Haiku 4.5, opus 4.8
+    context_used: 29876
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 181611
+    cost_usd: 0.34396369999999993
+    input_tokens: 3631
+    output_tokens: 16156
+    cache_read_tokens: 1443717
+    cache_creation_tokens: 55247
+    model: Haiku 4.5
+    context_used: 58878
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 274886
+    cost_usd: 0.4297944
+    input_tokens: 12
+    output_tokens: 5416
+    cache_read_tokens: 444298
+    cache_creation_tokens: 32637
+    model: Haiku 4.5, sonnet 4.6
+    context_used: 32649
+    context_max: 200000
+    lines_of_code: 93
+  sub_phases:
+  - num: 1
+    title: Static Conformance of the e2e File
+    done: true
+    metrics:
+      duration_ms: 54107
+      cost_usd: 0.3377731
+      input_tokens: 10
+      output_tokens: 2763
+      cache_read_tokens: 344487
+      cache_creation_tokens: 28924
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 28934
+      context_max: 200000
+      lines_of_code: 92
+  - num: 2
+    title: Default-Suite Integrity (e2e stays excluded)
+    done: true
+    metrics:
+      duration_ms: 93828
+      cost_usd: 0.3278212
+      input_tokens: 8
+      output_tokens: 3196
+      cache_read_tokens: 263454
+      cache_creation_tokens: 30236
+      model: sonnet 4.6, Haiku 4.5
+      context_used: 30244
+      context_max: 200000
+      lines_of_code: 92
+  - num: 3
+    title: End-to-End Execution (the deliverable's guarantee)
+    done: true
+    metrics:
+      duration_ms: 274886
+      cost_usd: 0.4297944
+      input_tokens: 12
+      output_tokens: 5416
+      cache_read_tokens: 444298
+      cache_creation_tokens: 32637
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 32649
+      context_max: 200000
+      lines_of_code: 93
+cumulative:
+  total_cost: 3.0175596
+  total_ms: 840120
+  total_cache_read: 2544308
+  total_cache_write: 202198
+  total_loc: 93
+  total_input_tokens: 19087
+  total_output_tokens: 48697
+  version: 0.0.8
+  completed_at: 2026-06-18 07:49:56.449733
