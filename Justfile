@@ -1,14 +1,12 @@
 lifecycle:
-  @uv pip sync requirements-dev.txt
-  @uv pip install -e .[test]
+  @uv sync
   @count=0; while uv run lifecycle --max-tasks 1 --prior-tasks "$count"; do count=$((count + 1)); done
 
 vision:
   uv run vision
 
 sync:
-  @uv pip sync requirements-dev.txt
-  @uv pip install -e .[test]
+  @uv sync
 
 test *args: sync
   uv run pytest -n "$(nproc --ignore=1)" {{args}}
@@ -72,7 +70,5 @@ init package_name="modernpackage":
   @git commit -m "Initial modern {{package_name}} package setup"
   @echo "Finished initializing {{package_name}}. You can now run: \033[0;32m cd {{package_name}} && just check\033[0m"
 
-compile:
-  uv pip compile -U -q pyproject.toml -o requirements.txt
-  uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt
+lock:
   uv lock --upgrade

@@ -33,7 +33,7 @@ After cloning and `cd`-ing into the created package directory, developers use `j
 
 - **`just check`** — run all code quality gates in sequence: format check, ruff lint, complexity audit, mypy type check, unit tests, pip-audit security scan, deadcode detection. Primary quality gate; used in CI/CD.
 - **`just fix`** — format code and auto-fix linting issues.
-- **`just compile`** — regenerate and upgrade all dependency artifacts: `requirements.txt`, `requirements-dev.txt`, and `uv.lock` to the latest versions available.
+- **`just lock`** — refresh `uv.lock` to the latest resolvable dependency versions via `uv lock --upgrade`.
 - **`just test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
 - **`just test-e2e`** — run only the end-to-end test marked `@pytest.mark.e2e` (real external calls: scaffolds a package and runs `just check` on it).
 - **`just lint`** — check for linting violations.
@@ -48,7 +48,7 @@ Individual check sub-steps are also available:
 - **`just check-format`**, **`just check-lint`**, **`just check-complexity`**, **`just check-typecheck`** — individual check-only steps (no auto-fix)
 - **`just fix-lint`** — auto-fix linting and deadcode issues
 
-`Justfile` recipes depend on synced dependencies (dev and test extras) via the `just sync` prerequisite.
+`Justfile` recipes depend on a synced environment (the locked `dev` group + editable project) via the `just sync` prerequisite, which runs `uv sync`.
 
 ## Key Implementation Details
 
@@ -64,7 +64,7 @@ Individual check sub-steps are also available:
 - **Scaffolding removal**: After cloning the template but before the rename step, `_strip_scaffolding()` removes the scaffolder's own machinery from the cloned tree — deleting `main.py` (the self-replicating CLI), the end-to-end test (`test_e2e.py`), the `docs/` directory, and `BACKLOG.md` (project-metadata). It rewrites `tests/test_main.py` with a minimal one-test stub that imports the package version (satisfying the minimum test collection requirement and coverage gate), replaces `README.md` with a generic template, and removes the `[project.scripts]` entry points table from `pyproject.toml` to avoid dangling console-script entries. Deletions are tolerated if files are absent (graceful degradation for different template shapes). This stripping happens **before** the rename sed and git commit in `just init`, so the initial commit captures a clean tree without the scaffolder machinery.
 - **Package replication**: the `just init` recipe uses `git grep + sed` to rename all "modernpackage" occurrences to the new package name, resets version to `0.0.1`, and reinitializes git.
 - **Configuration-as-code**: all tool settings live in `pyproject.toml` (ruff, mypy, pytest, deadcode, pip-audit); the Justfile delegates to them via `uv run`.
-- **Dependency compilation workflow**: `just compile` regenerates all three dependency artifacts in lockstep (`requirements.txt`, `requirements-dev.txt`, `uv.lock`) to ensure they always agree on shared package versions and are upgraded to the latest versions available in the GitLab index.
+- **Dependency locking workflow**: `just lock` runs `uv lock --upgrade` to refresh the single `uv.lock` source of truth to the latest versions available in the GitLab index; `uv sync` installs from it.
 - **Private index**: GitLab private package index configured for pulling internal dependencies; dependency resolution is capped by what this index serves, which may lag behind PyPI.
 
 ## Known Gaps & Future Work

@@ -1,8 +1,7 @@
 # ToDo
 
-- Use `uv` commands for managing dependencies instead of `uv pip`, update Justfile, Makefile. Use uv dev group for test dependencies.
-
 # Done
+- [x] [T48] Use `uv` commands for managing dependencies instead of `uv pip`, update Justfile, Makefile. Use uv dev group for test dependencies.
 - [x] [T47] Remove scaffolding/initialization related code programatically from the resulting project 
 - [ ] [V7] Cache the last successful clone for reuse
 - [ ] [V8] Add a --ref <tag> flag that pins scaffolding to a specific template ref

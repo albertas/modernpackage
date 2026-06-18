@@ -269,8 +269,8 @@ Commonly used commands for package development:
 - `just test-e2e` - run end-to-end test that scaffolds a package and validates it with `just check` (slow, requires network and git/just/uv on PATH; skips gracefully if tools missing).
 - `just fix` - format code and fix detected fixable issues.
 - `just publish` - publishes current package version to pypi.org.
-- `just compile` - bump and freeze dependency versions in requirements*.txt files.
-- `just sync` - upgrade installed dependencies in Virtual Environment (executed after `just compile`).
+- `just lock` - refresh `uv.lock` to the latest resolvable dependency versions.
+- `just sync` - create the virtual environment and install the locked dev group + editable project via `uv sync`.
 
 ## Toolset
 This package uses these cutting edge tools:

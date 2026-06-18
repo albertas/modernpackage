@@ -1324,7 +1324,7 @@ def test_strip_scaffolding_removes_project_scripts(tmp_path: Path) -> None:
     pyproject = (tmp_path / 'pyproject.toml').read_text()
     assert '[project.scripts]' not in pyproject
     assert 'modernpackage.main:main' not in pyproject
-    assert '[project.optional-dependencies]' in pyproject  # neighbour intact
+    assert '[dependency-groups]' in pyproject  # neighbour intact
     assert 'vupi' in pyproject  # test dep intact
     assert tomllib.loads(pyproject)  # still valid TOML
 

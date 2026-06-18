@@ -532,7 +532,7 @@ def _remove_project_scripts(pyproject_path: Path) -> None:
     """Remove the [project.scripts] table from the cloned pyproject.toml.
 
     Deletes the header line, its entries, and the trailing blank line, leaving
-    surrounding tables ([project.urls], [project.optional-dependencies], the
+    surrounding tables ([project.urls], [dependency-groups], the
     e2e marker, the vupi dep, [tool.deadcode]) intact. No-op if the table or the
     file is absent (graceful boundary degradation, like _write_package_metadata).
     """

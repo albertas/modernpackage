@@ -1207,19 +1207,13 @@ This ensures all code paths are covered by type hints and comply with strict typ
 
 `just publish` clears `dist/`, builds via `uv build`, and publishes via `uv publish`.
 
-### Dependency Compilation & Locking
+### Dependency Locking
 
-The project uses two mechanisms to pin and regenerate dependencies:
+The project uses uv's native lockfile as the single source of truth for dependency pins:
 
-1. **`requirements.txt` and `requirements-dev.txt`**: generated via `uv pip compile -U` to freeze all transitive dependencies
-2. **`uv.lock`**: generated via `uv lock --upgrade` to create a uv-native lock file
+- **`uv.lock`**: generated via `uv lock --upgrade` to pin all transitive dependencies (runtime and the `dev` group).
 
-The `Justfile` defines a `compile` recipe that regenerates all three artifacts in lockstep:
-- `uv pip compile -U -q pyproject.toml -o requirements.txt` (regenerates runtime pins; currently empty since `dependencies = []`)
-- `uv pip compile -U -q --all-extras pyproject.toml -o requirements-dev.txt` (regenerates dev/test pins including the `test` extra)
-- `uv lock --upgrade` (regenerates the native uv lock file to match the same versions)
-
-This ensures that `requirements.txt`, `requirements-dev.txt`, and `uv.lock` always agree on shared package versions and are bumped together whenever dependencies are upgraded. The compile recipes delegate to the private GitLab uv index configured in `pyproject.toml`, which may lag behind PyPI; the resolved versions are capped by what that index serves.
+The `Justfile` defines a `lock` recipe whose body is `uv lock --upgrade`. `uv sync` installs the project and the `dev` group directly from `uv.lock`. The lock recipe resolves against the private GitLab uv index configured in `pyproject.toml`, which may lag behind PyPI; the resolved versions are capped by what that index serves.
 
 ## Configuration Hub
 
@@ -1227,7 +1221,7 @@ This ensures that `requirements.txt`, `requirements-dev.txt`, and `uv.lock` alwa
 
 Single unified configuration file for all tools:
 
-- **`[project]`**: package metadata, entry points (`modernpackage` and `mp`), optional test dependencies
+- **`[project]`**: package metadata, entry points (`modernpackage` and `mp`); the `dev` dependency group is declared under `[dependency-groups]`
 - **`[tool.pytest.ini_options]`**: test runner config
   - `addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0 -m 'not e2e'"`
   - Measures coverage against the `modernpackage` package only (excludes `tests/`)
@@ -1258,8 +1252,8 @@ Single unified configuration file for all tools:
 
 The `Justfile` is the canonical command hub providing development workflows via `just` recipes:
 
-- **`sync`**: syncs dependencies from requirements files (required by most recipes as a prerequisite)
-- **`compile`**: upgrades and regenerates all dependency artifacts (`uv pip compile -U` for both requirements files, then `uv lock --upgrade` for the lock file)
+- **`sync`**: installs the project and locked `dev` group from `uv.lock` via `uv sync` (required by most recipes as a prerequisite)
+- **`lock`**: refreshes `uv.lock` to the latest resolvable versions via `uv lock --upgrade`
 - **`test`**: runs pytest in parallel across `nproc --ignore=1` workers with coverage (mocked unit tests only, excludes e2e)
 - **`test-e2e`**: runs pytest with only `e2e` marked tests (overrides the default `-m 'not e2e'` behavior)
 - **`check`**: combined quality gate (format, lint, complexity, typecheck, test, audit, deadcode) — enforces all quality gates including complexity threshold of 8
@@ -1272,7 +1266,7 @@ The `Justfile` is the canonical command hub providing development workflows via 
 
 ### Tool Coordination
 
-All tools read their configuration from `pyproject.toml`. The Justfile delegates to them via `uv run`, which manages the virtual environment and dependency versions (pinned in `requirements-dev.txt` and `uv.lock`).
+All tools read their configuration from `pyproject.toml`. The Justfile delegates to them via `uv run`, which manages the virtual environment and dependency versions (pinned in `uv.lock`).
 
 ## Test Strategy
 
@@ -1444,5 +1438,5 @@ The `Justfile` provides a comprehensive command surface for all development, tes
 - **`just test`** and **`just test-e2e`** run in parallel across `nproc --ignore=1` workers with full test discovery and coverage measurement
 - **`just check`** enforces the full gate (format, lint, complexity, typecheck, test, audit, deadcode) as the primary quality gate
 - **`just fix`** auto-fixes all correctable violations (format + lint + deadcode)
-- **`just publish`** builds and publishes to PyPI; **`just compile`** upgrades all locked dependencies
+- **`just publish`** builds and publishes to PyPI; **`just lock`** upgrades all locked dependencies
 - **`just init <name>`** replicates the package with a new name (named parameter, default `"modernpackage"`)

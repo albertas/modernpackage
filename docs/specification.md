@@ -86,9 +86,9 @@ init_new_package(name)
 - **Version management** (`pyproject.toml:50-51`, `[tool.hatch.version]`): dynamic version read from `modernpackage/__init__.py`, currently `'0.0.9'` (`__init__.py:3`).
 - **Python requirement**: `>= 3.14` (`pyproject.toml:8`).
 - **Runtime dependencies**: empty list (`pyproject.toml:18`, `dependencies = []`).
-- **Optional test group** (`pyproject.toml:27-37`): ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, vupi>=0.0.6.
+- **Dev dependency group** (`[dependency-groups].dev`): ruff, mypy, pip-audit, deadcode, pytest, pytest-cov, pytest-xdist, vupi>=0.0.7.
 - **Publishing**: `just publish` clears `dist/*`, runs `uv build`, then `uv publish`.
-- **Dependency pinning**: `just compile` uses `uv pip compile` to generate `requirements.txt` (runtime, empty) and `requirements-dev.txt` (full dev pins).
+- **Dependency pinning**: `just lock` runs `uv lock --upgrade` to refresh `uv.lock`, the single lockfile (runtime deps are empty).
 - **Private index** (`pyproject.toml:92-94`): `[[tool.uv.index]]` defines a private GitLab uv index at `https://gitlab.com/api/v4/projects/niekas%2Fpackages/packages/pypi/simple`.
 
 ## Developer tooling
@@ -102,12 +102,12 @@ init_new_package(name)
   - **pytest** (`pyproject.toml:39-40`): `addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0 -m 'not e2e'"` — measures coverage on package only, fails below 95%, and excludes e2e tests by default.
   - **pip-audit**: no project configuration in `pyproject.toml`; simply invoked via `just audit`.
 - **Justfile command hub**:
-  - `sync`: syncs dependencies from requirements files (prerequisite for recipes that need the editable install).
+  - `sync`: installs the project + locked `dev` group from `uv.lock` via `uv sync` (prerequisite for recipes that need the editable install).
   - `check`: runs `check-format check-lint check-complexity check-typecheck test audit deadcode` in sequence — the primary quality gate.
   - `fix`: runs `format fix-lint` — auto-fix tools.
-  - Individual targets: `format`, `lint`, `typecheck`, `audit`, `deadcode`, `test`, `test-e2e` — all depend on `sync` except `publish`, `compile`, and `init`.
+  - Individual targets: `format`, `lint`, `typecheck`, `audit`, `deadcode`, `test`, `test-e2e` — all depend on `sync` except `publish`, `lock`, and `init`.
   - Specialized targets: `check-format`, `check-lint`, `check-complexity`, `check-typecheck` (check-only variants).
-  - Other targets: `publish`, `compile`, `init package_name="modernpackage"`.
+  - Other targets: `publish`, `lock`, `init package_name="modernpackage"`.
 
 ## Tests
 
@@ -134,9 +134,7 @@ init_new_package(name)
   - `pyproject.toml` — single config hub (build backend, dependencies, tool settings).
   - `Justfile` — command hub (development, testing, publishing recipes).
 - **Dependencies**:
-  - `requirements.txt` — runtime dependencies (currently empty).
-  - `requirements-dev.txt` — pinned dev and test dependencies.
-  - `uv.lock` — lock file for `uv`.
+  - `uv.lock` — single lockfile pinning runtime and `dev`-group dependencies.
 - **CI/CD**:
   - `.github/workflows/check-modernpackage-on-python314.yml` — GitHub Actions workflow.
   - `.gitlab-ci.yml` — GitLab CI configuration.

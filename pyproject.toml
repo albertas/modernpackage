@@ -24,8 +24,8 @@ homepage = "https://github.com/albertas/modernpackage"
 modernpackage = "modernpackage.main:main"
 mp = "modernpackage.main:main"
 
-[project.optional-dependencies]
-test = [
+[dependency-groups]
+dev = [
     "ruff",
     "mypy",
     "pip-audit",

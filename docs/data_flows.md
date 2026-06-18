@@ -144,7 +144,7 @@ Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery
    - Uses literal `modernpackage` token so `just init`'s rename sed updates it
 4. Call `_remove_project_scripts(new_package_path / 'pyproject.toml')`:
    - Removes `[project.scripts]` table to avoid dangling entry points
-   - Leaves surrounding tables (`[project.optional-dependencies]`, `[tool.*]`) intact
+   - Leaves surrounding tables (`[dependency-groups]`, `[tool.*]`) intact
    - Tolerates missing file or table — no-op if absent
 
 **Result:** the cloned tree is now clean of scaffolder machinery. The next step (`just init`) will operate on an already-stripped tree, and the single git commit will capture the clean initial state.
