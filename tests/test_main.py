@@ -57,6 +57,29 @@ def test_validate_package_name_invalid() -> None:
             validate_package_name(bad_name)
 
 
+def test_explain_invalid_package_name_empty() -> None:
+    with pytest.raises(ArgumentTypeError, match='name must not be empty'):
+        validate_package_name('')
+
+
+def test_explain_invalid_package_name_disallowed_char() -> None:
+    with pytest.raises(ArgumentTypeError, match="disallowed character: ' '"):
+        validate_package_name('has space')
+    # uppercase stays valid (re.IGNORECASE; A-Z must not be flagged)
+    assert validate_package_name('MyPackage') == 'MyPackage'
+
+
+def test_explain_invalid_package_name_separator() -> None:
+    for bad_name in ('-bad', 'bad-', '.bad', '_bad'):
+        with pytest.raises(
+            ArgumentTypeError, match='name must start and end with a letter or digit'
+        ):
+            validate_package_name(bad_name)
+    # precedence: disallowed char wins over separator (design decision 3)
+    with pytest.raises(ArgumentTypeError, match='disallowed character'):
+        validate_package_name('-has space')
+
+
 def test_validate_package_name_rejects_stdlib_collision() -> None:
     for colliding_name in ('json', 'os', 'email'):
         with pytest.raises(

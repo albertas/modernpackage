@@ -60,16 +60,43 @@ _PACKAGE_NAME_RE: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
+# Matches the first character that is NOT a permitted package-name character.
+# Permits A-Z via re.IGNORECASE to stay consistent with _PACKAGE_NAME_RE.
+_DISALLOWED_CHAR_RE: re.Pattern[str] = re.compile(r'[^a-z0-9._-]', re.IGNORECASE)
+
 # All Python standard-library top-level module names for the running
 # interpreter (a frozenset; available since 3.10). A normalized module name
 # equal to any of these would shadow a stdlib module on import, so reject it.
 _STDLIB_MODULE_NAMES: frozenset[str] = sys.stdlib_module_names
 
 
+def _explain_invalid_package_name(value: str) -> str:
+    """Return a precise reason a name failed `_PACKAGE_NAME_RE`.
+
+    Caller guarantees `_PACKAGE_NAME_RE.match(value)` is falsy. Reasons are
+    checked most-specific-first (empty → disallowed char → separator); the
+    first match wins. The function is total: the final branch is the residual
+    leading/trailing-separator case.
+    """
+    if value == '':
+        return 'name must not be empty'
+    match = _DISALLOWED_CHAR_RE.search(value)
+    if match:
+        bad_char = match.group()
+        return (
+            f'name contains a disallowed character: {bad_char!r} '
+            f"(only letters, digits, '.', '_', '-' are allowed)"
+        )
+    # Residual case: regex failed, value is non-empty and contains only
+    # allowed characters, so a leading/trailing '.', '_', or '-' is to blame.
+    return 'name must start and end with a letter or digit'
+
+
 def validate_package_name(value: str) -> str:
     """Validate value is a PEP 508 / PyPI distribution name not shadowing stdlib."""
     if not _PACKAGE_NAME_RE.match(value):
-        message = f'Invalid package name: {value!r}'
+        reason = _explain_invalid_package_name(value)
+        message = f'Invalid package name: {value!r} — {reason}'
         raise ArgumentTypeError(message)
     module_name = normalize_module_name(value)
     if module_name in _STDLIB_MODULE_NAMES:

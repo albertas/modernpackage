@@ -36,6 +36,24 @@ This constant is:
 
 The main CLI orchestrator with five fully type-annotated functions:
 
+#### `_explain_invalid_package_name(value: str) -> str`
+
+A private helper that returns a precise reason why a package name failed validation.
+
+- **Purpose**: Called only when `_PACKAGE_NAME_RE.match(value)` is falsy, to provide actionable diagnostic messages.
+- **Parameter**: `value: str` — the input string that failed the regex check
+- **Returns**: `str` — a concise explanation of the failure reason
+- **Algorithm**: Checks reasons in precedence order (most-specific-first):
+  1. **Empty value**: returns `'name must not be empty'`
+  2. **Disallowed character**: finds the first character outside `[a-z0-9._-]` (case-insensitive) and returns `'name contains a disallowed character: <char> (only letters, digits, '.', '_', '-' are allowed)'`
+  3. **Leading/trailing separator**: residual case (regex failed, value is non-empty and contains only allowed characters), returns `'name must start and end with a letter or digit'`
+
+Examples:
+- `_explain_invalid_package_name('')` → `'name must not be empty'`
+- `_explain_invalid_package_name('has space')` → `"name contains a disallowed character: ' ' (only letters, digits, '.', '_', '-' are allowed)"`
+- `_explain_invalid_package_name('-bad')` → `'name must start and end with a letter or digit'`
+- `_explain_invalid_package_name('bad.')` → `'name must start and end with a letter or digit'`
+
 #### `validate_package_name(value: str) -> str`
 
 Validates that a string is a valid PEP 508 / PyPI distribution name and that its normalized module form does not collide with a Python standard-library module. Used as the `type=` validator in argument parsing.
@@ -55,17 +73,17 @@ The validation is performed in two stages:
        re.IGNORECASE,
    )
    ```
-   Rejects malformed input (e.g., `-bad`, `bad-`, `has space`).
+   If this regex fails to match, the helper `_explain_invalid_package_name(value)` is called to generate a specific reason phrase.
 
 2. **Collision check** against `_STDLIB_MODULE_NAMES`:
    ```python
    _STDLIB_MODULE_NAMES: frozenset[str] = sys.stdlib_module_names
    ```
-   The normalized module name is tested for membership in this frozen set. If present, the name is rejected with a specific message naming the collision. The collision check runs only on well-formed names to ensure malformed input reports the original "Invalid package name" message.
+   The normalized module name is tested for membership in this frozen set. If present, the name is rejected with a specific message naming the collision. The collision check runs only on well-formed names to ensure malformed input gets the detailed reason from the helper.
 
 - **Parameter**: `value: str` — the input string to validate
 - **Returns**: `str` — the input string unchanged if valid
-- **Raises**: `ArgumentTypeError(f'Invalid package name: {value!r}')` if the string does not match the PEP 508 pattern
+- **Raises**: `ArgumentTypeError(f'Invalid package name: {value!r} — {reason}')` if the string does not match the PEP 508 pattern (where `{reason}` is from `_explain_invalid_package_name`)
 - **Raises**: `ArgumentTypeError(f'Package name {value!r} collides with the Python standard-library module {module_name!r}')` if the normalized name matches a stdlib module
 
 Examples:
@@ -77,12 +95,13 @@ Examples:
 - `validate_package_name('my-json')` → `'my-json'` ✓ (near-miss: normalizes to `my_json`, not in stdlib set)
 - `validate_package_name('jsonschema')` → `'jsonschema'` ✓ (near-miss: contains stdlib name but does not equal it)
 - `validate_package_name('email_utils')` → `'email_utils'` ✓ (near-miss: contains stdlib name but does not equal it)
-- `validate_package_name('-bad')` → raises `ArgumentTypeError` (leading hyphen is invalid)
-- `validate_package_name('bad-')` → raises `ArgumentTypeError` (trailing hyphen is invalid)
-- `validate_package_name('has space')` → raises `ArgumentTypeError` (space is invalid)
-- `validate_package_name('json')` → raises `ArgumentTypeError` (collides with stdlib module `json`)
-- `validate_package_name('os')` → raises `ArgumentTypeError` (collides with stdlib module `os`)
-- `validate_package_name('email')` → raises `ArgumentTypeError` (collides with stdlib module `email`)
+- `validate_package_name('')` → raises `ArgumentTypeError('Invalid package name: '' — name must not be empty')`
+- `validate_package_name('-bad')` → raises `ArgumentTypeError("Invalid package name: '-bad' — name must start and end with a letter or digit")`
+- `validate_package_name('bad-')` → raises `ArgumentTypeError("Invalid package name: 'bad-' — name must start and end with a letter or digit")`
+- `validate_package_name('has space')` → raises `ArgumentTypeError("Invalid package name: 'has space' — name contains a disallowed character: ' ' (only letters, digits, '.', '_', '-' are allowed)")`
+- `validate_package_name('json')` → raises `ArgumentTypeError("Package name 'json' collides with the Python standard-library module 'json'")`
+- `validate_package_name('os')` → raises `ArgumentTypeError("Package name 'os' collides with the Python standard-library module 'os'")`
+- `validate_package_name('email')` → raises `ArgumentTypeError("Package name 'email' collides with the Python standard-library module 'email'")`
 
 #### `normalize_module_name(value: str) -> str`
 

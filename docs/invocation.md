@@ -55,11 +55,24 @@ Initializes a new Python package with the given name in the current directory. T
 - Validation is case-insensitive
 - The normalized module name (after converting hyphens and dots to underscores) must not collide with a Python standard-library module name
 
-If the name does not match the PEP 508 pattern, an error is raised:
+If the name does not match the PEP 508 pattern, an error is raised with a specific reason:
 
+**Empty name:**
 ```
 usage: modernpackage [-v] [package_name]
-modernpackage: error: argument package_name: Invalid package name: '<name>'
+modernpackage: error: argument package_name: Invalid package name: '' — name must not be empty
+```
+
+**Leading or trailing separator:**
+```
+usage: modernpackage [-v] [package_name]
+modernpackage: error: argument package_name: Invalid package name: '-bad' — name must start and end with a letter or digit
+```
+
+**Disallowed character:**
+```
+usage: modernpackage [-v] [package_name]
+modernpackage: error: argument package_name: Invalid package name: 'has space' — name contains a disallowed character: ' ' (only letters, digits, '.', '_', '-' are allowed)
 ```
 
 If the name's normalized form collides with a Python standard-library module, an error is raised:
@@ -252,11 +265,13 @@ The `parse_args()` function is fully type-annotated (`def parse_args() -> Namesp
 
 - Input: a string (typically the package name)
 - Output: the input string unchanged if valid
-- Error: raises `argparse.ArgumentTypeError(f'Invalid package name: {value!r}')` if the string does not match the PEP 508 pattern
+- Error: raises `argparse.ArgumentTypeError` with a specific reason if the string does not match the PEP 508 pattern
 
 The validation pattern matches:
 - A single alphanumeric character (e.g., `'a'`)
 - Or an alphanumeric character followed by any number of alphanumeric characters, hyphens, underscores, or dots, followed by an alphanumeric character (e.g., `'my-package'`, `'my_package'`, `'my.package'`)
+
+When validation fails, the error message identifies the specific reason (checked in precedence order: empty → disallowed character → leading/trailing separator):
 
 Examples:
 - `validate_package_name('mypackage')` → `'mypackage'` ✓
@@ -265,6 +280,7 @@ Examples:
 - `validate_package_name('my_package')` → `'my_package'` ✓
 - `validate_package_name('my.package')` → `'my.package'` ✓
 - `validate_package_name('a')` → `'a'` ✓
-- `validate_package_name('-bad')` → raises `ArgumentTypeError` (leading hyphen is invalid)
-- `validate_package_name('bad-')` → raises `ArgumentTypeError` (trailing hyphen is invalid)
-- `validate_package_name('has space')` → raises `ArgumentTypeError` (space is invalid)
+- `validate_package_name('')` → raises `ArgumentTypeError('Invalid package name: '' — name must not be empty')`
+- `validate_package_name('-bad')` → raises `ArgumentTypeError("Invalid package name: '-bad' — name must start and end with a letter or digit")`
+- `validate_package_name('bad-')` → raises `ArgumentTypeError("Invalid package name: 'bad-' — name must start and end with a letter or digit")`
+- `validate_package_name('has space')` → raises `ArgumentTypeError("Invalid package name: 'has space' — name contains a disallowed character: ' ' (only letters, digits, '.', '_', '-' are allowed)")`

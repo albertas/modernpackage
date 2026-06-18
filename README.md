@@ -17,8 +17,18 @@ modernpackage my-cool.package           # Valid PEP 508 distribution name
                                         # Creates directory: my_cool_package
                                         # All Python imports: from my_cool_package import ...
 
+# Example: Invalid package name (leading separator)
+modernpackage -bad                      # Error: Invalid package name: '-bad' — name must start and end with a letter or digit
+                                        # Exit code 2 (argument validation error)
+                                        # No scaffolding occurs
+
+# Example: Invalid package name (disallowed character)
+modernpackage 'has space'               # Error: Invalid package name: 'has space' — name contains a disallowed character: ' ' (only letters, digits, '.', '_', '-' are allowed)
+                                        # Exit code 2 (argument validation error)
+                                        # No scaffolding occurs
+
 # Example: Attempt to create a package with a name that collides with stdlib
-modernpackage json                      # Error: Package name collides with stdlib module
+modernpackage json                      # Error: Package name 'json' collides with the Python standard-library module 'json'
                                         # Exit code 2 (argument validation error)
                                         # No scaffolding occurs
 ```
