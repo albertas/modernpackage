@@ -72,6 +72,8 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
         repository_url='https://example.org/repo',
     )
 
+    main._strip_scaffolding(destination)  # noqa: SLF001
+
     init = _run(
         ['just', 'init', module_name],
         cwd=destination,
@@ -101,3 +103,14 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
     assert 'Name Surname' not in pyproject
     assert 'email@example.com' not in pyproject
     assert 'Package configuration example using bleeding edge toolset.' not in pyproject
+
+    # Scaffolding removed from the generated package.
+    assert not (source_dir / 'main.py').exists()  # self-replicating CLI gone
+    assert not (destination / 'tests' / 'test_e2e.py').exists()
+    assert not (destination / 'docs').exists()
+    assert not (destination / 'BACKLOG.md').exists()
+    assert '[project.scripts]' not in pyproject  # no dangling entry point
+    assert 'modernpackage.main:main' not in pyproject
+    # __init__.py version 0.0.1 already asserted at lines 88-90; check stub test.
+    stub = (destination / 'tests' / 'test_main.py').read_text()
+    assert '0.0.1' in stub

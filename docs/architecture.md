@@ -255,6 +255,48 @@ _XDG_CONFIG_HOME_ENV: str = 'XDG_CONFIG_HOME'
 
 Consulted by `_user_config_path()` to resolve the per-user config file location.
 
+**`_SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...]`**
+
+Clone-relative paths deleted wholesale from a generated package:
+```python
+_SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
+    'modernpackage/main.py',
+    'tests/test_e2e.py',
+    'docs',
+    'BACKLOG.md',
+)
+```
+
+Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root.
+
+**`_TEST_MAIN_STUB: str`**
+
+Minimal stub for `tests/test_main.py` written to generated packages:
+```python
+_TEST_MAIN_STUB: str = """\
+from modernpackage import __version__
+
+
+def test_version() -> None:
+    assert __version__ == '0.0.1'
+"""
+```
+
+Replaces the scaffolder's full test suite after cloning. Serves two purposes: (1) pytest requires ≥1 collected test (empty collection exits non-zero); (2) importing the package keeps `--cov-fail-under=95.0` satisfied (after `main.py` is deleted, the only package code is the `__version__` line, executed on import). Written with the literal `modernpackage` token so that `just init`'s rename sed rewrites the import to the new module name.
+
+**`_README_STUB: str`**
+
+Minimal generic README written to generated packages:
+```python
+_README_STUB: str = """\
+# modernpackage
+
+A Python package.
+"""
+```
+
+Replaces the scaffolder's detailed README (which documents the scaffolder, not the generated package). Required by `pyproject.toml:7` which specifies `readme = "README.md"`. Written with the literal `modernpackage` token so that `just init`'s rename sed rewrites the heading to the new module name.
+
 #### Functions
 
 The main CLI orchestrator with type-annotated functions:
@@ -865,6 +907,63 @@ A private helper that inserts a PEP 639 license key into the TOML content and re
   # ... (no MIT classifier)
   ```
 
+#### `_remove_project_scripts(pyproject_path: Path) -> None`
+
+A private helper that removes the `[project.scripts]` table from a cloned package's `pyproject.toml`.
+
+- **Purpose**: Called by `_strip_scaffolding()` to remove console-script entry points from the generated package, avoiding dangling references to the deleted `main.py`. Keeps entry-point removal isolated and testable.
+- **Parameters**:
+  - `pyproject_path: Path` — the path to `pyproject.toml` to modify (e.g., `clone_dir / 'pyproject.toml'`)
+- **Returns**: `None` (mutates the file in place)
+- **Behavior**:
+  1. Reads the file line-by-line (preserving line endings)
+  2. Searches for the line `[project.scripts]\n`
+  3. If found, marks that line as the start of the table and walks forward to find the next section header (a line starting with `[`)
+  4. Deletes all lines from the `[project.scripts]` header through the line before the next section (leaving surrounding tables intact)
+  5. Writes the modified content back to the file
+  6. If the file is missing or the table is not present, returns silently (no-op, no error)
+- **Design rationale**:
+  - Uses line-based deletion rather than TOML parsing to avoid introducing a new dependency and preserve formatting of surrounding tables
+  - Gracefully handles missing files (unit tests seed minimal trees where `pyproject.toml` may not exist) and absent tables (clone-shape-agnostic)
+  - Deletion is surgical: only the `[project.scripts]` header, its entries, and the trailing blank line are removed; neighboring tables remain untouched
+
+#### `_strip_scaffolding(package_path: Path) -> None`
+
+A private helper that removes the scaffolder's own CLI, tests, documentation, and entry points from a cloned package tree.
+
+- **Purpose**: Called from `init_new_package()` after `_write_package_metadata()` and before the `just init` subprocess, to remove the scaffolder's own machinery from the clone. Run before rename and git commit so the initial commit captures a clean tree.
+- **Parameters**:
+  - `package_path: Path` — the root directory of the cloned package (e.g., `Path.cwd() / 'my_package'`)
+- **Returns**: `None` (mutates the filesystem in place)
+- **Behavior**:
+  1. Iterates over paths in `_SCAFFOLDING_PATHS_TO_DELETE`
+  2. For each path (relative to `package_path`):
+     - If it is a directory: removes it and its contents via `shutil.rmtree(..., ignore_errors=True)`
+     - If it is a file: removes it via `Path.unlink(missing_ok=True)`
+     - Tolerates missing paths (no error if the path does not exist)
+  3. Writes `_TEST_MAIN_STUB` to `tests/test_main.py` (overwriting any existing test suite)
+  4. Writes `_README_STUB` to `README.md` (overwriting the scaffolder's detailed README)
+  5. Calls `_remove_project_scripts(package_path / 'pyproject.toml')` to delete the console-script entry points
+- **Assumptions**:
+  - The clone root and `tests/` directory exist (guaranteed by `git clone`)
+  - Deleted paths may be absent (graceful degradation for variant template shapes)
+- **Design rationale**:
+  - Deletes wholesale (no attempt to preserve or modify individual files) to ensure a clean slate
+  - Stubs written with the literal `modernpackage` token are renamed by `just init`'s sed pass, preserving the string-rename contract
+  - Runs **before** `just init` so the single git commit captures the clean tree without scaffolding
+  - Tolerates absent paths so the function is shape-agnostic (works if the template evolves, adds, or removes files)
+  - Raises `RuntimeError` on errors (e.g., permission denied), funnel through `main()` exception handler
+
+Examples:
+```python
+# Strips a cloned package in place
+_strip_scaffolding(Path('/tmp/my_package'))
+# Deletes: modernpackage/main.py, tests/test_e2e.py, docs/, BACKLOG.md
+# Writes: tests/test_main.py (stub), README.md (stub)
+# Modifies: pyproject.toml (removes [project.scripts])
+# After this call, just init can safely run with no scaffolding in the tree
+```
+
 #### `_validated_or_error(parser: ArgumentParser, value: str | None, validator: Callable[[str], str]) -> str | None`
 
 A private helper that validates a non-`None` value using a validator function, converting `ArgumentTypeError` to `parser.error()` for clean CLI error exits.
@@ -964,7 +1063,8 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
        - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
        - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
    - **Step 1.5: Write metadata** — **If clone succeeds (`returncode == 0`)**: calls `_write_package_metadata()` to write user-supplied metadata into the package's `pyproject.toml`. All non-`None` values are applied as targeted TOML-escaped substitutions of known template placeholders; `None` values are skipped. If the `pyproject.toml` file is missing, a notice is printed to stderr and the step continues without raising.
-   - **Step 2: Initialize** — **After metadata writing**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
+   - **Step 1.75: Strip scaffolding** — **After metadata writing**: calls `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. This deletes the scaffolder CLI (`main.py`), its tests (`test_e2e.py`), documentation (`docs/`), and project-metadata files (`BACKLOG.md`); replaces the test suite with a minimal stub; replaces the README with a generic template; and removes console-script entry points. Runs **before** `just init` so the single git commit captures a clean tree. Missing paths are tolerated (graceful degradation for variant template shapes).
+   - **Step 2: Initialize** — **After scaffolding removal**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
      - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
        - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
        - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
@@ -978,13 +1078,13 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
 
 Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes. The `just init` missing-command error path is caught at the point of spawning the subprocess, before any execution attempts, and provides a clear, actionable installation instruction.
 
-The `just init` recipe (in the cloned repo) performs the actual transformation:
-- Renames all "modernpackage" occurrences to the new package name
+The `just init` recipe (in the cloned repo) performs the actual transformation on the already-stripped tree:
+- Renames all "modernpackage" occurrences to the new package name (including the stub test and README files)
 - Resets the version to `0.0.1`
 - Renames the package directory (`modernpackage/` → `<name>/`)
-- Reinitializes git (clears `.git`, runs `git init`, commits initial state)
+- Reinitializes git (clears `.git`, runs `git init`, commits the clean initial state)
 
-The `just check` recipe (in the cloned repo) validates the newly scaffolded package by running all quality gates: format check, ruff lint, complexity audit, mypy type check, unit tests, pip-audit security scan, and deadcode detection.
+The `just check` recipe (in the cloned repo) validates the newly scaffolded package by running all quality gates: format check, ruff lint, complexity audit, mypy type check, unit tests, pip-audit security scan, and deadcode detection. At this point, the generated package contains only a minimal stub test (imported once to satisfy coverage requirements) and a generic README, with no scaffolder CLI, documentation, or test-suite code.
 
 #### `humanize_git_clone_error(stderr_text: str) -> str | None`
 
@@ -1081,12 +1181,12 @@ just check-typecheck  # runs: uv run mypy modernpackage tests
 
 **Current status**: ✅ **All 4 source files pass strict mypy**
 - `modernpackage/__init__.py` — version constant
-- `modernpackage/main.py` — CLI orchestrator with 6 public functions and 5 private helpers:
+- `modernpackage/main.py` — CLI orchestrator with 6 public functions and 7 private helpers:
   - Public validators: `validate_package_name`, `validate_author_email`, `validate_repository_url`
   - Public utilities: `normalize_module_name`, `parse_args`, `init_new_package`, `main`
-  - Private helpers: `_explain_invalid_package_name`, `humanize_git_clone_error`, `_toml_escape`, `_write_package_metadata`, `_apply_license`
+  - Private helpers: `_explain_invalid_package_name`, `humanize_git_clone_error`, `_toml_escape`, `_write_package_metadata`, `_apply_license`, `_strip_scaffolding`, `_remove_project_scripts`
 - `tests/__init__.py` — test package marker
-- `tests/test_main.py` — comprehensive test suite (including tests for validators, normalization, metadata writing, and integration)
+- `tests/test_main.py` — comprehensive test suite (including tests for validators, normalization, metadata writing, scaffolding removal, and integration)
 
 Result: `Success: no issues found in 4 source files`
 

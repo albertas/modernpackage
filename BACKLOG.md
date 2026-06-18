@@ -1,13 +1,14 @@
 # ToDo
 
-- [ ] [V7] Bundle the template inside the published wheel
+- Use `uv` commands for managing dependencies instead of `uv pip`, update Justfile, Makefile. Use uv dev group for test dependencies.
+
+# Done
+- [x] [T47] Remove scaffolding/initialization related code programatically from the resulting project 
 - [ ] [V7] Cache the last successful clone for reuse
 - [ ] [V8] Add a --ref <tag> flag that pins scaffolding to a specific template ref
 - [ ] [V8] Make modernpackage --version report the template and tooling versions it will produce
 - [ ] [V8] Warn when the installed CLI is older than the latest published release
-- [ ] Remove scaffolding/initialization related code programatically from the resulting project 
-
-# Done
+- [ ] [V7] Bundle the template inside the published wheel
 - [x] [T45] [V6] Print the next commands to run (cd <name> && just check) after a successful run
 - [x] [T44] [V6] Print a post-init summary with the created path, package name, and reset version
 - [x] [T43] [V6] Add a --dry-run flag that previews what would be created and renamed without touching disk

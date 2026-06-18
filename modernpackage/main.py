@@ -497,6 +497,80 @@ def _apply_license(content: str, package_license: str) -> str:
     )
 
 
+# Clone-relative paths removed wholesale from a generated package. Looped over
+# like _METADATA_FIELDS; absent entries are tolerated (clone-shape-agnostic).
+_SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
+    'modernpackage/main.py',
+    'tests/test_e2e.py',
+    'docs',
+    'BACKLOG.md',
+)
+
+# Stub tests/test_main.py: pytest needs >=1 collected test (empty collection
+# exits non-zero), and importing the package keeps --cov-fail-under=95.0 happy
+# (after main.py is deleted the only package code is __version__, run on import).
+# Written with the literal `modernpackage` token so `just init`'s rename sed
+# (Justfile:61-66) rewrites the import to the new module name.
+_TEST_MAIN_STUB: str = """\
+from modernpackage import __version__
+
+
+def test_version() -> None:
+    assert __version__ == '0.0.1'
+"""
+
+# Minimal generic README (pyproject.toml:7 requires `readme = "README.md"`).
+# The `modernpackage` token is renamed by `just init` to the new module name.
+_README_STUB: str = """\
+# modernpackage
+
+A Python package.
+"""
+
+
+def _remove_project_scripts(pyproject_path: Path) -> None:
+    """Remove the [project.scripts] table from the cloned pyproject.toml.
+
+    Deletes the header line, its entries, and the trailing blank line, leaving
+    surrounding tables ([project.urls], [project.optional-dependencies], the
+    e2e marker, the vupi dep, [tool.deadcode]) intact. No-op if the table or the
+    file is absent (graceful boundary degradation, like _write_package_metadata).
+    """
+    try:
+        lines = pyproject_path.read_text().splitlines(keepends=True)
+    except FileNotFoundError:
+        return
+    try:
+        start = lines.index('[project.scripts]\n')
+    except ValueError:
+        return
+    end = start + 1
+    while end < len(lines) and not lines[end].startswith('['):
+        end += 1
+    del lines[start:end]
+    pyproject_path.write_text(''.join(lines))
+
+
+def _strip_scaffolding(package_path: Path) -> None:
+    """Remove the scaffolder's own CLI, tests, docs, and entry points from a clone.
+
+    Mutates the cloned tree in place. Run before `just init` so the rename sed
+    (Justfile:61-66) and the single git commit (Justfile:72) capture an already-
+    clean tree. Deletes tolerate absent paths; the stub writes assume the clone
+    root and tests/ exist (always true for a real clone). Stubs retain the
+    literal `modernpackage` token so the rename sed rewrites their imports.
+    """
+    for relative_path in _SCAFFOLDING_PATHS_TO_DELETE:
+        target = package_path / relative_path
+        if target.is_dir():
+            shutil.rmtree(target, ignore_errors=True)
+        else:
+            target.unlink(missing_ok=True)
+    (package_path / 'tests' / 'test_main.py').write_text(_TEST_MAIN_STUB)
+    (package_path / 'README.md').write_text(_README_STUB)
+    _remove_project_scripts(package_path / 'pyproject.toml')
+
+
 @dataclass(frozen=True)
 class PreflightCheck:
     """One entry in the preflight check registry."""
@@ -760,6 +834,8 @@ def init_new_package(  # noqa: PLR0913
         package_license=package_license,
         repository_url=repository_url,
     )
+
+    _strip_scaffolding(new_package_path)
 
     try:
         pipe = Popen(  # noqa: S603

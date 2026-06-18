@@ -126,18 +126,43 @@ Call `_write_package_metadata(new_package_path, author_name=..., author_email=..
 - repository_url → "https://github.com/albertas/modernpackage"
 - license → (inserted after readme field; MIT classifier removed)
 
+### Step 6.5: Strip Scaffolding
+
+Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery from the cloned tree:
+1. Delete wholesale paths from `_SCAFFOLDING_PATHS_TO_DELETE`:
+   - `modernpackage/main.py` — the self-replicating CLI
+   - `tests/test_e2e.py` — end-to-end test for the scaffolder
+   - `docs` — scaffolder documentation
+   - `BACKLOG.md` — project-metadata file
+   - (tolerate missing paths — no error if not present)
+2. Write `_TEST_MAIN_STUB` to `tests/test_main.py`:
+   - Replaces scaffolder test suite with minimal stub
+   - Imports package version to satisfy coverage requirements
+   - Uses literal `modernpackage` token so `just init`'s rename sed updates it
+3. Write `_README_STUB` to `README.md`:
+   - Replaces scaffolder README with generic template
+   - Uses literal `modernpackage` token so `just init`'s rename sed updates it
+4. Call `_remove_project_scripts(new_package_path / 'pyproject.toml')`:
+   - Removes `[project.scripts]` table to avoid dangling entry points
+   - Leaves surrounding tables (`[project.optional-dependencies]`, `[tool.*]`) intact
+   - Tolerates missing file or table — no-op if absent
+
+**Result:** the cloned tree is now clean of scaffolder machinery. The next step (`just init`) will operate on an already-stripped tree, and the single git commit will capture the clean initial state.
+
 ### Step 7: Just Init
 
 Spawn subprocess via `Popen(['just', 'init', module_name], cwd=new_package_path, ...)`:
 - Capture stdout and stderr
 - If returncode != 0: raise `RuntimeError` with message "just init failed with exit code {code}: {stderr}"
 - If FileNotFoundError (just not on PATH): raise `RuntimeError` with install message
+- **Note**: operates on the already-stripped tree (see Step 6.5); renames the stub test and README files using the standard sed rename pass
 
 ### Step 8: Just Check and Summary
 
 Spawn subprocess via `Popen(['just', 'check'], cwd=new_package_path, ...)`:
 - Capture stdout and stderr
 - Communicate (wait for process to finish)
+- At this point, the generated package contains only the stripped tree: no scaffolder CLI, no end-to-end tests, no scaffolder documentation — only a minimal stub test and generic README
 - If returncode == 0:
   - Print "just check passed — {module_name} scaffold is valid." to stdout
   - Call `_print_init_summary(package_name, new_package_path)` to output a multi-line summary block to stdout:

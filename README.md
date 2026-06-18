@@ -13,7 +13,8 @@ modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # checks that target directory does not already exist
                                        # probes template repository reachability (fails fast on network issues)
                                        # validates the name (rejects stdlib collisions before scaffolding)
-                                       # creates a new package and validates it with just check
+                                       # clones the template and removes scaffolder machinery
+                                       # creates a clean new package and validates it with just check
                                        # prints "just check passed" with a summary block, or "just check failed"
 
 # Example: Preflight checklist and success summary (on success)
@@ -236,7 +237,13 @@ When `git clone` fails, the error message is enhanced with a friendly, actionabl
 
 ## After Initialization
 
-Once your new package is created and validated, you can begin development. The initialization process automatically runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed"). 
+Once your new package is created and validated, you can begin development. The initialization process automatically removes the scaffolder's own CLI, tests, and documentation from the generated package, leaving you with a clean, minimal codebase. The process then runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed").
+
+The generated package includes:
+- A minimal `__init__.py` with version `0.0.1`
+- A stub `tests/test_main.py` with a single test (satisfying coverage requirements)
+- A minimal generic `README.md` ready for your documentation
+- No scaffolder CLI machinery, no end-to-end tests, and no scaffolder documentation
 
 **Note**: If you provided a package name with hyphens or dots (e.g., `my-cool.package`), the created directory will use underscores instead (e.g., `my_cool_package`). This ensures the directory name and all Python imports are valid identifiers.
 

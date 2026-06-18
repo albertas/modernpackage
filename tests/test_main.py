@@ -17,6 +17,8 @@ from modernpackage.main import (
     _format_next_commands,
     _git_config_default,
     _load_config_file,
+    _remove_project_scripts,
+    _strip_scaffolding,
     _user_config_path,
     _verify_required_tools,
     _verify_target_directory_absent,
@@ -289,18 +291,21 @@ def test_init_new_package() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding') as strip_mock,
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
     assert popen_mock.call_count == 3  # noqa: PLR2004
+    strip_mock.assert_called_once_with(Path.cwd() / 'mypackage')
 
 
 def test_init_new_package_normalizes_name() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
@@ -320,6 +325,7 @@ def test_init_new_package_runs_just_check() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
@@ -328,6 +334,32 @@ def test_init_new_package_runs_just_check() -> None:
     third_call = popen_mock.call_args_list[2]
     assert third_call.args[0] == ['just', 'check']
     assert third_call.kwargs['cwd'] == Path.cwd() / 'mypackage'
+
+
+def test_init_new_package_strips_before_just_init() -> None:
+    calls: list[str] = []
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._write_package_metadata') as metadata_mock,
+        patch('modernpackage.main._strip_scaffolding') as strip_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+
+        def popen_side_effect(*args: object, **_kwargs: object) -> MagicMock:
+            first = args[0]
+            if isinstance(first, list) and first[:2] == ['just', 'init']:
+                calls.append('init')
+            return MagicMock(returncode=0, communicate=lambda: (b'', b''))
+
+        metadata_mock.side_effect = lambda *_args, **_kwargs: calls.append('metadata')
+        strip_mock.side_effect = lambda *_args, **_kwargs: calls.append('strip')
+        popen_mock.side_effect = popen_side_effect
+        init_new_package('mypackage')
+    assert calls.index('metadata') < calls.index('strip') < calls.index('init')
+    strip_mock.assert_called_once_with(Path.cwd() / 'mypackage')
 
 
 def test_init_new_package_git_clone_failure() -> None:
@@ -349,6 +381,7 @@ def test_init_new_package_just_not_installed() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.side_effect = [git_clone_mock, FileNotFoundError('just not found')]
@@ -366,6 +399,7 @@ def test_init_new_package_just_init_failure() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.side_effect = [git_clone_mock, just_init_mock]
@@ -633,6 +667,7 @@ def test_init_new_package_reports_check_passed() -> None:
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
         patch('modernpackage.main.print') as print_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
@@ -663,6 +698,7 @@ def test_init_new_package_prints_summary_on_success() -> None:
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
         patch('modernpackage.main.print') as print_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
@@ -685,6 +721,7 @@ def test_run_preflight_checks_prints_full_checklist_on_clean_run(
         patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0
@@ -719,6 +756,7 @@ def test_init_new_package_reports_check_failed() -> None:
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
         patch('modernpackage.main.print') as print_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.side_effect = [git_clone_mock, just_init_mock, just_check_mock]
@@ -1236,6 +1274,83 @@ def test_write_package_metadata_none_license_keeps_classifier(tmp_path: Path) ->
 
 
 # ---------------------------------------------------------------------------
+# Phase 1: _strip_scaffolding + _remove_project_scripts
+# ---------------------------------------------------------------------------
+
+
+def _seed_clone(tmp_path: Path) -> Path:
+    """Seed a fake clone tree with all scaffolding files; return the root."""
+    (tmp_path / 'modernpackage').mkdir()
+    (tmp_path / 'modernpackage' / 'main.py').write_text('# cli\n')
+    (tmp_path / 'modernpackage' / '__init__.py').write_text("__version__ = '0.0.1'\n")
+    (tmp_path / 'tests').mkdir()
+    (tmp_path / 'tests' / 'test_e2e.py').write_text('# e2e\n')
+    (tmp_path / 'tests' / 'test_main.py').write_text('# old tests\n')
+    (tmp_path / 'docs').mkdir()
+    (tmp_path / 'docs' / 'overview.md').write_text('# docs\n')
+    (tmp_path / 'BACKLOG.md').write_text('# backlog\n')
+    (tmp_path / 'README.md').write_text('# scaffolder readme\n')
+    source = Path(__file__).resolve().parent.parent / 'pyproject.toml'
+    (tmp_path / 'pyproject.toml').write_text(source.read_text())
+    return tmp_path
+
+
+def test_strip_scaffolding_removes_cli_tests_docs(tmp_path: Path) -> None:
+    _strip_scaffolding(_seed_clone(tmp_path))
+    assert not (tmp_path / 'modernpackage' / 'main.py').exists()
+    assert not (tmp_path / 'tests' / 'test_e2e.py').exists()
+    assert not (tmp_path / 'docs').exists()
+    assert not (tmp_path / 'BACKLOG.md').exists()
+    assert (tmp_path / 'modernpackage' / '__init__.py').exists()  # marker kept
+
+
+def test_strip_scaffolding_writes_test_main_stub(tmp_path: Path) -> None:
+    _strip_scaffolding(_seed_clone(tmp_path))
+    stub = (tmp_path / 'tests' / 'test_main.py').read_text()
+    assert 'modernpackage' in stub  # token preserved for rename sed
+    assert '0.0.1' in stub
+    assert 'def test_version' in stub
+
+
+def test_strip_scaffolding_writes_readme_stub(tmp_path: Path) -> None:
+    _strip_scaffolding(_seed_clone(tmp_path))
+    readme = (tmp_path / 'README.md').read_text()
+    assert readme  # non-empty
+    assert 'scaffolder readme' not in readme  # original replaced
+
+
+def test_strip_scaffolding_removes_project_scripts(tmp_path: Path) -> None:
+    _strip_scaffolding(_seed_clone(tmp_path))
+    pyproject = (tmp_path / 'pyproject.toml').read_text()
+    assert '[project.scripts]' not in pyproject
+    assert 'modernpackage.main:main' not in pyproject
+    assert '[project.optional-dependencies]' in pyproject  # neighbour intact
+    assert 'vupi' in pyproject  # test dep intact
+    assert tomllib.loads(pyproject)  # still valid TOML
+
+
+def test_strip_scaffolding_tolerates_absent_paths(tmp_path: Path) -> None:
+    # Only tests/ and pyproject.toml present; delete targets all absent.
+    (tmp_path / 'tests').mkdir()
+    source = Path(__file__).resolve().parent.parent / 'pyproject.toml'
+    (tmp_path / 'pyproject.toml').write_text(source.read_text())
+    _strip_scaffolding(tmp_path)  # must not raise
+    assert (tmp_path / 'tests' / 'test_main.py').exists()
+    assert (tmp_path / 'README.md').exists()
+
+
+def test_remove_project_scripts_missing_file(tmp_path: Path) -> None:
+    _remove_project_scripts(tmp_path / 'pyproject.toml')  # must not raise
+
+
+def test_remove_project_scripts_no_table(tmp_path: Path) -> None:
+    path = tmp_path / 'pyproject.toml'
+    path.write_text('[project]\nname = "x"\n')
+    _remove_project_scripts(path)  # no-op, must not raise
+    assert path.read_text() == '[project]\nname = "x"\n'
+
+
+# ---------------------------------------------------------------------------
 # _verify_target_directory_absent preflight check
 # ---------------------------------------------------------------------------
 
@@ -1264,6 +1379,7 @@ def test_init_new_package_proceeds_when_target_directory_absent(
         patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
         popen_mock.return_value.returncode = 0

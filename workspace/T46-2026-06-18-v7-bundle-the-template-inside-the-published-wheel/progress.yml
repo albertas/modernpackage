@@ -1,0 +1,96 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 53725
+    cost_usd: 0.5255569999999999
+    input_tokens: 3017
+    output_tokens: 3041
+    cache_read_tokens: 246922
+    cache_creation_tokens: 30689
+    model: Haiku 4.5, opus 4.8
+    context_used: 33706
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 108127
+    cost_usd: 0.764225
+    input_tokens: 3146
+    output_tokens: 8354
+    cache_read_tokens: 263696
+    cache_creation_tokens: 40473
+    model: Haiku 4.5, opus 4.8
+    context_used: 43619
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 205851
+    cost_usd: 0.9213655
+    input_tokens: 4848
+    output_tokens: 15279
+    cache_read_tokens: 184333
+    cache_creation_tokens: 41985
+    model: Haiku 4.5, opus 4.8
+    context_used: 46833
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 104448
+    cost_usd: 0.62381
+    input_tokens: 3144
+    output_tokens: 7679
+    cache_read_tokens: 211918
+    cache_creation_tokens: 30689
+    model: Haiku 4.5, opus 4.8
+    context_used: 33833
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 411294
+    cost_usd: 2.592205
+    input_tokens: 3430
+    output_tokens: 32622
+    cache_read_tokens: 1288650
+    cache_creation_tokens: 111182
+    model: Haiku 4.5, opus 4.8
+    context_used: 114612
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 244174
+    cost_usd: 0.004549
+    input_tokens: 0
+    output_tokens: 0
+    cache_read_tokens: 0
+    cache_creation_tokens: 0
+    model: Haiku 4.5
+    context_used: 0
+    context_max: 200000
+- name: 7_implement
+  done: false
+  sub_phases:
+  - num: 1
+    title: Bundle the template tree into the wheel
+    done: false
+  - num: 2
+    title: Materialize from the bundled template (replaces clone)
+    done: false
+  - num: 3
+    title: Retire dead network machinery, dry-run text, and docs
+    done: false

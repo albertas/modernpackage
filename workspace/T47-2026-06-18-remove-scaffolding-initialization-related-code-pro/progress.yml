@@ -1,0 +1,150 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 158013
+    cost_usd: 0.8288623999999999
+    input_tokens: 5420
+    output_tokens: 5281
+    cache_read_tokens: 255736
+    cache_creation_tokens: 36735
+    model: Haiku 4.5, opus 4.8, sonnet 4.6
+    context_used: 42155
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 171245
+    cost_usd: 1.205982
+    input_tokens: 4401
+    output_tokens: 9360
+    cache_read_tokens: 272979
+    cache_creation_tokens: 46042
+    model: Haiku 4.5, opus 4.8, sonnet 4.6
+    context_used: 50443
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 276379
+    cost_usd: 1.023272
+    input_tokens: 3140
+    output_tokens: 20626
+    cache_read_tokens: 144490
+    cache_creation_tokens: 41655
+    model: Haiku 4.5, opus 4.8
+    context_used: 44795
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 95143
+    cost_usd: 0.5565085
+    input_tokens: 3140
+    output_tokens: 7464
+    cache_read_tokens: 141683
+    cache_creation_tokens: 28010
+    model: Haiku 4.5, opus 4.8
+    context_used: 31150
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 198365
+    cost_usd: 1.065306
+    input_tokens: 3144
+    output_tokens: 17345
+    cache_read_tokens: 253486
+    cache_creation_tokens: 48587
+    model: Haiku 4.5, opus 4.8
+    context_used: 51731
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 234764
+    cost_usd: 0.4950135
+    input_tokens: 296
+    output_tokens: 19278
+    cache_read_tokens: 2493615
+    cache_creation_tokens: 72219
+    model: Haiku 4.5
+    context_used: 72515
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 59884
+    cost_usd: 0.7275007
+    input_tokens: 11
+    output_tokens: 3115
+    cache_read_tokens: 728909
+    cache_creation_tokens: 68389
+    model: Haiku 4.5, sonnet 4.6
+    context_used: 68400
+    context_max: 200000
+    lines_of_code: 386
+  sub_phases:
+  - num: 1
+    title: '`_strip_scaffolding` core + unit tests'
+    done: true
+    metrics:
+      duration_ms: 208351
+      cost_usd: 0.9694958999999999
+      input_tokens: 17
+      output_tokens: 6691
+      cache_read_tokens: 1253173
+      cache_creation_tokens: 73567
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 73584
+      context_max: 200000
+      lines_of_code: 334
+  - num: 2
+    title: Wire into `init_new_package` + orchestration tests
+    done: true
+    metrics:
+      duration_ms: 275671
+      cost_usd: 1.8170231999999993
+      input_tokens: 38
+      output_tokens: 13534
+      cache_read_tokens: 3346414
+      cache_creation_tokens: 93043
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 93081
+      context_max: 200000
+      lines_of_code: 373
+  - num: 3
+    title: Extend e2e test to assert a clean generated package
+    done: true
+    metrics:
+      duration_ms: 59884
+      cost_usd: 0.7275007
+      input_tokens: 11
+      output_tokens: 3115
+      cache_read_tokens: 728909
+      cache_creation_tokens: 68389
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 68400
+      context_max: 200000
+      lines_of_code: 386
+cumulative:
+  total_cost: 5.9024451
+  total_ms: 1193793
+  total_cache_read: 4290898
+  total_cache_write: 341637
+  total_loc: 386
+  total_input_tokens: 19552
+  total_output_tokens: 82469
+  version: 0.0.8
+  completed_at: 2026-06-18 22:56:29.661839

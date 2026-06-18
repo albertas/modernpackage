@@ -20,11 +20,15 @@ The self-replication path (one fenced ASCII diagram):
 
 ```
 modernpackage <name>
-        │  main()  (main.py:54-62)
+        │  main()
         ▼
-init_new_package(name)            (main.py:37-51)
+init_new_package(name)
         │
         ├─▶ git clone albertas/modernpackage  ./<name>
+        │
+        ├─▶ write metadata (pyproject.toml)
+        │
+        ├─▶ strip scaffolding (main.py, tests, docs, entry points)
         │
         └─▶ just init <name>   (cwd=./<name>)
                   │
@@ -52,19 +56,27 @@ init_new_package(name)            (main.py:37-51)
 
 ## Package-init flow
 
-- **`init_new_package(package_name)` orchestration** (`main.py:37-51`):
+- **`init_new_package(package_name)` orchestration**:
   1. Resolves target path: `Path.cwd() / package_name`.
-  2. Spawns first `subprocess.Popen`: `git clone https://github.com/albertas/modernpackage <cwd>/<name>` to target path.
-  3. Captures output via `.communicate()[0]` (discarded).
-  4. Spawns second `subprocess.Popen`: `just init <name>` with `cwd=<new_package_path>`.
-  5. Captures output, decodes, and **discards the result** — no return value, no error handling.
-  6. Both Popen calls flagged `# noqa: S603/S607` to suppress subprocess security lints.
-  - **Known gap**: no error handling, no output logging, discarded results (current state).
-- **`just init` recipe** transforms the cloned repository:
-  - **Rename**: `git grep -l 'modernpackage' | xargs sed -i` (Linux) or `sed -i ''` (Darwin) to replace all occurrences of token "modernpackage" with the new package name.
-  - **Version reset**: `sed` to replace the version string (e.g., `0.0.9`) with `0.0.1`.
+  2. Runs preflight checks (tools on PATH, target directory absent, template reachable).
+  3. Spawns `subprocess.Popen`: `git clone https://github.com/albertas/modernpackage <cwd>/<name>` to target path.
+  4. Calls `_write_package_metadata()` to update cloned pyproject.toml with user metadata.
+  5. Calls `_strip_scaffolding()` to remove scaffolder machinery:
+     - Deletes `modernpackage/main.py` (self-replicating CLI)
+     - Deletes `tests/test_e2e.py` (scaffolder end-to-end test)
+     - Deletes `docs/` directory (scaffolder documentation)
+     - Deletes `BACKLOG.md` (project-metadata file)
+     - Overwrites `tests/test_main.py` with minimal stub test
+     - Overwrites `README.md` with generic template
+     - Removes `[project.scripts]` table from pyproject.toml (entry points)
+  6. Spawns `subprocess.Popen`: `just init <name>` with `cwd=<new_package_path>`.
+  7. Spawns `subprocess.Popen`: `just check` to validate the scaffolded package.
+  8. Returns exit code 0 on success, 1 on failure.
+- **`just init` recipe** transforms the already-stripped cloned repository:
+  - **Rename**: `git grep -l 'modernpackage' | xargs sed -i` (Linux) or `sed -i ''` (Darwin) to replace all occurrences of token "modernpackage" with the new package name (including renamed stub test and README).
+  - **Version reset**: `sed` to replace the version string to `0.0.1`.
   - **Directory rename**: `mv modernpackage <name>` to rename the package directory.
-  - **Git reinitialization**: `rm -fr .git/ .venv`, then `git init -b main`, `git add .`, `git commit` with message "Initial modern <name> package setup".
+  - **Git reinitialization**: `rm -fr .git/ .venv`, then `git init -b main`, `git add .`, `git commit` with message "Initial modern <name> package setup" (commits the clean, stripped tree).
 - **Named parameter handling**: the `just init` recipe accepts a named parameter `package_name` with default `"modernpackage"`, interpolated as `{{package_name}}` in the recipe body.
 
 ## Build, versioning & dependencies
