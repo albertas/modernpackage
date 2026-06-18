@@ -8,6 +8,7 @@ Install and run:
 ```bash
 pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
+                                       # validates the name (rejects stdlib collisions before scaffolding)
                                        # creates a new package and validates it with just check
                                        # prints "just check passed" or "just check failed"
 
@@ -15,6 +16,11 @@ modernpackage <your-package-name>     # or `mp <your-package-name>`
 modernpackage my-cool.package           # Valid PEP 508 distribution name
                                         # Creates directory: my_cool_package
                                         # All Python imports: from my_cool_package import ...
+
+# Example: Attempt to create a package with a name that collides with stdlib
+modernpackage json                      # Error: Package name collides with stdlib module
+                                        # Exit code 2 (argument validation error)
+                                        # No scaffolding occurs
 ```
 
 View the installed version:

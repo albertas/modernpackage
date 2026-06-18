@@ -53,16 +53,24 @@ Initializes a new Python package with the given name in the current directory. T
 - Must start and end with an alphanumeric character (a-z, A-Z, 0-9)
 - May contain hyphens (`-`), underscores (`_`), and dots (`.`) in between
 - Validation is case-insensitive
+- The normalized module name (after converting hyphens and dots to underscores) must not collide with a Python standard-library module name
 
-If the name does not match this pattern, an error is raised:
+If the name does not match the PEP 508 pattern, an error is raised:
 
 ```
 usage: modernpackage [-v] [package_name]
 modernpackage: error: argument package_name: Invalid package name: '<name>'
 ```
 
-Examples of valid names: `mypackage`, `my-package`, `my_package`, `my.package`, `a`
-Examples of invalid names: `-bad`, `bad-`, `has space`, empty string
+If the name's normalized form collides with a Python standard-library module, an error is raised:
+
+```
+usage: modernpackage [-v] [package_name]
+modernpackage: error: argument package_name: Package name 'json' collides with the Python standard-library module 'json'
+```
+
+Examples of valid names: `mypackage`, `my-package`, `my_package`, `my.package`, `a`, `my-json`, `jsonschema`, `email_utils`
+Examples of invalid names: `-bad`, `bad-`, `has space`, empty string, `json`, `os`, `email`
 
 **Important**: The provided `package_name` may contain hyphens and dots (e.g., `my-cool.package`), but the created directory will use underscores instead (e.g., `my_cool_package`). This normalization ensures that the directory name and all import paths are valid Python identifiers. For example:
 

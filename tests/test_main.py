@@ -44,12 +44,25 @@ def test_validate_package_name_valid() -> None:
     assert validate_package_name('my_package') == 'my_package'
     assert validate_package_name('my.package') == 'my.package'
     assert validate_package_name('a') == 'a'
+    # near-misses: contain a stdlib name but do not normalize to one
+    assert validate_package_name('my-json') == 'my-json'
+    assert validate_package_name('jsonschema') == 'jsonschema'
+    assert validate_package_name('email_utils') == 'email_utils'
+    assert normalize_module_name('my-json') == 'my_json'
 
 
 def test_validate_package_name_invalid() -> None:
     for bad_name in ('-bad', 'bad-', 'has space', ''):
         with pytest.raises(ArgumentTypeError, match='Invalid package name'):
             validate_package_name(bad_name)
+
+
+def test_validate_package_name_rejects_stdlib_collision() -> None:
+    for colliding_name in ('json', 'os', 'email'):
+        with pytest.raises(
+            ArgumentTypeError, match='collides with the Python standard-library module'
+        ):
+            validate_package_name(colliding_name)
 
 
 def test_parse_args_version_flag() -> None:

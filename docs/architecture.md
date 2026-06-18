@@ -38,24 +38,35 @@ The main CLI orchestrator with five fully type-annotated functions:
 
 #### `validate_package_name(value: str) -> str`
 
-Validates that a string is a valid PEP 508 / PyPI distribution name. Used as the `type=` validator in argument parsing.
+Validates that a string is a valid PEP 508 / PyPI distribution name and that its normalized module form does not collide with a Python standard-library module. Used as the `type=` validator in argument parsing.
 
 A valid distribution name must:
 - Start and end with an alphanumeric character (a-z, A-Z, 0-9)
 - May contain hyphens (`-`), underscores (`_`), and dots (`.`) in between
 - Matching is case-insensitive
+- When normalized to a module name (replacing hyphens and dots with underscores), it must not equal a Python standard-library top-level module name
 
-The validation is performed using a compiled regex constant `_PACKAGE_NAME_RE`:
-```python
-_PACKAGE_NAME_RE: re.Pattern[str] = re.compile(
-    r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$',
-    re.IGNORECASE,
-)
-```
+The validation is performed in two stages:
+
+1. **Composition check** using a compiled regex constant `_PACKAGE_NAME_RE`:
+   ```python
+   _PACKAGE_NAME_RE: re.Pattern[str] = re.compile(
+       r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$',
+       re.IGNORECASE,
+   )
+   ```
+   Rejects malformed input (e.g., `-bad`, `bad-`, `has space`).
+
+2. **Collision check** against `_STDLIB_MODULE_NAMES`:
+   ```python
+   _STDLIB_MODULE_NAMES: frozenset[str] = sys.stdlib_module_names
+   ```
+   The normalized module name is tested for membership in this frozen set. If present, the name is rejected with a specific message naming the collision. The collision check runs only on well-formed names to ensure malformed input reports the original "Invalid package name" message.
 
 - **Parameter**: `value: str` — the input string to validate
 - **Returns**: `str` — the input string unchanged if valid
 - **Raises**: `ArgumentTypeError(f'Invalid package name: {value!r}')` if the string does not match the PEP 508 pattern
+- **Raises**: `ArgumentTypeError(f'Package name {value!r} collides with the Python standard-library module {module_name!r}')` if the normalized name matches a stdlib module
 
 Examples:
 - `validate_package_name('mypackage')` → `'mypackage'` ✓
@@ -63,9 +74,15 @@ Examples:
 - `validate_package_name('my_package')` → `'my_package'` ✓
 - `validate_package_name('my.package')` → `'my.package'` ✓
 - `validate_package_name('a')` → `'a'` ✓
+- `validate_package_name('my-json')` → `'my-json'` ✓ (near-miss: normalizes to `my_json`, not in stdlib set)
+- `validate_package_name('jsonschema')` → `'jsonschema'` ✓ (near-miss: contains stdlib name but does not equal it)
+- `validate_package_name('email_utils')` → `'email_utils'` ✓ (near-miss: contains stdlib name but does not equal it)
 - `validate_package_name('-bad')` → raises `ArgumentTypeError` (leading hyphen is invalid)
 - `validate_package_name('bad-')` → raises `ArgumentTypeError` (trailing hyphen is invalid)
 - `validate_package_name('has space')` → raises `ArgumentTypeError` (space is invalid)
+- `validate_package_name('json')` → raises `ArgumentTypeError` (collides with stdlib module `json`)
+- `validate_package_name('os')` → raises `ArgumentTypeError` (collides with stdlib module `os`)
+- `validate_package_name('email')` → raises `ArgumentTypeError` (collides with stdlib module `email`)
 
 #### `normalize_module_name(value: str) -> str`
 

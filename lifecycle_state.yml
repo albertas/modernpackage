@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-18 08:16:25
+heart_beat: 2026-06-18 08:30:09
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T29-2026-06-18-v3-normalize-an-accepted-distribution-name-into-an
-    heart_beat: 2026-06-18 08:16:25
+  - artifact_dir: T30-2026-06-18-v3-reject-names-that-collide-with-python-standard
+    heart_beat: 2026-06-18 08:30:09

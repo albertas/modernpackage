@@ -4,8 +4,9 @@
 
 ## What It Does
 
-`modernpackage` is a standalone package that, when invoked as `modernpackage <name>` or `mp <name>`, clones itself to a new directory and rewrites all occurrences of "modernpackage" to a normalized module name (converting hyphens and dots to underscores for import-safety). The result is a ready-to-build Python package with:
+`modernpackage` is a standalone package that, when invoked as `modernpackage <name>` or `mp <name>`, validates the package name and clones itself to a new directory and rewrites all occurrences of "modernpackage" to a normalized module name (converting hyphens and dots to underscores for import-safety). The result is a ready-to-build Python package with:
 
+- **Input validation**: Package names are validated to match PEP 508 / PyPI distribution names, and names that would collide with Python standard-library modules are rejected before any scaffolding begins
 - **Modern tooling**: **ruff** (linting, formatting, complexity auditing), **mypy** (strict type checking), **pytest** (testing with parallel execution), **pip-audit** (vulnerability scanning), **deadcode** (unused code detection)
 - **Single configuration hub** via `pyproject.toml` with strict settings (line-length 88, strict mypy with full type annotations verified, 95% test coverage minimum, cyclomatic complexity ≤ 8)
 - **Comprehensive test coverage** (95% minimum) ensuring all code paths are exercised deterministically and in parallel across all-but-one CPU cores with fully mocked dependencies

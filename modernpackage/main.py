@@ -60,11 +60,23 @@ _PACKAGE_NAME_RE: re.Pattern[str] = re.compile(
     re.IGNORECASE,
 )
 
+# All Python standard-library top-level module names for the running
+# interpreter (a frozenset; available since 3.10). A normalized module name
+# equal to any of these would shadow a stdlib module on import, so reject it.
+_STDLIB_MODULE_NAMES: frozenset[str] = sys.stdlib_module_names
+
 
 def validate_package_name(value: str) -> str:
-    """Validate value is a PEP 508 / PyPI distribution name."""
+    """Validate value is a PEP 508 / PyPI distribution name not shadowing stdlib."""
     if not _PACKAGE_NAME_RE.match(value):
         message = f'Invalid package name: {value!r}'
+        raise ArgumentTypeError(message)
+    module_name = normalize_module_name(value)
+    if module_name in _STDLIB_MODULE_NAMES:
+        message = (
+            f'Package name {value!r} collides with the Python '
+            f'standard-library module {module_name!r}'
+        )
         raise ArgumentTypeError(message)
     return value
 
