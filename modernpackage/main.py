@@ -53,10 +53,18 @@ def humanize_git_clone_error(stderr_text: str) -> str | None:
     return None
 
 
-def check_alpha_numeric(value: str) -> str:
-    """Validate value to contain only Letters and Numbers."""
-    if not value.isalnum():
-        message = 'Non-AlphaNumeric package name'
+# PEP 503 / PEP 508 valid distribution name: alphanumeric ends, with
+# -, _, . permitted internally. Case-insensitive.
+_PACKAGE_NAME_RE: re.Pattern[str] = re.compile(
+    r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$',
+    re.IGNORECASE,
+)
+
+
+def validate_package_name(value: str) -> str:
+    """Validate value is a PEP 508 / PyPI distribution name."""
+    if not _PACKAGE_NAME_RE.match(value):
+        message = f'Invalid package name: {value!r}'
         raise ArgumentTypeError(message)
     return value
 
@@ -75,7 +83,7 @@ def parse_args() -> Namespace:
         'package_name',
         help='Name of a new package to initialise in a local directory.',
         nargs='?',
-        type=check_alpha_numeric,
+        type=validate_package_name,
     )
     return parser.parse_args()
 

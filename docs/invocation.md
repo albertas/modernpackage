@@ -49,12 +49,20 @@ modernpackage <package_name>
 mp <name>
 ```
 
-Initializes a new Python package with the given name in the current directory. The `package_name` argument is validated to contain only alphanumeric characters (letters and digits). If the name contains non-alphanumeric characters, an error is raised:
+Initializes a new Python package with the given name in the current directory. The `package_name` argument is validated to be a valid PEP 508 / PyPI distribution name:
+- Must start and end with an alphanumeric character (a-z, A-Z, 0-9)
+- May contain hyphens (`-`), underscores (`_`), and dots (`.`) in between
+- Validation is case-insensitive
+
+If the name does not match this pattern, an error is raised:
 
 ```
 usage: modernpackage [-v] [package_name]
-modernpackage: error: argument package_name: Non-AlphaNumeric package name
+modernpackage: error: argument package_name: Invalid package name: '<name>'
 ```
+
+Examples of valid names: `mypackage`, `my-package`, `my_package`, `my.package`, `a`
+Examples of invalid names: `-bad`, `bad-`, `has space`, empty string
 
 #### Success path
 
@@ -206,7 +214,7 @@ The test scaffolds a package from the local template and validates:
 The CLI uses `argparse.ArgumentParser` with the following configuration:
 
 - **`-v` / `--version`**: optional flag, `action='store_true'`, default `False` — prints package version
-- **`package_name`**: optional positional argument, `nargs='?'`, validated via `type=check_alpha_numeric()` — name of package to initialize
+- **`package_name`**: optional positional argument, `nargs='?'`, validated via `type=validate_package_name()` — name of package to initialize (must be a valid PEP 508 / PyPI distribution name)
 
 The parser is created and invoked in `parse_args()`, which returns an `argparse.Namespace` object with type-annotated fields:
 - `version: bool` — whether the `--version` flag was provided
@@ -218,14 +226,23 @@ The `parse_args()` function is fully type-annotated (`def parse_args() -> Namesp
 
 ## Validation
 
-**`check_alpha_numeric(value)`** validates that a string contains only alphanumeric characters:
+**`validate_package_name(value)`** validates that a string is a valid PEP 508 / PyPI distribution name:
 
 - Input: a string (typically the package name)
 - Output: the input string unchanged if valid
-- Error: raises `argparse.ArgumentTypeError('Non-AlphaNumeric package name')` if the string contains any non-alphanumeric character
+- Error: raises `argparse.ArgumentTypeError(f'Invalid package name: {value!r}')` if the string does not match the PEP 508 pattern
+
+The validation pattern matches:
+- A single alphanumeric character (e.g., `'a'`)
+- Or an alphanumeric character followed by any number of alphanumeric characters, hyphens, underscores, or dots, followed by an alphanumeric character (e.g., `'my-package'`, `'my_package'`, `'my.package'`)
 
 Examples:
-- `check_alpha_numeric('mypackage')` → `'mypackage'` ✓
-- `check_alpha_numeric('MyPackage123')` → `'MyPackage123'` ✓
-- `check_alpha_numeric('my-package')` → raises `ArgumentTypeError` (hyphen is invalid)
-- `check_alpha_numeric('my_package')` → raises `ArgumentTypeError` (underscore is invalid)
+- `validate_package_name('mypackage')` → `'mypackage'` ✓
+- `validate_package_name('MyPackage123')` → `'MyPackage123'` ✓
+- `validate_package_name('my-package')` → `'my-package'` ✓
+- `validate_package_name('my_package')` → `'my_package'` ✓
+- `validate_package_name('my.package')` → `'my.package'` ✓
+- `validate_package_name('a')` → `'a'` ✓
+- `validate_package_name('-bad')` → raises `ArgumentTypeError` (leading hyphen is invalid)
+- `validate_package_name('bad-')` → raises `ArgumentTypeError` (trailing hyphen is invalid)
+- `validate_package_name('has space')` → raises `ArgumentTypeError` (space is invalid)

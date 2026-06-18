@@ -36,13 +36,36 @@ This constant is:
 
 The main CLI orchestrator with four fully type-annotated functions:
 
-#### `check_alpha_numeric(value: str) -> str`
+#### `validate_package_name(value: str) -> str`
 
-Validates that a string contains only alphanumeric characters. Used as the `type=` validator in argument parsing.
+Validates that a string is a valid PEP 508 / PyPI distribution name. Used as the `type=` validator in argument parsing.
+
+A valid distribution name must:
+- Start and end with an alphanumeric character (a-z, A-Z, 0-9)
+- May contain hyphens (`-`), underscores (`_`), and dots (`.`) in between
+- Matching is case-insensitive
+
+The validation is performed using a compiled regex constant `_PACKAGE_NAME_RE`:
+```python
+_PACKAGE_NAME_RE: re.Pattern[str] = re.compile(
+    r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$',
+    re.IGNORECASE,
+)
+```
 
 - **Parameter**: `value: str` — the input string to validate
 - **Returns**: `str` — the input string unchanged if valid
-- **Raises**: `ArgumentTypeError('Non-AlphaNumeric package name')` if the string contains non-alphanumeric characters
+- **Raises**: `ArgumentTypeError(f'Invalid package name: {value!r}')` if the string does not match the PEP 508 pattern
+
+Examples:
+- `validate_package_name('mypackage')` → `'mypackage'` ✓
+- `validate_package_name('my-package')` → `'my-package'` ✓
+- `validate_package_name('my_package')` → `'my_package'` ✓
+- `validate_package_name('my.package')` → `'my.package'` ✓
+- `validate_package_name('a')` → `'a'` ✓
+- `validate_package_name('-bad')` → raises `ArgumentTypeError` (leading hyphen is invalid)
+- `validate_package_name('bad-')` → raises `ArgumentTypeError` (trailing hyphen is invalid)
+- `validate_package_name('has space')` → raises `ArgumentTypeError` (space is invalid)
 
 #### `parse_args() -> Namespace`
 
@@ -50,7 +73,7 @@ Parses command-line arguments using `argparse.ArgumentParser`.
 
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`)
-  - `package_name`: optional positional argument (validated via `check_alpha_numeric`)
+  - `package_name`: optional positional argument (validated via `validate_package_name`)
 - **Returns**: `Namespace` — an `argparse.Namespace` object with fields `version` (bool) and `package_name` (str | None)
 
 #### `init_new_package(package_name: str) -> int`
@@ -130,10 +153,10 @@ The error handling ensures that subprocess failures (from `git clone` or `just i
 
 All public functions in `modernpackage/main.py` carry complete type annotations:
 
-- **`check_alpha_numeric(value: str) -> str`** — parameter and return types specified
+- **`validate_package_name(value: str) -> str`** — parameter and return types specified
 - **`parse_args() -> Namespace`** — return type specified (no parameters)
-- **`init_new_package(package_name: str) -> None`** — parameter type and return type specified
-- **`main() -> None`** — return type specified (no parameters)
+- **`init_new_package(package_name: str) -> int`** — parameter type and return type specified
+- **`main() -> int`** — return type specified (no parameters)
 
 ### Mypy Configuration
 

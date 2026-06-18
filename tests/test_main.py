@@ -6,11 +6,11 @@ import pytest
 
 from modernpackage import __version__
 from modernpackage.main import (
-    check_alpha_numeric,
     humanize_git_clone_error,
     init_new_package,
     main,
     parse_args,
+    validate_package_name,
 )
 
 
@@ -25,13 +25,18 @@ def test_show_version() -> None:
     assert result == 0
 
 
-def test_check_alpha_numeric_valid() -> None:
-    assert check_alpha_numeric('mypackage') == 'mypackage'
+def test_validate_package_name_valid() -> None:
+    assert validate_package_name('mypackage') == 'mypackage'
+    assert validate_package_name('my-package') == 'my-package'
+    assert validate_package_name('my_package') == 'my_package'
+    assert validate_package_name('my.package') == 'my.package'
+    assert validate_package_name('a') == 'a'
 
 
-def test_check_alpha_numeric_invalid() -> None:
-    with pytest.raises(ArgumentTypeError, match='Non-AlphaNumeric package name'):
-        check_alpha_numeric('my-package')
+def test_validate_package_name_invalid() -> None:
+    for bad_name in ('-bad', 'bad-', 'has space', ''):
+        with pytest.raises(ArgumentTypeError, match='Invalid package name'):
+            validate_package_name(bad_name)
 
 
 def test_parse_args_version_flag() -> None:

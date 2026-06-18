@@ -12,7 +12,7 @@ This document is an accurate, navigable reference to the `modernpackage` codebas
 A small, two-module package with a single self-replication entrypoint:
 
 - **`modernpackage/__init__.py`**: defines version constant (`__version__ = '0.0.9'`).
-- **`modernpackage/main.py`**: CLI logic — `main()` orchestrates, `parse_args()` parses arguments, `check_alpha_numeric()` validates, `init_new_package()` clones and initializes.
+- **`modernpackage/main.py`**: CLI logic — `main()` orchestrates, `parse_args()` parses arguments, `validate_package_name()` validates, `init_new_package()` clones and initializes.
 - **`pyproject.toml`**: single configuration hub (dependencies, build backend, tool settings) (`pyproject.toml:1-94`).
 - **`Justfile`**: canonical command hub — all development and publishing commands route through it.
 
@@ -43,8 +43,9 @@ init_new_package(name)            (main.py:37-51)
   - Else no-op (silent exit).
 - **`parse_args()` signature** (`main.py:18-34`): uses `argparse.ArgumentParser`:
   - `-v` / `--version`: `action='store_true'`, default `False`.
-  - `package_name`: optional positional argument (`nargs='?'`), validated via `type=check_alpha_numeric`.
-- **`check_alpha_numeric(value)` validator** (`main.py:10-15`): returns `value` if `value.isalnum()`, else raises `ArgumentTypeError('Non-AlphaNumeric package name')`.
+  - `package_name`: optional positional argument (`nargs='?'`), validated via `type=validate_package_name`.
+- **`validate_package_name(value)` validator** (`main.py`): validates that `value` is a valid PEP 508 / PyPI distribution name (alphanumeric start/end, with hyphens/underscores/dots in between, case-insensitive via compiled regex `_PACKAGE_NAME_RE`); returns `value` if valid, else raises `ArgumentTypeError(f'Invalid package name: {value!r}')`.
+- **`_PACKAGE_NAME_RE` pattern** (`main.py`): compiled regex constant matching PEP 508 / PyPI distribution names: `r'^([a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9])$'` with `re.IGNORECASE`.
 - **`__version__` source** (`modernpackage/__init__.py:3`): constant `'0.0.9'`.
 
 ## Package-init flow
@@ -103,7 +104,7 @@ init_new_package(name)            (main.py:37-51)
   - Asserts `print` called once with `f'modernpackage {__version__}'`.
 - **Coverage of codebase**:
   - ✓ Covered: `--version` branch only.
-  - ✗ Untested: `check_alpha_numeric()` validation, `init_new_package()` cloning, package-name branch, real argument parsing.
+  - ✗ Untested: `validate_package_name()` validation, `init_new_package()` cloning, package-name branch, real argument parsing.
 - **Coverage gate** (`pyproject.toml:39-40`): `--cov-fail-under=50.0` — currently met by the single test, but uncovered paths are extensive.
 - **Test infrastructure**: no `conftest.py`, no shared fixtures; per-test `unittest.mock.patch` only.
 
