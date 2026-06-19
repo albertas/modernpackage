@@ -1,12 +1,14 @@
 # ToDo
 - [ ] Add optional scaffolding capabilities for frontend and backend.
-  - [x] [T49] Document containerization usage best practices researched online (using podman, but configuration comatible with docker)
-  - [ ] Document FastAPI backend best practices researched online. Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.
+  - [x] [T51] Document containerization usage best practices researched online (year 2026) (using podman, but configuration comatible with docker)
+  - [ ] Document FastAPI backend best practices researched online (year 2026). Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.
   - [ ] Add --backend (alias --fastapi) option that would include fully functional backend into the resulting application. The backend should use FastAPI, SQLAlchemy, asyncpg, containerization, Alembic, should have Justfile targets for makemigration and migrate. Should have functional health API endpoint that provides database health status. Use best practices documented in docs/
-  - [ ] Document ReactJS frontend best practices researched online. Use ReactJS, Vite, automatic backend API schema synchronization, unit testing and others.
+  - [ ] Document ReactJS frontend best practices researched online (year 2026). Use ReactJS, Vite, automatic backend API schema synchronization, unit testing and others.
   - [ ] Add --fullstack (alias/--reactjs) option that would include both backend and frontedn. Frontend should be fully functional API based Reactjs application. Frontend should have unittests, vite, automatic backend API schema synchronization.
   - [ ] Ensure that no backend or frontend related code is added to the scaffold by default.
   - [ ] Run both backend and frontend tests with --fullstack scaffold is created.
+- [ ] Add end to end test that tests --fullstack application scaffolding.
+- [ ] Add playwrite setup to --fullstack scaffolding that would allow to tests frontend, backend, database integration. Add status page to the frontend that would show application and database health based on /health endpoint output.
 
 
 # Done

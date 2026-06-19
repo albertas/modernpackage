@@ -34,10 +34,15 @@ creates `.venv/`, then copy only the `.venv/` directory to the runtime stage. Us
 Split `uv sync` into two phases: **Phase 1** bind-mounts `uv.lock` and `pyproject.toml`, runs
 `uv sync --locked --no-install-project`, and caches until either file changes. **Phase 2**
 copies the full source and runs `uv sync --locked`. Use `--mount=type=cache,target=/root/.cache/uv`
-with BuildKit to cache downloads/compilation across rebuilds.
+with BuildKit to cache downloads/compilation across rebuilds. For the first workspace sync,
+`--frozen` is recommended over `--locked`: it installs straight from the lockfile and skips the
+freshness check (which can fail if a workspace member's manifest is missing); the examples below
+use `--locked` to assert the lockfile is current.
 
-Recommended `.dockerignore` entries: `.venv`, `.git`, `__pycache__`, `*.pyc`, `.ruff_cache`,
-`.mypy_cache`.
+`.dockerignore`: the official Astral example ships exactly one entry — `.venv`
+(platform-specific, must be rebuilt in-image). Recommended additions for this project:
+`.git`, `__pycache__`, `*.pyc`, `.ruff_cache`, `.mypy_cache` (community conventions, not
+part of the Astral baseline).
 
 ### Build Environment Variables
 
@@ -157,6 +162,10 @@ Podman offers three ways to run Compose files:
 - **`docker compose` over the Podman socket** — fuller Compose spec coverage when the Docker
   API socket is exposed (see Docker-API Socket above).
 
+Quadlet `.container` units (Podman 4.4+) are a systemd-native alternative for running
+containers, but they are not a Compose drop-in and are out of scope for this
+Compose-portability reference.
+
 ### Keeping Config Docker-Compatible
 
 To maintain compatibility across Docker and Podman tooling, follow these conventions:
@@ -242,7 +251,9 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 ```
 
 `/health` returns 200 when ready, 503 when dependencies are down. `start-period` covers init
-without marking failed probes unhealthy.
+without marking failed probes unhealthy. `--start-interval` (Engine 25+) sets a faster probe
+cadence during the start period. The probe command's exit code drives the state: `0` = healthy,
+`1` = unhealthy, `2` = reserved (do not use).
 
 ### Volumes & Networking
 
@@ -261,6 +272,8 @@ Compose files define multi-container apps using the vendor-neutral [Compose
 Specification](https://compose-spec.github.io/compose-spec/spec.html). Top-level `services`
 block is required; optional: `networks`, `volumes`, `secrets`. **Important**: omit `version:` —
 it is deprecated since Compose V2.
+The canonical Compose Specification filename is `compose.yaml`; `compose.yml` is also
+recognized by Compose tooling (the examples in this document use `compose.yml`).
 
 ### Service Networking
 
@@ -282,7 +295,9 @@ For portability: omit `version:`, use core spec, isolate Podman-specific options
 
 Use long-form `depends_on` with `condition: service_healthy` and a `healthcheck:` on the
 dependency to wait for readiness (per [Compose startup
-order](https://docs.docker.com/compose/how-tos/startup-order/)):
+order](https://docs.docker.com/compose/how-tos/startup-order/)). For one-shot init/migration
+containers, use `condition: service_completed_successfully` instead, which waits for the
+dependency to run to completion (exit 0) rather than to become healthy.
 
 ```yaml
 depends_on:

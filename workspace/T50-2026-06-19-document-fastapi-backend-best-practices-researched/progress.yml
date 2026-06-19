@@ -1,0 +1,28 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 167458
+    cost_usd: 0.5978663500000002
+    input_tokens: 3015
+    output_tokens: 4415
+    cache_read_tokens: 184974
+    cache_creation_tokens: 21024
+    model: Haiku 4.5, opus 4.8, sonnet 4.6
+    context_used: 24039
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: false
+- name: 3_design
+  done: false
+- name: 4_structure
+  done: false
+- name: 5_plan
+  done: false
+- name: 6_document
+  done: false
+- name: 7_implement
+  done: false
