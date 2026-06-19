@@ -1,5 +1,10 @@
 # ToDo
-- [ ] Add optional scaffolding capabilities for frontend and backend.
+- [ ] Add end to end test that tests --fullstack application scaffolding.
+- [ ] Add playwrite setup to --fullstack scaffolding that would allow to tests frontend, backend, database integration. Add status page to the frontend that would show application and database health based on /health endpoint output.
+
+
+# Done
+- [x] [T58] Add optional scaffolding capabilities for frontend and backend.
   - [x] [T51] Document containerization usage best practices researched online (year 2026) (using podman, but configuration comatible with docker)
   - [x] [T52] Document FastAPI backend best practices researched online (year 2026). Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.
   - [x] [T53] Add --backend (alias --fastapi) option that would include fully functional backend into the resulting application. The backend should use FastAPI, SQLAlchemy, asyncpg, containerization, Alembic, should have Justfile targets for makemigration and migrate. Should have functional health API endpoint that provides database health status. Use best practices documented in docs/
@@ -7,11 +12,6 @@
   - [x] [T55] Add --fullstack (alias/--reactjs) option that would include both backend and frontedn. Frontend should be fully functional API based Reactjs application. Frontend should have unittests, vite, automatic backend API schema synchronization.
   - [x] [T56] Ensure that no backend or frontend related code is added to the scaffold by default.
   - [x] [T57] Run both backend and frontend tests with --fullstack scaffold is created.
-- [ ] Add end to end test that tests --fullstack application scaffolding.
-- [ ] Add playwrite setup to --fullstack scaffolding that would allow to tests frontend, backend, database integration. Add status page to the frontend that would show application and database health based on /health endpoint output.
-
-
-# Done
 - [x] [T48] Use `uv` commands for managing dependencies instead of `uv pip`, update Justfile, Makefile. Use uv dev group for test dependencies.
 - [x] [T47] Remove scaffolding/initialization related code programatically from the resulting project 
 - [ ] [V7] Cache the last successful clone for reuse

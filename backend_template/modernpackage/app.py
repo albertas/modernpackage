@@ -6,9 +6,10 @@ from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
 from modernpackage.db import create_engine
 from modernpackage.health import router as health_router
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

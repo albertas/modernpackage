@@ -6,7 +6,7 @@ import os
 from typing import TYPE_CHECKING, Annotated, cast
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
+    from collections.abc import AsyncGenerator
 
 from fastapi import Depends, Request
 from sqlalchemy import MetaData
@@ -48,7 +48,7 @@ def create_engine() -> AsyncEngine:
     return create_async_engine(database_url())
 
 
-async def get_db(request: Request) -> AsyncIterator[AsyncSession]:
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession]:
     """Yield one `AsyncSession` per request from the app-state session factory."""
     sessionmaker = cast(
         'async_sessionmaker[AsyncSession]', request.app.state.sessionmaker

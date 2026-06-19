@@ -75,7 +75,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "S108", "D", "PLR2004", "TRY003", "EM101"]  # allow assert, /tmp/ paths, no docs, magic values, inline exception messages in tests
-"backend_template/**" = ["INP001"]  # template dirs don't have __init__.py; they merge into the clone's package dirs
+"backend_template/**" = ["INP001", "I001"]  # template dirs: no __init__.py (INP001); isort can't detect first-party vs third-party without the generated package name (I001)
 "frontend_template/**" = ["INP001"]  # Node project; no __init__.py, not a Python package
 "backend_template/tests/*" = ["S101", "S108", "D100", "D103", "PLR2004", "TRY003", "EM101"]  # test rules; tests/* doesn't match this path prefix
 "backend_template/migrations/*" = ["D103", "TC002"]  # migration env: no public function docstrings; Connection used at runtime

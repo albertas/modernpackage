@@ -5,8 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Annotated
 
-from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy import text
 
 if TYPE_CHECKING:
@@ -38,11 +37,10 @@ async def livez() -> dict[str, str]:
 @router.get('/readyz')
 async def readyz(
     ready: Annotated[bool, Depends(database_ready)],
-) -> JSONResponse | dict[str, str]:
+    response: Response,
+) -> dict[str, str]:
     """Readiness probe — 200 when the DB answers, 503 otherwise."""
     if not ready:
-        return JSONResponse(
-            {'status': 'fail'},
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        )
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        return {'status': 'fail'}
     return {'status': 'pass'}

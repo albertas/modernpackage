@@ -5,10 +5,11 @@ from types import SimpleNamespace
 from typing import TYPE_CHECKING, Self, cast
 
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
 from modernpackage.app import create_app
 from modernpackage.db import create_engine, get_db
 from modernpackage.health import database_ready
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -81,9 +82,13 @@ def test_get_db_yields_session() -> None:
         sessionmaker = async_sessionmaker(engine, expire_on_commit=False)
         request = cast(
             'Request',
-            SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
-                sessionmaker=sessionmaker,
-            ))),
+            SimpleNamespace(
+                app=SimpleNamespace(
+                    state=SimpleNamespace(
+                        sessionmaker=sessionmaker,
+                    )
+                )
+            ),
         )
         generator = get_db(request)
         session = await anext(generator)
