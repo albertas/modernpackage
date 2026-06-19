@@ -1574,6 +1574,38 @@ Validates `--fullstack`/`--reactjs` scaffolding workflow, running both backend a
 
 **Graceful skipping for fullstack test**: Additionally requires `npm` on `PATH` for frontend test execution. When `npm` is unavailable (CI environments), the fullstack test skips while other e2e tests run.
 
+#### Fullstack Runtime Integration: `test_fullstack_package_runs_end_to_end`
+
+Validates that a scaffolded fullstack application runs end-to-end in a real Docker Compose stack and exercises the backend↔frontend integration path. This test goes beyond structural validation by running the complete application stack and testing real HTTP endpoints, API client generation, and frontend builds:
+
+1. **Setup**: Same clone, metadata, strip, fullstack-inject, and init steps as the fullstack scaffold test
+2. **Compose up & wait**: Brings the stack up via `compose up -d --wait --build`, which blocks until all services are healthy:
+   - `db` service (Postgres 17) starts and becomes healthy (`pg_isready`)
+   - `migrate` service (Alembic) runs migrations and completes successfully
+   - `app` service (uvicorn with FastAPI factory) starts and its `/readyz` healthcheck passes (real `SELECT 1` on the live database)
+3. **Backend HTTP assertions**: With the stack live, makes real HTTP requests from the test host:
+   - `GET http://127.0.0.1:8000/livez` returns 200 with `{"status":"pass"}` (liveness check)
+   - `GET http://127.0.0.1:8000/readyz` returns 200 (readiness check with live DB)
+4. **Frontend installation**: Installs Node dependencies via `just frontend-install` (runs `npm ci`)
+5. **API client regeneration**: With the backend still running, runs `just generate-client` to regenerate the OpenAPI client:
+   - The `@hey-api/openapi-ts` generator fetches the live `http://localhost:8000/openapi.json` (not the committed snapshot)
+   - Rewrites `frontend/src/client/` with real operation types and client stubs
+   - Asserts the regenerated client contains operation names (`livez`, `readyz`) and is no longer the hand-written placeholder
+6. **Frontend build**: Runs `just frontend-build` to compile the frontend against the regenerated client:
+   - TypeScript type-checks pass against the real client types
+   - Vite bundles the application to `frontend/dist/`
+   - Asserts `frontend/dist/index.html` exists and is non-empty
+7. **Teardown**: Always runs `compose down -v` in `try/finally` to:
+   - Stop all containers
+   - Remove the `pgdata` volume (prevents port/volume leakage between test runs)
+   - Free port 8000 for subsequent test runs
+
+**Graceful skipping**: Requires `docker compose` or `podman compose` or `podman-compose` on `PATH` (auto-detected), plus `npm`, plus the Python test tools. When any required tool is missing, skips cleanly instead of failing. Compose command auto-detection tries `docker compose`, then `podman compose`, then `podman-compose` (the portability set named in `backend_template/compose.yml:1`).
+
+**Caveats**: This test pulls `postgres:17`, builds the application image, and runs `npm ci` + `vite build`, which takes several minutes and requires network access. It is excluded from `just check` (default quality gate) and requires explicit `just test-e2e` invocation. The test documents its runtime cost and skip conditions in the test docstring (matching the module docstring at lines 1–15) so developers understand why it might be slow or skipped in their environment.
+
+**What it guarantees**: The scaffolded fullstack application is genuinely functional end-to-end: the compose stack brings up a real Postgres database with applied migrations, the FastAPI backend responds to health probes with a real database connection, the generated OpenAPI schema is consistent with the running backend, the frontend can be rebuilt against live schema, and TypeScript compilation succeeds against the generated client types. This is complementary to `test_scaffolded_fullstack_package_passes_check`, which validates file structure and unit tests; together they cover structural correctness, unit test execution, and end-to-end integration.
+
 #### Common Characteristics
 
 **Why e2e tests are excluded by default:**
@@ -1587,6 +1619,7 @@ Validates `--fullstack`/`--reactjs` scaffolding workflow, running both backend a
 - Generated packages pass their respective test suites (backend pytest, frontend Vitest, or both)
 - Regressions in the template code are caught end-to-end, not just in unit tests
 - For fullstack packages specifically: both backend and frontend components are correctly injected and functional
+- For fullstack packages additionally: the generated application runs end-to-end in a real Docker Compose stack with a live Postgres database, the backend responds correctly to HTTP health probes, the frontend can be rebuilt against the live OpenAPI schema, and TypeScript compilation succeeds against the generated client
 
 **Intentional design choices:**
 - Clone the **local committed checkout** (not the GitHub URL) so template uncommitted edits are not exercised, matching CI behavior

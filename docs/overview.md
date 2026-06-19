@@ -42,7 +42,7 @@ After cloning and `cd`-ing into the created package directory, developers use `j
 - **`just fix`** — format code and auto-fix linting issues.
 - **`just lock`** — refresh `uv.lock` to the latest resolvable dependency versions via `uv lock --upgrade`.
 - **`just test`** — run pytest unit tests in parallel across `nproc --ignore=1` workers (mocked-only, excludes e2e).
-- **`just test-e2e`** — run only the end-to-end tests marked `@pytest.mark.e2e` (real external calls: scaffolds packages and validates them via their test suites and quality gates).
+- **`just test-e2e`** — run only the end-to-end tests marked `@pytest.mark.e2e` (real external calls: scaffolds packages, validates them via their test suites and quality gates; for fullstack packages, additionally verifies the application runs end-to-end in a real Docker Compose stack with live Postgres, HTTP health probes, API client generation, and frontend builds). Requires compose (docker/podman), npm, and several minutes to complete.
 - **`just lint`** — check for linting violations.
 - **`just format`** — reformat code with ruff.
 - **`just typecheck`** — run type checker (mypy in strict mode).

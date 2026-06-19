@@ -1,9 +1,9 @@
 # ToDo
-- [ ] Add end to end test that tests --fullstack application scaffolding.
 - [ ] Add playwrite setup to --fullstack scaffolding that would allow to tests frontend, backend, database integration. Add status page to the frontend that would show application and database health based on /health endpoint output.
 
 
 # Done
+- [x] [T59] Add end to end test that tests --fullstack application scaffolding.
 - [x] [T58] Add optional scaffolding capabilities for frontend and backend.
   - [x] [T51] Document containerization usage best practices researched online (year 2026) (using podman, but configuration comatible with docker)
   - [x] [T52] Document FastAPI backend best practices researched online (year 2026). Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.

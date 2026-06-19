@@ -18,6 +18,8 @@ import os
 import re
 import shutil
 import subprocess
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -27,6 +29,10 @@ from modernpackage.main import normalize_module_name
 
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
+
+# Phase 2's skip guard needs the base tools plus a Node toolchain (`npm`); the
+# compose command itself is detected separately via `_detect_compose_command`.
+_REQUIRED_RUNTIME_TOOLS: tuple[str, ...] = (*REQUIRED_TOOLS, 'npm')
 
 _GIT_IDENTITY_ENV: dict[str, str] = {
     'GIT_AUTHOR_NAME': 'e2e',
@@ -49,6 +55,53 @@ def _run(
         capture_output=True,
         text=True,
     )
+
+
+_COMPOSE_CANDIDATES: tuple[tuple[str, ...], ...] = (
+    ('docker', 'compose'),
+    ('podman', 'compose'),
+    ('podman-compose',),
+)
+
+
+def _detect_compose_command() -> list[str] | None:
+    """Return the first working compose command, or None if none is available.
+
+    Probes the portability set named in `backend_template/compose.yml:1`
+    (`docker compose` → `podman compose` → `podman-compose`) by running
+    `<cmd> version` with `check=False`; returns the first whose returncode is 0.
+    Degrades gracefully: a missing executable raises `FileNotFoundError`, which
+    is treated as "not available" rather than propagated.
+    """
+    for candidate in _COMPOSE_CANDIDATES:
+        try:
+            probe = subprocess.run(  # noqa: S603
+                [*candidate, 'version'],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            continue
+        if probe.returncode == 0:
+            return list(candidate)
+    return None
+
+
+def _http_get(url: str, timeout: float = 30.0) -> tuple[int, str]:
+    """GET `url` via stdlib urllib; return `(status_code, body)`.
+
+    Mirrors the `Containerfile` healthcheck's use of `urllib.request`
+    (`Containerfile:25`) instead of pulling in `httpx` (a backend-template dev
+    dep, not guaranteed in the outer test env — design decision 5). HTTP error
+    statuses (4xx/5xx) are returned, not raised, so callers can assert on them;
+    only a connection-level failure propagates.
+    """
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310
+            return response.status, response.read().decode('utf-8')
+    except urllib.error.HTTPError as error:
+        return error.code, error.read().decode('utf-8')
 
 
 _RECIPE_NAME_RE = re.compile(r'^([a-z][\w-]*)(?: \w+)*:', re.MULTILINE)
@@ -366,3 +419,114 @@ def test_scaffolded_fullstack_package_passes_check(tmp_path: Path) -> None:
         line for line in generated_justfile.splitlines() if line.startswith('check:')
     )
     assert 'frontend-' not in check_line
+
+
+@pytest.mark.e2e
+def test_fullstack_package_runs_end_to_end(tmp_path: Path) -> None:
+    """Scaffold a fullstack package and prove it runs against a real stack.
+
+    Brings the shipped `compose.yml` up (db + migrate + app) via
+    `compose up --wait` (which blocks until the app's `/readyz` healthcheck
+    passes, proving DB + migrations + app readiness), then asserts host-side
+    HTTP on `/livez` and `/readyz`, regenerates the API client against the live
+    backend, and builds the frontend against it.
+
+    Caveats (inherited from sibling tests, see module docstring): pulls
+    `postgres:17`, builds the app image, and runs `npm ci` + `vite build` —
+    minutes-long and network-dependent. Skip guards make environments lacking
+    compose or Node skip rather than fail. Teardown (`compose down -v`) always
+    runs in `try/finally`.
+    """
+    for tool in _REQUIRED_RUNTIME_TOOLS:
+        if shutil.which(tool) is None:
+            pytest.skip(f'required tool not on PATH: {tool}')
+    compose = _detect_compose_command()
+    if compose is None:
+        pytest.skip('no compose command available (docker/podman compose)')
+
+    package_name = 'fullstack-run.pkg'
+    module_name = normalize_module_name(package_name)
+    destination = tmp_path / module_name
+
+    clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
+    assert clone.returncode == 0, f'git clone failed:\n{clone.stdout}\n{clone.stderr}'
+
+    main._write_package_metadata(  # noqa: SLF001
+        destination,
+        author_name='Test Author',
+        author_email='test@example.org',
+        description='An e2e fullstack package.',
+        package_license='Apache-2.0',
+        repository_url='https://example.org/repo',
+    )
+    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._inject_templates(destination, fullstack=True)  # noqa: SLF001
+
+    init = _run(
+        ['just', 'init', module_name],
+        cwd=destination,
+        env=os.environ | _GIT_IDENTITY_ENV,
+    )
+    assert init.returncode == 0, f'just init failed:\n{init.stdout}\n{init.stderr}'
+
+    # `compose.yml` lands at the package root (`destination`), not under
+    # `destination / module_name` — `_add_backend` copytrees the backend
+    # template into `package_path`. The `build: .` context is `destination`.
+    try:
+        up = _run([*compose, 'up', '-d', '--wait', '--build'], cwd=destination)
+        assert up.returncode == 0, f'compose up failed:\n{up.stdout}\n{up.stderr}'
+
+        # Backend HTTP assertions (design pillar 1). `--wait` already proved
+        # readiness; these confirm real behavior from the host.
+        livez_status, livez_body = _http_get('http://127.0.0.1:8000/livez')
+        assert livez_status == 200, f'/livez returned {livez_status}: {livez_body}'
+        assert 'pass' in livez_body, f'/livez body unexpected: {livez_body}'
+
+        readyz_status, readyz_body = _http_get('http://127.0.0.1:8000/readyz')
+        assert readyz_status == 200, f'/readyz returned {readyz_status}: {readyz_body}'
+
+        # Frontend deps first: `generate-client` does not depend on
+        # `frontend-install` (research Q4; test_e2e.py:321-323).
+        install = _run(['just', 'frontend-install'], cwd=destination)
+        assert install.returncode == 0, (
+            f'just frontend-install failed:\n{install.stdout}\n{install.stderr}'
+        )
+
+        # `generate-client` reads the LIVE http://localhost:8000/openapi.json
+        # (openapi-ts.config.ts:4), so the backend must be up — this is why the
+        # call lives inside the `try` after `compose up`.
+        generate = _run(['just', 'generate-client'], cwd=destination)
+        assert generate.returncode == 0, (
+            f'just generate-client failed:\n{generate.stdout}\n{generate.stderr}'
+        )
+
+        # The regenerated client references the real operations. Assert on stable
+        # substrings (operationIds livez_livez_get / readyz_readyz_get) rather
+        # than exact generated structure, which @hey-api versions may change
+        # (design Open Risks).
+        client_dir = destination / 'frontend' / 'src' / 'client'
+        client_text = '\n'.join(
+            path.read_text() for path in client_dir.rglob('*') if path.is_file()
+        )
+        assert 'livez' in client_text, (
+            f'regenerated client missing livez:\n{client_text}'
+        )
+        assert 'readyz' in client_text, (
+            f'regenerated client missing readyz:\n{client_text}'
+        )
+        # Placeholder marker is gone (src/client/index.ts:3-4 used this type).
+        assert 'Record<string, unknown>' not in client_text, (
+            'client still looks like the hand-written placeholder'
+        )
+
+        build = _run(['just', 'frontend-build'], cwd=destination)
+        assert build.returncode == 0, (
+            f'just frontend-build failed:\n{build.stdout}\n{build.stderr}'
+        )
+
+        # Build emitted a non-empty dist/ (Vite default output dir).
+        dist_dir = destination / 'frontend' / 'dist'
+        assert dist_dir.is_dir(), 'frontend/dist not created by build'
+        assert (dist_dir / 'index.html').is_file(), 'frontend/dist/index.html missing'
+    finally:
+        _run([*compose, 'down', '-v'], cwd=destination)
