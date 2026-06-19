@@ -1,4 +1,13 @@
 # ToDo
+- [ ] Add optional scaffolding capabilities for frontend and backend.
+  - [x] [T49] Document containerization usage best practices researched online (using podman, but configuration comatible with docker)
+  - [ ] Document FastAPI backend best practices researched online. Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.
+  - [ ] Add --backend (alias --fastapi) option that would include fully functional backend into the resulting application. The backend should use FastAPI, SQLAlchemy, asyncpg, containerization, Alembic, should have Justfile targets for makemigration and migrate. Should have functional health API endpoint that provides database health status. Use best practices documented in docs/
+  - [ ] Document ReactJS frontend best practices researched online. Use ReactJS, Vite, automatic backend API schema synchronization, unit testing and others.
+  - [ ] Add --fullstack (alias/--reactjs) option that would include both backend and frontedn. Frontend should be fully functional API based Reactjs application. Frontend should have unittests, vite, automatic backend API schema synchronization.
+  - [ ] Ensure that no backend or frontend related code is added to the scaffold by default.
+  - [ ] Run both backend and frontend tests with --fullstack scaffold is created.
+
 
 # Done
 - [x] [T48] Use `uv` commands for managing dependencies instead of `uv pip`, update Justfile, Makefile. Use uv dev group for test dependencies.

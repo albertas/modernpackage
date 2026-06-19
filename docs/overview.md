@@ -24,6 +24,7 @@
 | [architecture.md](architecture.md) | **Design & modules**: package structure, module responsibilities, init flow, build & versioning, developer tooling, test strategy. |
 | [backlog_formats.md](backlog_formats.md) | **Task tracking format**: BACKLOG.md structure, progress markers, category tags. |
 | [specification.md](specification.md) | **Complete architectural reference**: package goals, modules, CLI entry point, initialization flow, build/versioning, developer tooling, tests, repository structure, known gaps. Start here for deep understanding. |
+| [containerization.md](containerization.md) | **Containerization**: image authoring, Podman/Docker compatibility, security, local multi-service stacks. |
 | [README.md](../README.md) | User-facing usage guide and feature-request backlog. |
 | [BACKLOG.md](../BACKLOG.md) | Task tracking with progress markers (`[x]` complete, `[~]` in-progress, `[ ]` pending). |
 

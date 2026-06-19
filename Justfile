@@ -8,6 +8,9 @@ vision:
 sync:
   @uv sync
 
+compile:
+  uv lock
+
 test *args: sync
   uv run pytest -n "$(nproc --ignore=1)" {{args}}
 
