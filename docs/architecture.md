@@ -1558,6 +1558,59 @@ The e2e test (`tests/test_e2e.py:test_scaffolded_package_passes_check`, marked w
 - Injects git author/committer identity (`GIT_AUTHOR_NAME`, etc.) because the inner `just init` runs `git commit` and requires a configured identity
 - Documents deviations in the module docstring to explain the intentional differences from production (`modernpackage.main:init_new_package`, which clones from GitHub)
 
+### No-Flag Verification Tests
+
+**Guarantee**: A package scaffolded with no extra flags contains zero backend or frontend code, config, dependencies, recipes, or references.
+
+The scaffolder enforces this guarantee through two layers of testing:
+
+#### Mocked Unit Test: `test_init_new_package_no_flags_injects_nothing`
+
+Located in `tests/test_main.py`, this fast mocked test verifies that a no-flag `init_new_package()` call:
+- Does **not** invoke `_add_backend()` or `_add_frontend()` (the injector functions)
+- Makes exactly **3** subprocess calls: `git clone`, `just init`, `just check` (no extra calls like `git add -A` that would appear on the inject path)
+
+This test runs in ~1 ms and serves as a regression guard on the control-flow gate (`if backend or fullstack:` at the injector entry point). It complements existing positive guards that verify `--backend` and `--fullstack` correctly invoke their injectors.
+
+**Why this test is valuable**: It fails immediately if any code path accidentally injects backend/frontend into the no-flag flow, catching regressions at development time before they propagate to e2e tests.
+
+#### End-to-End Test: `test_scaffolded_package_has_no_backend_or_frontend`
+
+Located in `tests/test_e2e.py` with the `@pytest.mark.e2e` marker, this comprehensive test scaffolds a real no-flag package and asserts the absence of every backend/frontend artifact:
+
+1. **Directory checks**: Verifies these directories do not exist:
+   - `backend_template`, `frontend_template`, `frontend` (template injection remnants)
+   - `migrations` (Alembic directory for databases)
+
+2. **File checks**: Verifies these configuration files do not exist:
+   - `alembic.ini` (Alembic config)
+   - `compose.yml` (Docker Compose)
+   - `Containerfile` (container build definition)
+   - `.dockerignore` (container ignore rules)
+
+3. **Dependency checks**: Parses `pyproject.toml` and verifies:
+   - `dependencies = []` (no runtime deps injected)
+   - No forbidden tokens: fastapi, sqlalchemy, asyncpg, alembic, uvicorn, httpx
+
+4. **Recipe checks**: Parses the `Justfile` and verifies no backend/frontend recipes present:
+   - No `migrate`, `makemigration`, `migration-check` (backend recipes)
+   - No `frontend-*`, `generate-client` (frontend recipes)
+
+5. **Source code checks**: Scans the package source tree and verifies no import tokens:
+   - No `import fastapi`, `from fastapi`
+   - No `import sqlalchemy`, `from sqlalchemy`
+   - No `import asyncpg`, `import alembic`, `import uvicorn`
+   - No `from react`, `vite` (frontend markers)
+
+**Why this test is valuable**: It locks the entire no-flag guarantee end-to-end, covering the real clone → strip → init pipeline. Future changes that accidentally leak backend/frontend artifacts will fail this test before reaching production.
+
+**Markers and exclusion**: Both tests use markers:
+- Unit test: included in default `just test` run (mocked, fast)
+- E2E test: marked `@pytest.mark.e2e`, excluded from `just test` (manual `just test-e2e` only)
+- Neither test is included in the `just check` default flow, to avoid slowing the primary gate
+
+**Coverage impact**: These tests exercise the stripping and validation paths but add minimal new executed code (mostly assertion-only). The 95% coverage gate remains achievable without lowering thresholds.
+
 ### Coverage Measurement
 
 `pytest-cov` is configured in `pyproject.toml`:
@@ -1575,9 +1628,9 @@ markers = [
 - `--no-cov-on-fail`: skips coverage reporting if tests fail (speeds up failure diagnosis)
 - `-m 'not e2e'`: default run excludes `e2e` marked tests (mocked unit tests only)
 
-The coverage gate is measured **against mocked unit tests only** (the default `just test` run); the e2e test is not included in the coverage measurement because it exercises the public CLI (which is already covered by unit test mocks).
+The coverage gate is measured **against mocked unit tests only** (the default `just test` run); e2e tests are not included in the coverage measurement because they exercise the public CLI (which is already covered by unit test mocks).
 
-**Metadata writing coverage**: The 95% coverage gate ensures all branches of the new metadata writing helpers (`_toml_escape`, `_write_package_metadata`, `_apply_license`) and their failure paths (missing file, `None` values, special characters) are exercised:
+**Metadata writing coverage**: The 95% coverage gate ensures all branches of the metadata writing helpers (`_toml_escape`, `_write_package_metadata`, `_apply_license`) and their failure paths (missing file, `None` values, special characters) are exercised:
 - Each metadata field (author_name, author_email, description, license, repository_url) has a dedicated test case covering presence and absence
 - License handling has separate tests for the present/absent cases
 - Special character handling (quotes and backslashes) is tested separately

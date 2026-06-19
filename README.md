@@ -347,8 +347,8 @@ git push
 ## Development
 Commonly used commands for package development:
 - `just check` - run unit tests and linters (format, lint, complexity, typecheck, tests, security audit, dead code detection). Primary quality gate; excludes e2e tests.
-- `just test` - run unit tests only (mocked, parallel, excludes e2e).
-- `just test-e2e` - run end-to-end test that scaffolds a package and validates it with `just check` (slow, requires network and git/just/uv on PATH; skips gracefully if tools missing).
+- `just test` - run unit tests only (mocked, parallel, excludes e2e). Includes: fast regression guards for the no-flag scaffold guarantee, metadata writing tests, and CLI argument parsing tests.
+- `just test-e2e` - run end-to-end tests that scaffold packages and validate them with `just check` (slow, requires network and git/just/uv on PATH; skips gracefully if tools missing). Includes: no-flag scaffold validation (verifies zero backend/frontend artifacts), backend scaffold validation (verifies FastAPI injection), and standard scaffold validation (verifies `just check` passes).
 - `just fix` - format code and fix detected fixable issues.
 - `just publish` - publishes current package version to pypi.org.
 - `just lock` - refresh `uv.lock` to the latest resolvable dependency versions.

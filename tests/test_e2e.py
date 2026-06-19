@@ -15,6 +15,7 @@ Intentional deviations / caveats:
 """
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -48,6 +49,21 @@ def _run(
         capture_output=True,
         text=True,
     )
+
+
+_RECIPE_NAME_RE = re.compile(r'^([a-z][\w-]*)(?: \w+)*:', re.MULTILINE)
+
+
+def _dependency_tokens() -> set[str]:
+    """Bare package names from the backend dependency constants (no version/extras)."""
+    deps = main._BACKEND_DEPENDENCIES + main._BACKEND_DEV_DEPENDENCIES  # noqa: SLF001
+    return {re.split(r'[<>=\[ ]', dep, maxsplit=1)[0] for dep in deps}
+
+
+def _recipe_tokens() -> set[str]:
+    """Recipe names declared in the backend/frontend recipe constants."""
+    recipes = main._BACKEND_RECIPES + main._FRONTEND_RECIPES  # noqa: SLF001
+    return set(_RECIPE_NAME_RE.findall(recipes))
 
 
 @pytest.mark.e2e
@@ -174,3 +190,80 @@ def test_scaffolded_backend_package_passes_check(tmp_path: Path) -> None:
     assert 'migrate:' in compose
     containerfile = (destination / 'Containerfile').read_text()
     assert '/readyz' in containerfile
+
+
+@pytest.mark.e2e
+def test_scaffolded_package_has_no_backend_or_frontend(tmp_path: Path) -> None:
+    for tool in REQUIRED_TOOLS:
+        if shutil.which(tool) is None:
+            pytest.skip(f'required tool not on PATH: {tool}')
+
+    package_name = 'no-extras.pkg'
+    module_name = normalize_module_name(package_name)
+    destination = tmp_path / module_name
+
+    clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
+    assert clone.returncode == 0, f'git clone failed:\n{clone.stdout}\n{clone.stderr}'
+
+    main._write_package_metadata(  # noqa: SLF001
+        destination,
+        author_name='Test Author',
+        author_email='test@example.org',
+        description='A no-extras package.',
+        package_license='Apache-2.0',
+        repository_url='https://example.org/repo',
+    )
+    main._strip_scaffolding(destination)  # noqa: SLF001
+
+    init = _run(
+        ['just', 'init', module_name],
+        cwd=destination,
+        env=os.environ | _GIT_IDENTITY_ENV,
+    )
+    assert init.returncode == 0, f'just init failed:\n{init.stdout}\n{init.stderr}'
+
+    source_dir = destination / module_name
+    assert source_dir.is_dir()
+
+    # 1. Backend/frontend directories never reach the package.
+    for directory in (
+        'backend_template',
+        'frontend_template',
+        'frontend',
+        'migrations',
+    ):
+        assert not (destination / directory).exists(), f'unexpected dir: {directory}'
+
+    # 2. Backend/container config files absent.
+    for filename in ('alembic.ini', 'compose.yml', 'Containerfile', '.dockerignore'):
+        assert not (destination / filename).exists(), f'unexpected file: {filename}'
+
+    # 3. pyproject.toml carries no backend deps and keeps the empty list.
+    pyproject = (destination / 'pyproject.toml').read_text()
+    assert 'dependencies = []' in pyproject
+    for token in _dependency_tokens():
+        assert token not in pyproject, f'unexpected dependency token: {token}'
+
+    # 4. Justfile carries no backend/frontend recipes.
+    justfile = (destination / 'Justfile').read_text()
+    for token in _recipe_tokens():
+        assert token not in justfile, f'unexpected recipe: {token}'
+
+    # 5. Package source dir contains no backend/frontend import tokens
+    #    (scoped scan avoids incidental-substring false positives).
+    import_tokens = (
+        'import fastapi',
+        'from fastapi',
+        'import sqlalchemy',
+        'from sqlalchemy',
+        'import asyncpg',
+        'import alembic',
+        'import uvicorn',
+        'from react',
+        'vite',
+    )
+    source_text = '\n'.join(
+        path.read_text() for path in source_dir.rglob('*') if path.is_file()
+    )
+    for token in import_tokens:
+        assert token not in source_text, f'unexpected import token: {token}'

@@ -1603,6 +1603,24 @@ def test_init_new_package_invokes_add_backend_when_flag_set() -> None:
     add_backend_mock.assert_called_once_with(Path.cwd() / 'mypackage')
 
 
+def test_init_new_package_no_flags_injects_nothing() -> None:
+    expected_popen_calls = 3  # clone, just init, just check
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
+        patch('modernpackage.main._add_backend') as add_backend_mock,
+        patch('modernpackage.main._add_frontend') as add_frontend_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage')
+    add_backend_mock.assert_not_called()
+    add_frontend_mock.assert_not_called()
+    assert popen_mock.call_count == expected_popen_calls
+
+
 # ---------------------------------------------------------------------------
 # Phase 2: _add_backend injection mechanism
 # ---------------------------------------------------------------------------
