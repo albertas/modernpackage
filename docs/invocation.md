@@ -112,6 +112,35 @@ Dry run — no changes will be made:
 
 **Exit code:** 0
 
+**Example: Dry-run with fullstack**
+
+```bash
+modernpackage my-app --dry-run --fullstack
+```
+
+**Output (stdout):**
+```
+Preflight checks:
+  [ok]   package name valid
+  [ok]   required tools on PATH (git, just, uv)
+  [ok]   target directory available
+  [ok]   template remote reachable
+Dry run — no changes will be made:
+  clone https://github.com/albertas/modernpackage into /home/user/my_app
+  update pyproject.toml metadata:
+    author name: keeps template default
+    author email: keeps template default
+    description: keeps template default
+    license: keeps template default
+    repository URL: keeps template default
+  add FastAPI backend (app, migrations, container, recipes)
+  add React frontend (Vite, Vitest, generated API client, recipes)
+  run just init: rename modernpackage/ -> my_app/
+  run just init: reset version to 0.0.1
+```
+
+**Exit code:** 0
+
 **Important**: The dry-run still performs preflight checks (including a network probe to verify the template repository is reachable). If preflight fails, the dry-run returns exit code 1 and no plan is printed.
 
 ### Backend flag
@@ -174,6 +203,109 @@ just check              # Full validation including backend tests
 just migrate            # Run pending Alembic migrations
 just makemigration "add users table"  # Generate migration
 docker compose up       # Start app + Postgres + migration job
+```
+
+### Fullstack flag
+
+```bash
+modernpackage <package_name> --fullstack
+modernpackage <package_name> --reactjs           # alias for --fullstack
+modernpackage <package_name> --fullstack --author-name "Ada"
+```
+
+Scaffolds a complete frontend + backend application. When `--fullstack` (or its alias `--reactjs`) is provided, the scaffolder injects both the FastAPI backend (as described above) **and** a React frontend. The frontend is fully isolated in a `frontend/` subdirectory and includes:
+
+- **Vite 8 build system** for rapid development (hot module replacement) and optimized production builds
+- **React 19 with TypeScript strict mode** for type-safe component development
+- **Vitest 4.1 unit testing** with jsdom environment for DOM testing
+- **React Testing Library 16.3** for user-behavior-focused component testing
+- **OpenAPI client generation** via `@hey-api/openapi-ts` with client-fetch plugin, generating `frontend/src/client/` from the backend's OpenAPI schema
+- **ESLint 10 + typescript-eslint 8** for code quality and style enforcement
+- **Prettier 3.8** for automatic code formatting
+- **Development proxy**: dev server proxies `/api/*` requests to the backend on `http://localhost:8000`
+- **Pre-generated client stubs**: `frontend/src/client/` contains TypeScript types and API client functions
+- **Node.js recipes in Justfile**: `just frontend-install`, `just frontend-build`, `just frontend-test`, `just frontend-lint`, `just generate-client`, `just frontend-check`
+
+**Important**: The frontend is a separate Node.js project and is **isolated from the Python package**. The Python `pyproject.toml` gains **zero** new dependencies; frontend tooling and dependencies are managed independently via `frontend/package.json` and `frontend/package-lock.json`. The generated `just check` command (which validates the Python side) does NOT include frontend tests — Node.js tools are not required by the Python scaffolder.
+
+**Superset relationship**: `--fullstack` is a superset of `--backend`. When `--fullstack` is set, the backend is always injected. If both `--backend` and `--fullstack` are passed, `--fullstack` takes precedence and both are injected as if only `--fullstack` were set.
+
+**Example: Scaffold with fullstack**
+
+```bash
+modernpackage my-app --fullstack
+```
+
+The generated package directory structure includes:
+
+```
+my_app/
+├── my_app/                      # Python package (FastAPI backend)
+│   ├── __init__.py
+│   ├── app.py                   # FastAPI app factory with lifespan
+│   ├── db.py                    # Async engine and session management
+│   └── health.py                # Health probe routes (/livez, /readyz)
+├── tests/
+│   └── test_app.py              # Backend tests (≥95% coverage)
+├── migrations/
+│   ├── env.py                   # Alembic async environment
+│   ├── script.py.mako           # Migration template
+│   └── versions/                # Auto-generated migrations
+├── frontend/                    # Isolated React frontend (Node.js project)
+│   ├── src/
+│   │   ├── main.tsx             # Entry point
+│   │   ├── App.tsx              # Root component
+│   │   ├── App.test.tsx         # Component test (Vitest + RTL)
+│   │   ├── setupTests.ts        # Test configuration
+│   │   ├── vite-env.d.ts        # Vite type definitions
+│   │   └── client/              # Generated OpenAPI client
+│   │       ├── index.ts         # Client re-exports
+│   │       ├── types.gen.ts     # TypeScript types from schema
+│   │       ├── sdk.gen.ts       # SDK functions
+│   │       └── client.gen.ts    # Fetch client
+│   ├── index.html               # HTML entry point
+│   ├── package.json             # Node.js dependencies
+│   ├── vite.config.ts           # Vite configuration (React plugin, proxy)
+│   ├── vitest.config.ts         # Vitest configuration
+│   ├── tsconfig.json            # TypeScript root config
+│   ├── tsconfig.app.json        # App-side TypeScript settings
+│   ├── tsconfig.node.json       # Build-side TypeScript settings
+│   ├── eslint.config.js         # ESLint configuration
+│   ├── prettier.config.js       # Prettier configuration (optional)
+│   ├── openapi.json             # Backend schema snapshot
+│   ├── openapi-ts.config.ts     # OpenAPI client generator config
+│   ├── .gitignore               # (node_modules/, dist/, coverage/)
+│   └── README.md                # Frontend-specific documentation (optional)
+├── alembic.ini                  # Alembic configuration
+├── Containerfile                # Multi-stage Docker build (backend)
+├── compose.yml                  # Docker Compose stack (app + Postgres + migrations)
+├── .dockerignore                # Container build exclusions
+├── Justfile                     # Includes backend + frontend recipes
+├── pyproject.toml               # Backend deps only (no frontend deps)
+├── README.md                    # Project documentation
+└── .gitignore
+```
+
+**Development workflow with fullstack:**
+
+```bash
+cd my_app
+
+# Backend development
+just check                        # Run all Python tests and linters (backend only)
+just migrate                      # Run pending Alembic migrations
+docker compose up                 # Start backend + Postgres + migration service
+
+# Frontend development (in a separate terminal)
+just frontend-install             # npm ci in frontend/
+just frontend-check               # Format check + lint + typecheck + tests
+cd frontend && npm run dev        # Start Vite dev server (auto-proxies /api to backend)
+
+# Update API client from live backend
+just generate-client              # Regenerate frontend/src/client/ from backend schema
+
+# Build for production
+just frontend-build               # Build optimized frontend bundle
 ```
 
 ### Package initialization

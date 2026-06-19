@@ -1,0 +1,164 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 59610
+    cost_usd: 0.6077920000000001
+    input_tokens: 3142
+    output_tokens: 3268
+    cache_read_tokens: 185684
+    cache_creation_tokens: 41338
+    model: Haiku 4.5, opus 4.8
+    context_used: 44480
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 241391
+    cost_usd: 1.40872435
+    input_tokens: 6406
+    output_tokens: 11202
+    cache_read_tokens: 693894
+    cache_creation_tokens: 55190
+    model: Haiku 4.5, opus 4.8, sonnet 4.6
+    context_used: 61596
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 113101
+    cost_usd: 0.5235755
+    input_tokens: 3011
+    output_tokens: 7927
+    cache_read_tokens: 134677
+    cache_creation_tokens: 23987
+    model: Haiku 4.5, opus 4.8
+    context_used: 26998
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 108112
+    cost_usd: 0.6063010000000001
+    input_tokens: 3140
+    output_tokens: 8360
+    cache_read_tokens: 144528
+    cache_creation_tokens: 30607
+    model: Haiku 4.5, opus 4.8
+    context_used: 33747
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 223775
+    cost_usd: 1.329021
+    input_tokens: 3281
+    output_tokens: 19309
+    cache_read_tokens: 473246
+    cache_creation_tokens: 58989
+    model: opus 4.8, Haiku 4.5
+    context_used: 62270
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 736010
+    cost_usd: 0.6603909000000001
+    input_tokens: 303
+    output_tokens: 24223
+    cache_read_tokens: 3416829
+    cache_creation_tokens: 96346
+    model: Haiku 4.5
+    context_used: 96649
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 247012
+    cost_usd: 1.4775047
+    input_tokens: 16
+    output_tokens: 7131
+    cache_read_tokens: 1822299
+    cache_creation_tokens: 124721
+    model: Haiku 4.5, sonnet 4.6
+    context_used: 124737
+    context_max: 200000
+    lines_of_code: 524
+  sub_phases:
+  - num: 1
+    title: "Flag, threading, dry-run, fullstack\u21D2backend"
+    done: true
+    metrics:
+      duration_ms: 472218
+      cost_usd: 1.809995
+      input_tokens: 26
+      output_tokens: 8728
+      cache_read_tokens: 2988040
+      cache_creation_tokens: 117850
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 117876
+      context_max: 200000
+      lines_of_code: 298
+  - num: 2
+    title: Ship + package `frontend_template/`
+    done: true
+    metrics:
+      duration_ms: 646687
+      cost_usd: 1.8198329000000002
+      input_tokens: 99
+      output_tokens: 7505
+      cache_read_tokens: 3425403
+      cache_creation_tokens: 100640
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 100739
+      context_max: 200000
+      lines_of_code: 310
+  - num: 3
+    title: '`_add_frontend` injection + recipes + wiring'
+    done: true
+    metrics:
+      duration_ms: 572808
+      cost_usd: 2.0451938999999997
+      input_tokens: 32
+      output_tokens: 14943
+      cache_read_tokens: 3562473
+      cache_creation_tokens: 112783
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 112815
+      context_max: 200000
+      lines_of_code: 381
+  - num: 4
+    title: Test suite + integration lock
+    done: true
+    metrics:
+      duration_ms: 247012
+      cost_usd: 1.4775047
+      input_tokens: 16
+      output_tokens: 7131
+      cache_read_tokens: 1822299
+      cache_creation_tokens: 124721
+      model: Haiku 4.5, sonnet 4.6
+      context_used: 124737
+      context_max: 200000
+      lines_of_code: 524
+cumulative:
+  total_cost: 6.61330945
+  total_ms: 1729011
+  total_cache_read: 6871157
+  total_cache_write: 431178
+  total_loc: 524
+  total_input_tokens: 19299
+  total_output_tokens: 81420
+  version: 0.0.8
+  completed_at: 2026-06-19 12:02:21.338741

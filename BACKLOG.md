@@ -4,7 +4,7 @@
   - [x] [T52] Document FastAPI backend best practices researched online (year 2026). Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.
   - [x] [T53] Add --backend (alias --fastapi) option that would include fully functional backend into the resulting application. The backend should use FastAPI, SQLAlchemy, asyncpg, containerization, Alembic, should have Justfile targets for makemigration and migrate. Should have functional health API endpoint that provides database health status. Use best practices documented in docs/
   - [x] [T54] Document ReactJS frontend best practices researched online (year 2026). Use ReactJS, Vite, automatic backend API schema synchronization, unit testing and others.
-  - [ ] Add --fullstack (alias/--reactjs) option that would include both backend and frontedn. Frontend should be fully functional API based Reactjs application. Frontend should have unittests, vite, automatic backend API schema synchronization.
+  - [x] [T55] Add --fullstack (alias/--reactjs) option that would include both backend and frontedn. Frontend should be fully functional API based Reactjs application. Frontend should have unittests, vite, automatic backend API schema synchronization.
   - [ ] Ensure that no backend or frontend related code is added to the scaffold by default.
   - [ ] Run both backend and frontend tests with --fullstack scaffold is created.
 - [ ] Add end to end test that tests --fullstack application scaffolding.

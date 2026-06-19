@@ -1,3 +1,4 @@
+import inspect
 import tomllib
 from argparse import ArgumentTypeError, Namespace
 from pathlib import Path
@@ -12,8 +13,10 @@ from modernpackage.main import (
     _GIT_CONFIG_USER_NAME_KEY,
     _REQUIRED_TOOLS,
     _add_backend,
+    _add_frontend,
     _append_backend_dependencies,
     _append_backend_recipes,
+    _append_frontend_recipes,
     _config_file_default,
     _format_dry_run_plan,
     _format_init_summary,
@@ -554,6 +557,7 @@ def test_main_with_package_name() -> None:
         argparse_mock().parse_args().repository_url = None
         argparse_mock().parse_args().dry_run = False
         argparse_mock().parse_args().backend = False
+        argparse_mock().parse_args().fullstack = False
         init_mock.return_value = 0
         result = main()
     init_mock.assert_called_once_with(
@@ -565,6 +569,7 @@ def test_main_with_package_name() -> None:
         repository_url=None,
         dry_run=False,
         backend=False,
+        fullstack=False,
     )
     assert result == 0
 
@@ -1673,3 +1678,143 @@ def test_add_backend_appends_migration_recipes(tmp_path: Path) -> None:
 
 def test_append_backend_recipes_missing_file(tmp_path: Path) -> None:
     _append_backend_recipes(tmp_path / 'Justfile')  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Phase 4: --fullstack / --reactjs flag + _add_frontend injection
+# ---------------------------------------------------------------------------
+
+
+def test_parse_args_fullstack_flag() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--fullstack']):
+        result = parse_args()
+    assert result.fullstack is True
+
+
+def test_parse_args_reactjs_alias_sets_fullstack() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--reactjs']):
+        result = parse_args()
+    assert result.fullstack is True
+
+
+def test_parse_args_fullstack_defaults_false() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.fullstack is False
+    assert result.backend is False
+
+
+def test_format_dry_run_plan_announces_frontend_and_backend() -> None:
+    plan = _format_dry_run_plan(
+        'foo',
+        Path('/tmp/foo'),
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+        fullstack=True,
+    )
+    assert 'add FastAPI backend' in plan
+    assert 'add React frontend' in plan
+
+
+def test_format_dry_run_plan_omits_frontend_by_default() -> None:
+    plan = _format_dry_run_plan(
+        'foo',
+        Path('/tmp/foo'),
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
+    assert 'add React frontend' not in plan
+
+
+def test_add_frontend_copies_template_and_appends_recipes(tmp_path: Path) -> None:
+    clone = _seed_clone(tmp_path)
+    (clone / 'Justfile').write_text('sync:\n  @uv sync\n')
+    original_pyproject = (clone / 'pyproject.toml').read_text()
+    _add_frontend(clone)
+    assert (clone / 'frontend' / 'package.json').exists()
+    assert (clone / 'frontend' / 'vite.config.ts').exists()
+    assert (clone / 'frontend' / 'src' / 'App.test.tsx').exists()
+    assert (clone / 'frontend' / 'src' / 'client').is_dir()
+    justfile = (clone / 'Justfile').read_text()
+    assert 'generate-client' in justfile
+    assert 'frontend-check' in justfile
+    # No Python deps added (design Decision 3).
+    assert (clone / 'pyproject.toml').read_text() == original_pyproject
+
+
+def test_add_frontend_no_npm_or_subprocess() -> None:
+    source = inspect.getsource(_add_frontend)
+    assert 'npm' not in source
+    assert 'Popen' not in source
+
+
+def test_frontend_token_rename_leaves_no_leftover(tmp_path: Path) -> None:
+    clone = _seed_clone(tmp_path)
+    (clone / 'Justfile').write_text('sync:\n  @uv sync\n')
+    _add_frontend(clone)
+    package_json = clone / 'frontend' / 'package.json'
+    package_json.write_text(package_json.read_text().replace('modernpackage', 'newpkg'))
+    # The generated client must contain no token to rename.
+    for ts in (clone / 'frontend' / 'src' / 'client').rglob('*.ts'):
+        assert 'modernpackage' not in ts.read_text()
+    assert 'modernpackage' not in package_json.read_text()
+
+
+def test_append_frontend_recipes_missing_file(tmp_path: Path) -> None:
+    _append_frontend_recipes(tmp_path / 'Justfile')  # must not raise
+
+
+def test_init_new_package_invokes_add_frontend_when_fullstack() -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
+        patch('modernpackage.main._add_backend') as add_backend_mock,
+        patch('modernpackage.main._add_frontend') as add_frontend_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage', fullstack=True)
+    add_backend_mock.assert_called_once_with(Path.cwd() / 'mypackage')
+    add_frontend_mock.assert_called_once_with(Path.cwd() / 'mypackage')
+
+
+def test_init_new_package_fullstack_stages_then_inits() -> None:
+    expected_popen_calls = 4  # clone, git add, just init, just check
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
+        patch('modernpackage.main._add_backend'),
+        patch('modernpackage.main._add_frontend'),
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage', fullstack=True)
+    assert popen_mock.call_count == expected_popen_calls
+    second = popen_mock.call_args_list[1]
+    assert second.args[0] == ['git', 'add', '-A']
+    assert second.kwargs['cwd'] == Path.cwd() / 'mypackage'
+
+
+def test_init_new_package_backend_only_does_not_add_frontend() -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
+        patch('modernpackage.main._add_backend'),
+        patch('modernpackage.main._add_frontend') as add_frontend_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage', backend=True)
+    add_frontend_mock.assert_not_called()

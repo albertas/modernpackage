@@ -368,6 +368,13 @@ def parse_args() -> Namespace:
         default=False,
     )
     parser.add_argument(
+        '--fullstack',
+        '--reactjs',
+        help='Include a FastAPI backend AND a React frontend (Vite, Vitest, generated API client).',  # noqa: E501
+        action='store_true',
+        default=False,
+    )
+    parser.add_argument(
         'package_name',
         help='Name of a new package to initialise in a local directory.',
         nargs='?',
@@ -515,6 +522,7 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'docs',
     'BACKLOG.md',
     'backend_template',  # Always removed; re-injected if --backend is set
+    'frontend_template',  # Always removed; re-injected if --fullstack is set
 )
 
 # Stub tests/test_main.py: pytest needs >=1 collected test (empty collection
@@ -545,6 +553,13 @@ _BACKEND_TEMPLATE_DIR: Path = (
     Path(__file__).resolve().parent.parent / 'backend_template'
 )
 
+# Top-level template tree copied into a generated package's `frontend/` by
+# `_add_frontend`. Resolved relative to this file so it works from a source
+# checkout and from an installed wheel (shipped via [tool.hatch.build] include).
+_FRONTEND_TEMPLATE_DIR: Path = (
+    Path(__file__).resolve().parent.parent / 'frontend_template'
+)
+
 # Runtime dependencies appended to the generated package's [project.dependencies]
 # (PEP 621 — these are service runtime deps, not dev tooling). Lower bounds only.
 _BACKEND_DEPENDENCIES: tuple[str, ...] = (
@@ -570,6 +585,32 @@ makemigration message: sync
 
 migration-check: sync
   uv run alembic check
+"""
+
+# Frontend recipes appended to the generated package's Justfile (NOT added to the
+# `check` chain — they need Node, which the generated package's CI does not have;
+# mirrors the backend-recipes precedent above). `frontend-check` aggregates the
+# Node-side gates for local use. `cd frontend &&` scopes them to the injected
+# subdirectory; no `: sync` dep (that is a Python/uv concern).
+_FRONTEND_RECIPES: str = """
+frontend-install:
+  cd frontend && npm ci
+
+frontend-build:
+  cd frontend && npm run build
+
+frontend-test:
+  cd frontend && npm run test
+
+frontend-lint:
+  cd frontend && npm run lint
+
+generate-client:
+  cd frontend && npm run generate-client
+
+frontend-check: frontend-install
+  cd frontend && npm run format:check && npm run lint \
+    && npm run typecheck && npm run test
 """
 
 
@@ -651,6 +692,7 @@ def _format_dry_run_plan(  # noqa: PLR0913
     package_license: str | None,
     repository_url: str | None,
     backend: bool = False,
+    fullstack: bool = False,
 ) -> str:
     """Return the multi-line dry-run preview (design Decision 3).
 
@@ -678,8 +720,12 @@ def _format_dry_run_plan(  # noqa: PLR0913
             lines.append(f'    {label}: {value}')
     lines.append(f'  run just init: rename modernpackage/ -> {module_name}/')
     lines.append(f'  run just init: reset version to {_RESET_VERSION}')
-    if backend:
+    if backend or fullstack:
         lines.append('  add FastAPI backend (app, migrations, container, recipes)')
+    if fullstack:
+        lines.append(
+            '  add React frontend (Vite, Vitest, generated API client, recipes)'
+        )
     return '\n'.join(lines)
 
 
@@ -693,6 +739,7 @@ def _print_dry_run_plan(  # noqa: PLR0913
     package_license: str | None,
     repository_url: str | None,
     backend: bool = False,
+    fullstack: bool = False,
 ) -> None:
     """Print the formatted dry-run plan to stdout (output convention, main.py:592)."""
     print(  # noqa: T201
@@ -705,6 +752,7 @@ def _print_dry_run_plan(  # noqa: PLR0913
             package_license=package_license,
             repository_url=repository_url,
             backend=backend,
+            fullstack=fullstack,
         )
     )
 
@@ -895,6 +943,52 @@ def _stage_injected_files(package_path: Path) -> None:
         raise RuntimeError(message)
 
 
+def _append_frontend_recipes(justfile_path: Path) -> None:
+    """Append the frontend recipes to the generated package's Justfile.
+
+    No-op with a notice if the Justfile is absent (graceful boundary).
+    """
+    try:
+        content = justfile_path.read_text()
+    except FileNotFoundError:
+        print(  # noqa: T201
+            f'No Justfile at {justfile_path}; skipping frontend recipes.',
+            file=sys.stderr,
+        )
+        return
+    justfile_path.write_text(content + _FRONTEND_RECIPES)
+
+
+def _add_frontend(package_path: Path) -> None:
+    """Copy the React frontend template into a generated package's `frontend/`.
+
+    Copies `_FRONTEND_TEMPLATE_DIR` into `package_path / 'frontend'` (isolating
+    the Node project from the Python package root, design Decision 3), then
+    appends the frontend recipes to the Justfile. Adds NO Python deps and spawns NO
+    child processes at scaffold time (Node tooling is invoked later by the user via
+    `just frontend-install`). Copied files carry the literal `modernpackage` token
+    (package.json name) so `just init`'s rename sed rewrites them; callers stage
+    the copied files (`git add -A`) before `just init`.
+    """
+    shutil.copytree(
+        _FRONTEND_TEMPLATE_DIR, package_path / 'frontend', dirs_exist_ok=True
+    )
+    _append_frontend_recipes(package_path / 'Justfile')
+
+
+def _inject_templates(package_path: Path, *, fullstack: bool) -> None:
+    """Copy backend and optionally frontend templates into the clone, then stage.
+
+    Always injects the backend (callers guard with `if backend or fullstack`).
+    Additionally injects the frontend when `fullstack=True`. Stages all injected
+    files with `git add -A` so `just init`'s rename sed sees them.
+    """
+    _add_backend(package_path)
+    if fullstack:
+        _add_frontend(package_path)
+    _stage_injected_files(package_path)
+
+
 def _add_backend(package_path: Path) -> None:
     """Copy the FastAPI backend template into a generated package and wire its deps.
 
@@ -920,6 +1014,7 @@ def init_new_package(  # noqa: PLR0913
     repository_url: str | None = None,
     dry_run: bool = False,
     backend: bool = False,
+    fullstack: bool = False,
 ) -> int:
     """Clone modernpackage files into `package_name` and run `just init` in it."""
     module_name = normalize_module_name(package_name)
@@ -937,6 +1032,7 @@ def init_new_package(  # noqa: PLR0913
             package_license=package_license,
             repository_url=repository_url,
             backend=backend,
+            fullstack=fullstack,
         )
         return 0
 
@@ -966,9 +1062,8 @@ def init_new_package(  # noqa: PLR0913
 
     _strip_scaffolding(new_package_path)
 
-    if backend:
-        _add_backend(new_package_path)
-        _stage_injected_files(new_package_path)
+    if backend or fullstack:
+        _inject_templates(new_package_path, fullstack=fullstack)
 
     try:
         pipe = Popen(  # noqa: S603
@@ -1031,6 +1126,7 @@ def main() -> int:
                 repository_url=parsed_args.repository_url,
                 dry_run=parsed_args.dry_run,
                 backend=parsed_args.backend,
+                fullstack=parsed_args.fullstack,
             )
         except RuntimeError as error:
             print(error, file=sys.stderr)  # noqa: T201

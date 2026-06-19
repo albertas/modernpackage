@@ -1,0 +1,20 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "modernpackage", "version": "0.1.0" },
+  "paths": {
+    "/livez": {
+      "get": {
+        "summary": "Livez",
+        "operationId": "livez_livez_get",
+        "responses": { "200": { "description": "Successful Response", "content": { "application/json": { "schema": {} } } } }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Readyz",
+        "operationId": "readyz_readyz_get",
+        "responses": { "200": { "description": "Successful Response", "content": { "application/json": { "schema": {} } } } }
+      }
+    }
+  }
+}

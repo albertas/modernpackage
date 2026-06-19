@@ -221,7 +221,22 @@ The CLI accepts optional feature flags for scaffolding:
   
   Without this flag, the generated package output is byte-for-byte identical to today (no backend injected, no extra dependencies).
 
-- **`--dry-run`**: Store-true flag (default `False`) that previews what scaffolding would do without making changes. Runs preflight checks, prints a high-level plan to stdout, and exits with code 0. If the backend flag is also set, the dry-run plan indicates that the FastAPI backend would be injected.
+- **`--fullstack` / `--reactjs`**: Store-true flag (default `False`) that scaffolds a complete frontend + backend application. When set, injects both the FastAPI backend (as above) and a React frontend with:
+  - Vite 8 build system for development (dev server, HMR) and optimized production builds
+  - React 19 with TypeScript strict mode for type-safe component development
+  - Vitest 4.1 unit testing framework with jsdom environment
+  - React Testing Library 16.3 for component testing best practices
+  - OpenAPI client generation via `@hey-api/openapi-ts` with client-fetch plugin
+  - ESLint 10 + typescript-eslint 8 for code quality
+  - Prettier 3.8 for consistent code formatting
+  - Pre-generated `src/client/` OpenAPI client synced to the backend schema
+  - Isolated in a `frontend/` subdirectory to keep the Python package root clean
+  - Node recipes in the generated Justfile: `frontend-install`, `frontend-build`, `frontend-test`, `frontend-lint`, `generate-client`, `frontend-check`
+  - Python `pyproject.toml` gains zero new dependencies (frontend is fully isolated)
+  
+  `--fullstack` is a superset of `--backend`: the backend is always injected when `--fullstack` is set. If both `--backend` and `--fullstack` are passed, `--fullstack` takes precedence.
+
+- **`--dry-run`**: Store-true flag (default `False`) that previews what scaffolding would do without making changes. Runs preflight checks, prints a high-level plan to stdout, and exits with code 0. If the backend flag is set, the dry-run plan indicates that the FastAPI backend would be injected. If the fullstack flag is set, the dry-run plan indicates that both the backend and React frontend would be injected.
 
 ### Optional Metadata Flags
 
@@ -293,6 +308,19 @@ When scaffolded with `--backend`, the generated package additionally includes:
 - **Containerization**: `Containerfile` (multi-stage, BuildKit), `compose.yml` (app + Postgres + migration service), `.dockerignore`
 - **Dependencies**: `fastapi`, `sqlalchemy[asyncio]`, `asyncpg`, `alembic`, `uvicorn` in `[project.dependencies]`; `httpx` in dev group
 - **Justfile recipes**: `just migrate`, `just makemigration "message"`, `just migration-check` (standalone recipes, not part of `just check` chain)
+
+### Fullstack Package (with `--fullstack`)
+
+When scaffolded with `--fullstack`, the generated package includes both the backend (as above) **and** a frontend directory:
+- **Frontend subdirectory**: `frontend/` at the package root contains an isolated Node.js project
+- **Frontend source**: `frontend/src/` with React component tree starting from `App.tsx` and `main.tsx`, TypeScript strict mode configuration, app entry point in `index.html`
+- **Frontend build system**: Vite 8 configuration (`vite.config.ts`) with React plugin, dev server with proxy to `/api` (backend), production build optimization
+- **Frontend testing**: Vitest 4.1 unit test runner with jsdom environment, React Testing Library 16.3 for component testing, test configuration in `setupTests.ts`
+- **Frontend quality**: ESLint 10 + typescript-eslint 8 for linting, Prettier 3.8 for formatting, TypeScript strict mode for type safety
+- **API client**: Pre-generated `frontend/src/client/` containing OpenAPI client stubs (TypeScript), generated from the backend's OpenAPI schema via `@hey-api/openapi-ts`
+- **Frontend dependencies**: React 19, @hey-api/client-fetch for API calls, React Query for data fetching (as devDependency)
+- **Justfile recipes**: `just frontend-install`, `just frontend-build`, `just frontend-test`, `just frontend-lint`, `just generate-client`, `just frontend-check` (Node recipes, not part of Python `just check` chain)
+- **No Python dependencies added**: The Python `pyproject.toml` remains unchanged; frontend is fully isolated in its own Node.js project
 
 To continue development:
 

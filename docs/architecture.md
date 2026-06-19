@@ -265,10 +265,11 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'docs',
     'BACKLOG.md',
     'backend_template',  # Always removed; re-injected if --backend is set
+    'frontend_template',  # Always removed; re-injected if --fullstack is set
 )
 ```
 
-Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The `backend_template` entry is always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects template files into the clone root after stripping.
+Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The `backend_template` and `frontend_template` entries are always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects backend template files into the clone root after stripping. When `--fullstack` is set, both `_add_backend()` and `_add_frontend()` re-inject their respective templates after stripping.
 
 **`_BACKEND_TEMPLATE_DIR: Path`**
 
@@ -320,6 +321,42 @@ migration-check: sync
 ```
 
 Appended by `_append_backend_recipes()` after the existing Justfile. Recipes are standalone (not part of `just check` chain) and require a live database.
+
+**`_FRONTEND_TEMPLATE_DIR: Path`**
+
+Top-level directory containing the React frontend template files, resolved relative to the installed modernpackage package:
+```python
+_FRONTEND_TEMPLATE_DIR: Path = Path(__file__).resolve().parent.parent / 'frontend_template'
+```
+
+Used by `_add_frontend()` to locate the committed frontend template (Vite config, React components, Vitest config, ESLint config, TypeScript configs, package.json, pre-generated OpenAPI client). The path is resolved from the installed package so it works both in source checkouts and in published wheels. Only injected when `--fullstack` is set.
+
+**`_FRONTEND_RECIPES: str`**
+
+Frontend build and test recipes appended to the generated package's Justfile:
+```python
+_FRONTEND_RECIPES: str = """
+frontend-install:
+  cd frontend && npm ci
+
+frontend-build:
+  cd frontend && npm run build
+
+frontend-test:
+  cd frontend && npm run test
+
+frontend-lint:
+  cd frontend && npm run lint
+
+generate-client:
+  cd frontend && npm run generate-client
+
+frontend-check: frontend-install
+  cd frontend && npm run format:check && npm run lint && npm run typecheck && npm run test
+"""
+```
+
+Appended by `_append_frontend_recipes()` after the existing Justfile. Recipes are standalone (not part of Python `just check` chain) and require Node.js + npm. The recipes are scoped to the `frontend/` subdirectory via `cd frontend && ...` and have no `sync` dependency (that is a Python/uv concept). The `frontend-check` recipe aggregates the frontend quality gates for local use.
 
 **`_TEST_MAIN_STUB: str`**
 
@@ -1077,11 +1114,60 @@ A private helper that appends migration recipes to a generated package's `Justfi
   - Appends (does not overwrite) to preserve existing recipes like `init`, `check`, `test`, etc.
   - Recipes use two-space indentation to match the template Justfile; `migrate: sync` pattern (dependency on `sync`) ensures the venv is up-to-date before running migrations
 
+#### `_add_frontend(package_path: Path) -> None`
+
+A private helper that injects the React frontend template into a cloned package, called only when `fullstack=True` in `init_new_package()`.
+
+- **Purpose**: Called from `init_new_package()` after `_add_backend()` and before `_stage_injected_files()`, to inject the frontend template tree into a `frontend/` subdirectory. Runs before `just init` so the injected files are seen by the rename sed and included in the initial git commit. Adds NO Python dependencies (frontend is fully isolated).
+- **Parameters**:
+  - `package_path: Path` — the root directory of the cloned package
+- **Returns**: `None` (mutates the filesystem and Justfile in place)
+- **Behavior**:
+  1. Calls `shutil.copytree(_FRONTEND_TEMPLATE_DIR, package_path / 'frontend', dirs_exist_ok=True)` to copy the frontend template tree into the clone's `frontend/` subdirectory
+  2. Calls `_append_frontend_recipes(package_path / 'Justfile')` to append Node recipes
+- **Design rationale**:
+  - Template is shipped as committed package data (via `[tool.hatch.build] include = ["frontend_template/**"]`), not inline as string constants (keeps `main.py` lean)
+  - Frontend is isolated in a subdirectory to avoid polluting the Python package root (avoids import discovery, ruff/mypy/pytest collection, coverage gates)
+  - Runs after `_add_backend` so the backend is always present when frontend is injected (frontend API client requires backend schema)
+  - Tolerates absent `Justfile` (graceful boundary)
+  - No subprocess calls and no npm invocation at scaffold time (frontend deps are installed separately via `just frontend-install`)
+
+Examples:
+```python
+_add_frontend(Path('/tmp/my_app'))
+# Injects: frontend/src/main.tsx, frontend/src/App.tsx, frontend/src/App.test.tsx
+#          frontend/package.json, frontend/vite.config.ts, frontend/vitest.config.ts
+#          frontend/tsconfig.json, frontend/eslint.config.js, frontend/openapi-ts.config.ts
+#          frontend/src/client/ (pre-generated OpenAPI client)
+# Modifies: Justfile (adds frontend recipes)
+# Does NOT modify: pyproject.toml (no Python deps added)
+```
+
+#### `_append_frontend_recipes(justfile_path: Path) -> None`
+
+A private helper that appends frontend build and test recipes to a generated package's `Justfile`.
+
+- **Purpose**: Called by `_add_frontend()` to append Node.js recipes: `frontend-install`, `frontend-build`, `frontend-test`, `frontend-lint`, `generate-client`, and an aggregate `frontend-check` recipe (standalone, not part of Python `just check` chain).
+- **Parameters**:
+  - `justfile_path: Path` — the path to the cloned package's `Justfile`
+- **Returns**: `None` (mutates the file in place via string concatenation)
+- **Behavior**:
+  1. Reads the file contents
+  2. Appends `_FRONTEND_RECIPES` constant (multiline string) to the end
+  3. Writes the modified content back to the file
+- **Graceful boundary**: If the file is missing, prints a notice to stderr and returns without raising
+- **Design rationale**:
+  - Appends (does not overwrite) to preserve existing recipes like `init`, `check`, `test`, etc.
+  - Recipes use two-space indentation to match the template Justfile
+  - All recipes are scoped to the `frontend/` subdirectory via `cd frontend && ...` (no `: sync` dependency; that is a Python concept)
+  - NOT chained into the root `check` recipe (keeps Python `just check` Node-free, matching backend-recipes precedent)
+  - `frontend-check` aggregates frontend quality gates for convenience: `npm run format:check && npm run lint && npm run typecheck && npm run test`
+
 #### `_stage_injected_files(package_path: Path) -> None`
 
-A private helper that stages injected backend files so `just init`'s `git grep` sees them, called only when `backend=True` in `init_new_package()`.
+A private helper that stages injected backend and frontend files so `just init`'s `git grep` sees them, called only when `backend=True` or `fullstack=True` in `init_new_package()`.
 
-- **Purpose**: Called from `init_new_package()` immediately after `_add_backend()` and before `just init`, to stage the injected backend files with `git add -A` so they are tracked and renamed by `just init`'s rename sed.
+- **Purpose**: Called from `init_new_package()` immediately after `_add_backend()` (and optionally `_add_frontend()`) and before `just init`, to stage the injected files with `git add -A` so they are tracked and renamed by `just init`'s rename sed.
 - **Parameters**:
   - `package_path: Path` — the root directory of the cloned package (the git working tree)
 - **Returns**: `None` (runs `git add -A` subprocess and raises on failure)
@@ -1123,6 +1209,7 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
   - `-v` / `--version`: optional flag (default `False`) — prints the package version and exits
   - `--dry-run`: optional flag (default `False`) — previews what scaffolding would do without making changes; runs preflight, then prints a plan and exits
   - `--backend` / `--fastapi`: optional store-true flag (default `False`) — scaffolds a FastAPI backend service with async SQLAlchemy, migrations, and containerization
+  - `--fullstack` / `--reactjs`: optional store-true flag (default `False`) — scaffolds both FastAPI backend (as above) and React frontend (Vite, Vitest, generated OpenAPI client) in isolated `frontend/` subdirectory
   - `package_name`: optional positional argument (validated via `validate_package_name`)
   - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_NAME_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_NAME_KEY)`, then `_config_file_default(config, 'author_name')`.
   - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_EMAIL_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)`, then `_config_file_default(config, 'author_email')`, then validates via `_validated_or_error()`.
@@ -1143,6 +1230,7 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
   - `version` (bool) — whether `--version` was provided
   - `dry_run` (bool) — whether `--dry-run` was provided
   - `backend` (bool) — whether `--backend` or `--fastapi` was provided (scaffolds FastAPI backend)
+  - `fullstack` (bool) — whether `--fullstack` or `--reactjs` was provided (scaffolds FastAPI backend + React frontend)
   - `package_name` (str | None) — the package name (from flag or `None`)
   - `author_name` (str | None) — author name (from flag, env var, git config, config file, or `None`)
   - `author_email` (str | None) — author email (from flag, env var, git config, config file, or `None`, validated)
@@ -1160,9 +1248,9 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 
 **Complexity**: The function has a McCabe cyclomatic complexity of ≤ 10 (enforced by `pyproject.toml:tool.ruff.lint.mccabe.max-complexity`), with the validation logic extracted into the `_validated_or_error()` helper and the config file helpers extracted into `_load_config_file()` and `_config_file_default()` to keep the post-parse block clear and maintainable.
 
-#### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None, dry_run: bool = False, backend: bool = False) -> int`
+#### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None, dry_run: bool = False, backend: bool = False, fullstack: bool = False) -> int`
 
-Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name. When `dry_run=True`, performs preflight checks and prints a preview plan, then exits without cloning or making any changes. When `backend=True`, injects a FastAPI backend template with async SQLAlchemy, health probes, and containerization.
+Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name. When `dry_run=True`, performs preflight checks and prints a preview plan, then exits without cloning or making any changes. When `backend=True`, injects a FastAPI backend template with async SQLAlchemy, health probes, and containerization. When `fullstack=True`, injects both the FastAPI backend and a React frontend (Vite, Vitest, OpenAPI client) in an isolated `frontend/` subdirectory.
 
 1. **Positional Parameter**: `package_name: str` — name of the new package to create (validated distribution name, may contain `.` or `-`)
 2. **Keyword Parameters** (optional, all default to `None` or `False`):
@@ -1173,6 +1261,7 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
    - `repository_url: str | None = None` — repository URL to include in metadata (validated via `validate_repository_url`, not yet written to files)
    - `dry_run: bool = False` — if `True`, preview what scaffolding would do without making changes (no clone, no directory creation)
    - `backend: bool = False` — if `True`, injects a FastAPI backend template with app factory, async DB layer, health probes, Alembic migrations, and containerization (Containerfile, Docker Compose)
+   - `fullstack: bool = False` — if `True`, injects both the FastAPI backend (as above) and a React frontend (Vite, Vitest, OpenAPI client) in isolated `frontend/` subdirectory; `backend` is a subset of `fullstack` so when both are provided, `fullstack` takes precedence
 3. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails, or 0 if dry-run succeeds)
 
 **Metadata writing**: The metadata parameters are automatically written to the generated package's `pyproject.toml` file via `_write_package_metadata()`, called after the successful clone and before `just init`. This ensures the metadata is included in the package's initial git commit.
@@ -1197,7 +1286,9 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
        - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
    - **Step 1.5: Write metadata** — **If clone succeeds (`returncode == 0`)**: calls `_write_package_metadata()` to write user-supplied metadata into the package's `pyproject.toml`. All non-`None` values are applied as targeted TOML-escaped substitutions of known template placeholders; `None` values are skipped. If the `pyproject.toml` file is missing, a notice is printed to stderr and the step continues without raising.
    - **Step 1.75: Strip scaffolding** — **After metadata writing**: calls `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. This deletes the scaffolder CLI (`main.py`), its tests (`test_e2e.py`), documentation (`docs/`), and project-metadata files (`BACKLOG.md`); replaces the test suite with a minimal stub; replaces the README with a generic template; and removes console-script entry points. Also ensures the cloned `backend_template/` directory is removed (present in the clone by default but always stripped, so the no-flag output remains byte-for-byte identical). Runs **before** `just init` so the single git commit captures a clean tree. Missing paths are tolerated (graceful degradation for variant template shapes).
-   - **Step 1.85: Inject backend (if requested)** — **If `backend=True`**: after stripping, calls `_add_backend()` to inject the FastAPI backend template. This copies the committed `backend_template/` directory (from the installed package or source checkout) into the clone root, merges FastAPI, SQLAlchemy, asyncpg, alembic, and uvicorn runtime dependencies into `[project.dependencies]`, appends the test-only `httpx` dependency to the dev group, and appends migration recipes (`just migrate`, `just makemigration`, `just migration-check`) to the clone's `Justfile`. After injection, calls `_stage_injected_files()` to run `git add -A` so the injected files (which carry the literal `modernpackage` token) are staged and seen by `just init`'s rename sed. If `backend=False`, this step is skipped and the output is byte-for-byte identical to today.
+   - **Step 1.85: Inject backend and/or frontend (if requested)** — **If `backend=True` or `fullstack=True`**: after stripping, calls `_add_backend()` to inject the FastAPI backend template. This copies the committed `backend_template/` directory (from the installed package or source checkout) into the clone root, merges FastAPI, SQLAlchemy, asyncpg, alembic, and uvicorn runtime dependencies into `[project.dependencies]`, appends the test-only `httpx` dependency to the dev group, and appends migration recipes (`just migrate`, `just makemigration`, `just migration-check`) to the clone's `Justfile`.
+     — **Additionally, if `fullstack=True`** (and the backend was just injected): calls `_add_frontend()` to inject the React frontend template. This copies the committed `frontend_template/` directory (from the installed package or source checkout) into `frontend/` subdirectory, appending frontend recipes (`just frontend-install`, `just frontend-build`, `just frontend-test`, `just frontend-lint`, `just generate-client`, `just frontend-check`) to the clone's `Justfile`. Frontend is isolated in a subdirectory and adds NO Python dependencies.
+     — After all injections complete, calls `_stage_injected_files()` to run `git add -A` so the injected files (which carry the literal `modernpackage` token) are staged and seen by `just init`'s rename sed. If both `backend=False` and `fullstack=False`, this step is skipped and the output is byte-for-byte identical to today.
    - **Step 2: Initialize** — **After backend injection (if any)**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
      - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
        - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
@@ -1332,7 +1423,11 @@ This ensures all code paths are covered by type hints and comply with strict typ
 ### Build Configuration
 
 - **Build backend**: `hatchling` (modern, minimal Python build system)
-- **Package files**: includes `**/*.py`, excludes `tests/**`
+- **Package files**: includes `**/*.py`, `backend_template/**`, `frontend_template/**`, excludes `tests/**`, `frontend_template/node_modules/**`, `frontend_template/dist/**`
+  - `backend_template/` is shipped as package data and copied into generated packages when `--backend` is set
+  - `frontend_template/` is shipped as package data and copied into generated packages when `--fullstack` is set
+  - Excluding `frontend_template/node_modules/` and `frontend_template/dist/` keeps the wheel size small (no npm lock file artifacts or build outputs in the distribution)
+  - The scaffolder's `pyproject.toml` excludes `frontend_template/**` from ruff linting (no `.py` files, but explicit ignore for INP001 defensiveness)
 - **Version source**: dynamic, read from `modernpackage/__init__.py` at build time (no hard-coded version in `pyproject.toml`)
 - **Python requirement**: `>= 3.14`
 - **Runtime dependencies**: none (empty list)
@@ -1363,6 +1458,7 @@ Single unified configuration file for all tools:
   - Fails if coverage is below 95%
   - Default run excludes `e2e` marked tests (mocked unit tests only)
   - `markers` lists registered markers: `e2e` (tests that perform real external calls)
+  - `norecursedirs = ["backend_template", "frontend_template"]` — excludes the template directories from pytest's test collection and discovery
 - **`[tool.ruff]`**: linter & formatter config
   - Line length: 88 characters
   - Quote style: single quotes
