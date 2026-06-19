@@ -1,7 +1,7 @@
 # ToDo
 - [ ] Add optional scaffolding capabilities for frontend and backend.
   - [x] [T51] Document containerization usage best practices researched online (year 2026) (using podman, but configuration comatible with docker)
-  - [ ] Document FastAPI backend best practices researched online (year 2026). Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.
+  - [x] [T52] Document FastAPI backend best practices researched online (year 2026). Use FastAPI, SQLAlchemy, asyncpg, Alembic, uv, containerization, dependency injection for tests.
   - [ ] Add --backend (alias --fastapi) option that would include fully functional backend into the resulting application. The backend should use FastAPI, SQLAlchemy, asyncpg, containerization, Alembic, should have Justfile targets for makemigration and migrate. Should have functional health API endpoint that provides database health status. Use best practices documented in docs/
   - [ ] Document ReactJS frontend best practices researched online (year 2026). Use ReactJS, Vite, automatic backend API schema synchronization, unit testing and others.
   - [ ] Add --fullstack (alias/--reactjs) option that would include both backend and frontedn. Frontend should be fully functional API based Reactjs application. Frontend should have unittests, vite, automatic backend API schema synchronization.
