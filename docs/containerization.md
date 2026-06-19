@@ -2,11 +2,12 @@
 
 [overview.md](overview.md)
 
-`modernpackage` ships no container artifacts today (no `Containerfile`, `compose.yml`, or
-`.dockerignore` exist in-repo). This document is a forward-looking reference for containerizing a
-modern `uv`-managed Python project — Podman-primary and Docker-compatible — to prepare for the
-scaffolder's future service backend. All examples are illustrative templates, not committed
-build files.
+When scaffolded with the `--backend` flag, `modernpackage` generates a complete containerization 
+setup for the FastAPI service. This document describes the generated `Containerfile`, `compose.yml`, 
+and `.dockerignore` — all committed artifacts in the backend template. The containerization approach 
+is Podman-primary (rootless safe) and Docker-compatible, with multi-stage builds, BuildKit layer 
+caching, health checks targeting the readiness probe, and Docker Compose integration with async 
+Alembic migrations.
 
 ## Image Authoring
 

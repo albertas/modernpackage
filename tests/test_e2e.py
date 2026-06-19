@@ -111,6 +111,66 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
     assert not (destination / 'BACKLOG.md').exists()
     assert '[project.scripts]' not in pyproject  # no dangling entry point
     assert 'modernpackage.main:main' not in pyproject
+    assert not (destination / 'backend_template').exists()  # template never leaks
     # __init__.py version 0.0.1 already asserted at lines 88-90; check stub test.
     stub = (destination / 'tests' / 'test_main.py').read_text()
     assert '0.0.1' in stub
+
+
+@pytest.mark.e2e
+def test_scaffolded_backend_package_passes_check(tmp_path: Path) -> None:
+    for tool in REQUIRED_TOOLS:
+        if shutil.which(tool) is None:
+            pytest.skip(f'required tool not on PATH: {tool}')
+
+    package_name = 'backend-check.pkg'
+    module_name = normalize_module_name(package_name)
+    destination = tmp_path / module_name
+
+    clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
+    assert clone.returncode == 0, f'git clone failed:\n{clone.stderr}'
+
+    main._write_package_metadata(  # noqa: SLF001
+        destination,
+        author_name='Test Author',
+        author_email='test@example.org',
+        description='An e2e backend package.',
+        package_license='Apache-2.0',
+        repository_url='https://example.org/repo',
+    )
+    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._add_backend(destination)  # noqa: SLF001
+    stage = _run(['git', 'add', '-A'], cwd=destination)
+    assert stage.returncode == 0, f'git add failed:\n{stage.stderr}'
+
+    init = _run(
+        ['just', 'init', module_name],
+        cwd=destination,
+        env=os.environ | _GIT_IDENTITY_ENV,
+    )
+    assert init.returncode == 0, f'just init failed:\n{init.stdout}\n{init.stderr}'
+
+    source_dir = destination / module_name
+    assert (source_dir / 'app.py').exists()
+    assert (source_dir / 'health.py').exists()
+    # token fully renamed in injected sources
+    for source in source_dir.glob('*.py'):
+        assert 'modernpackage' not in source.read_text()
+    assert '/readyz' in (source_dir / 'health.py').read_text()
+
+    check = _run(['just', 'check'], cwd=destination)
+    assert check.returncode == 0, f'just check failed:\n{check.stdout}\n{check.stderr}'
+
+    generated_justfile = (destination / 'Justfile').read_text()
+    assert 'migrate: sync' in generated_justfile
+    assert 'makemigration' in generated_justfile
+    assert (destination / 'migrations' / 'env.py').exists()
+    assert (destination / 'alembic.ini').exists()
+
+    assert (destination / 'Containerfile').exists()
+    assert (destination / '.dockerignore').exists()
+    compose = (destination / 'compose.yml').read_text()
+    assert 'service_completed_successfully' in compose
+    assert 'migrate:' in compose
+    containerfile = (destination / 'Containerfile').read_text()
+    assert '/readyz' in containerfile

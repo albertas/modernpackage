@@ -264,10 +264,62 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'tests/test_e2e.py',
     'docs',
     'BACKLOG.md',
+    'backend_template',  # Always removed; re-injected if --backend is set
 )
 ```
 
-Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root.
+Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The `backend_template` entry is always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects template files into the clone root after stripping.
+
+**`_BACKEND_TEMPLATE_DIR: Path`**
+
+Top-level directory containing the backend template files, resolved relative to the installed modernpackage package:
+```python
+_BACKEND_TEMPLATE_DIR: Path = Path(__file__).resolve().parent.parent / 'backend_template'
+```
+
+Used by `_add_backend()` to locate the committed backend template (app.py, db.py, health.py, tests/, migrations/, alembic.ini, Containerfile, compose.yml, .dockerignore). The path is resolved from the installed package so it works both in source checkouts and in published wheels.
+
+**`_BACKEND_DEPENDENCIES: tuple[str, ...]`**
+
+Runtime dependencies for the FastAPI backend service, appended to `[project.dependencies]` when `--backend` is set:
+```python
+_BACKEND_DEPENDENCIES: tuple[str, ...] = (
+    'fastapi>=0.115',
+    'sqlalchemy[asyncio]>=2.0',
+    'asyncpg>=0.30',
+    'alembic>=1.14',
+    'uvicorn>=0.34',
+)
+```
+
+Pinned with lower bounds only; versions float to the latest available (per `uv`'s resolver). Used by `_append_backend_dependencies()` to inject service runtime deps into the generated package's pyproject.toml.
+
+**`_BACKEND_DEV_DEPENDENCIES: tuple[str, ...]`**
+
+Test-only dependency for the FastAPI backend, appended to the dev group when `--backend` is set:
+```python
+_BACKEND_DEV_DEPENDENCIES: tuple[str, ...] = ('httpx',)
+```
+
+`httpx` is required by `fastapi.testclient.TestClient` and is added to the dev group so generated `just check` can run backend tests without adding a runtime dependency.
+
+**`_BACKEND_RECIPES: str`**
+
+Migration recipes appended to the generated package's Justfile:
+```python
+_BACKEND_RECIPES: str = """
+migrate: sync
+  uv run alembic upgrade head
+
+makemigration message: sync
+  uv run alembic revision --autogenerate -m "{{message}}"
+
+migration-check: sync
+  uv run alembic check
+"""
+```
+
+Appended by `_append_backend_recipes()` after the existing Justfile. Recipes are standalone (not part of `just check` chain) and require a live database.
 
 **`_TEST_MAIN_STUB: str`**
 
@@ -958,11 +1010,89 @@ Examples:
 ```python
 # Strips a cloned package in place
 _strip_scaffolding(Path('/tmp/my_package'))
-# Deletes: modernpackage/main.py, tests/test_e2e.py, docs/, BACKLOG.md
+# Deletes: modernpackage/main.py, tests/test_e2e.py, docs/, BACKLOG.md, backend_template/
 # Writes: tests/test_main.py (stub), README.md (stub)
 # Modifies: pyproject.toml (removes [project.scripts])
 # After this call, just init can safely run with no scaffolding in the tree
 ```
+
+#### `_add_backend(package_path: Path) -> None`
+
+A private helper that injects the FastAPI backend template into a cloned package, called only when `backend=True` in `init_new_package()`.
+
+- **Purpose**: Called from `init_new_package()` after `_strip_scaffolding()` and before `_stage_injected_files()`, to inject the backend template files and their dependencies. Runs before `just init` so the injected files are seen by the rename sed and included in the initial git commit.
+- **Parameters**:
+  - `package_path: Path` — the root directory of the cloned package
+- **Returns**: `None` (mutates the filesystem and pyproject.toml in place)
+- **Behavior**:
+  1. Calls `shutil.copytree(_BACKEND_TEMPLATE_DIR, package_path, dirs_exist_ok=True)` to copy the backend template tree into the clone root, merging into existing `<module>/` and `tests/` directories
+  2. Calls `_append_backend_dependencies(package_path / 'pyproject.toml')` to inject runtime and dev dependencies
+  3. Calls `_append_backend_recipes(package_path / 'Justfile')` to append migration recipes
+- **Design rationale**:
+  - Template is shipped as committed package data (via `[tool.hatch.build] include = ["backend_template/**"]`), not inline as string constants (keeps `main.py` lean)
+  - Runs between `_strip_scaffolding` and `_stage_injected_files`, ensuring a clean ordering (remove scaffolding → inject backend → stage for rename → `just init`)
+  - Tolerates absent `pyproject.toml` or `Justfile` (graceful boundary, like `_write_package_metadata`)
+
+Examples:
+```python
+_add_backend(Path('/tmp/my_service'))
+# Injects: modernpackage/app.py, modernpackage/db.py, modernpackage/health.py
+#          tests/test_app.py, migrations/, alembic.ini, Containerfile, compose.yml, .dockerignore
+# Modifies: pyproject.toml (adds backend deps), Justfile (adds migration recipes)
+```
+
+#### `_append_backend_dependencies(pyproject_path: Path) -> None`
+
+A private helper that injects backend runtime and dev dependencies into a generated package's `pyproject.toml`.
+
+- **Purpose**: Called by `_add_backend()` to populate `[project.dependencies]` with backend runtime deps and extend the dev group with `httpx` (required by FastAPI's TestClient).
+- **Parameters**:
+  - `pyproject_path: Path` — the path to the cloned package's `pyproject.toml` file
+- **Returns**: `None` (mutates the file in place via TOML-safe string replacement)
+- **Behavior**:
+  1. Reads the file contents
+  2. Replaces `dependencies = []` with `dependencies = [\n    "fastapi>=0.115",\n    "sqlalchemy[asyncio]>=2.0",\n    ...` (newline + indent per dep, matching TOML style)
+  3. Replaces `dev = [\n` with `dev = [\n    "httpx",\n` (prepends httpx to the dev group)
+  4. Writes the modified content back to the file
+- **Graceful boundary**: If the file is missing or `dependencies = []` is not found, prints a notice to stderr and returns without raising
+- **Design rationale**:
+  - Uses surgical line-replacement (like `_remove_project_scripts`) rather than a full TOML parser, keeping changes minimal and verifiable in diffs
+  - Deps are lower-bound-pinned only (`>=X.Y`), floating to latest available
+  - `httpx` is dev-only (not a runtime dep), keeping the generated service's production image lean
+
+#### `_append_backend_recipes(justfile_path: Path) -> None`
+
+A private helper that appends migration recipes to a generated package's `Justfile`.
+
+- **Purpose**: Called by `_add_backend()` to append `just migrate`, `just makemigration`, and `just migration-check` recipes (standalone, not part of `just check` chain).
+- **Parameters**:
+  - `justfile_path: Path` — the path to the cloned package's `Justfile`
+- **Returns**: `None` (mutates the file in place via string concatenation)
+- **Behavior**:
+  1. Reads the file contents
+  2. Appends `_BACKEND_RECIPES` constant (multiline string) to the end
+  3. Writes the modified content back to the file
+- **Graceful boundary**: If the file is missing, prints a notice to stderr and returns without raising
+- **Design rationale**:
+  - Appends (does not overwrite) to preserve existing recipes like `init`, `check`, `test`, etc.
+  - Recipes use two-space indentation to match the template Justfile; `migrate: sync` pattern (dependency on `sync`) ensures the venv is up-to-date before running migrations
+
+#### `_stage_injected_files(package_path: Path) -> None`
+
+A private helper that stages injected backend files so `just init`'s `git grep` sees them, called only when `backend=True` in `init_new_package()`.
+
+- **Purpose**: Called from `init_new_package()` immediately after `_add_backend()` and before `just init`, to stage the injected backend files with `git add -A` so they are tracked and renamed by `just init`'s rename sed.
+- **Parameters**:
+  - `package_path: Path` — the root directory of the cloned package (the git working tree)
+- **Returns**: `None` (runs `git add -A` subprocess and raises on failure)
+- **Behavior**:
+  1. Spawns `git add -A` via `Popen` with `cwd=package_path`
+  2. Waits for completion via `communicate()` and captures stderr
+  3. **If `returncode != 0`**: raises `RuntimeError` with message `'git add failed with exit code {returncode}: {stderr}'`
+- **Design rationale**:
+  - Injected template files carry the literal `modernpackage` token in imports and strings; staging ensures they are seen by `git grep -l 'modernpackage'` and renamed by the sed pass
+  - Runs before `just init`, so the single git commit captures the clean, renamed tree
+  - Subprocess seam mirrors existing `Popen` calls in `init_new_package` (tested via mock)
 
 #### `_validated_or_error(parser: ArgumentParser, value: str | None, validator: Callable[[str], str]) -> str | None`
 
@@ -992,6 +1122,7 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`) — prints the package version and exits
   - `--dry-run`: optional flag (default `False`) — previews what scaffolding would do without making changes; runs preflight, then prints a plan and exits
+  - `--backend` / `--fastapi`: optional store-true flag (default `False`) — scaffolds a FastAPI backend service with async SQLAlchemy, migrations, and containerization
   - `package_name`: optional positional argument (validated via `validate_package_name`)
   - `--author-name`: optional flag (default `None`, free string, no validation). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_NAME_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_NAME_KEY)`, then `_config_file_default(config, 'author_name')`.
   - `--author-email`: optional flag (default `None`, validated via `validate_author_email`). If omitted, falls back via the precedence ladder: `_environment_default(_AUTHOR_EMAIL_ENV)`, then `_git_config_default(_GIT_CONFIG_USER_EMAIL_KEY)`, then `_config_file_default(config, 'author_email')`, then validates via `_validated_or_error()`.
@@ -1011,6 +1142,7 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 - **Returns**: `Namespace` — an `argparse.Namespace` object with fields:
   - `version` (bool) — whether `--version` was provided
   - `dry_run` (bool) — whether `--dry-run` was provided
+  - `backend` (bool) — whether `--backend` or `--fastapi` was provided (scaffolds FastAPI backend)
   - `package_name` (str | None) — the package name (from flag or `None`)
   - `author_name` (str | None) — author name (from flag, env var, git config, config file, or `None`)
   - `author_email` (str | None) — author email (from flag, env var, git config, config file, or `None`, validated)
@@ -1028,9 +1160,9 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 
 **Complexity**: The function has a McCabe cyclomatic complexity of ≤ 10 (enforced by `pyproject.toml:tool.ruff.lint.mccabe.max-complexity`), with the validation logic extracted into the `_validated_or_error()` helper and the config file helpers extracted into `_load_config_file()` and `_config_file_default()` to keep the post-parse block clear and maintainable.
 
-#### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None, dry_run: bool = False) -> int`
+#### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None, dry_run: bool = False, backend: bool = False) -> int`
 
-Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name. When `dry_run=True`, performs preflight checks and prints a preview plan, then exits without cloning or making any changes.
+Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name. When `dry_run=True`, performs preflight checks and prints a preview plan, then exits without cloning or making any changes. When `backend=True`, injects a FastAPI backend template with async SQLAlchemy, health probes, and containerization.
 
 1. **Positional Parameter**: `package_name: str` — name of the new package to create (validated distribution name, may contain `.` or `-`)
 2. **Keyword Parameters** (optional, all default to `None` or `False`):
@@ -1040,6 +1172,7 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
    - `package_license: str | None = None` — license identifier to include in metadata (free string, not yet written to files)
    - `repository_url: str | None = None` — repository URL to include in metadata (validated via `validate_repository_url`, not yet written to files)
    - `dry_run: bool = False` — if `True`, preview what scaffolding would do without making changes (no clone, no directory creation)
+   - `backend: bool = False` — if `True`, injects a FastAPI backend template with app factory, async DB layer, health probes, Alembic migrations, and containerization (Containerfile, Docker Compose)
 3. **Returns**: `int` — exit code (0 on success, 1 if `just check` fails, or 0 if dry-run succeeds)
 
 **Metadata writing**: The metadata parameters are automatically written to the generated package's `pyproject.toml` file via `_write_package_metadata()`, called after the successful clone and before `just init`. This ensures the metadata is included in the package's initial git commit.
@@ -1063,8 +1196,9 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
        - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
        - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
    - **Step 1.5: Write metadata** — **If clone succeeds (`returncode == 0`)**: calls `_write_package_metadata()` to write user-supplied metadata into the package's `pyproject.toml`. All non-`None` values are applied as targeted TOML-escaped substitutions of known template placeholders; `None` values are skipped. If the `pyproject.toml` file is missing, a notice is printed to stderr and the step continues without raising.
-   - **Step 1.75: Strip scaffolding** — **After metadata writing**: calls `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. This deletes the scaffolder CLI (`main.py`), its tests (`test_e2e.py`), documentation (`docs/`), and project-metadata files (`BACKLOG.md`); replaces the test suite with a minimal stub; replaces the README with a generic template; and removes console-script entry points. Runs **before** `just init` so the single git commit captures a clean tree. Missing paths are tolerated (graceful degradation for variant template shapes).
-   - **Step 2: Initialize** — **After scaffolding removal**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
+   - **Step 1.75: Strip scaffolding** — **After metadata writing**: calls `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. This deletes the scaffolder CLI (`main.py`), its tests (`test_e2e.py`), documentation (`docs/`), and project-metadata files (`BACKLOG.md`); replaces the test suite with a minimal stub; replaces the README with a generic template; and removes console-script entry points. Also ensures the cloned `backend_template/` directory is removed (present in the clone by default but always stripped, so the no-flag output remains byte-for-byte identical). Runs **before** `just init` so the single git commit captures a clean tree. Missing paths are tolerated (graceful degradation for variant template shapes).
+   - **Step 1.85: Inject backend (if requested)** — **If `backend=True`**: after stripping, calls `_add_backend()` to inject the FastAPI backend template. This copies the committed `backend_template/` directory (from the installed package or source checkout) into the clone root, merges FastAPI, SQLAlchemy, asyncpg, alembic, and uvicorn runtime dependencies into `[project.dependencies]`, appends the test-only `httpx` dependency to the dev group, and appends migration recipes (`just migrate`, `just makemigration`, `just migration-check`) to the clone's `Justfile`. After injection, calls `_stage_injected_files()` to run `git add -A` so the injected files (which carry the literal `modernpackage` token) are staged and seen by `just init`'s rename sed. If `backend=False`, this step is skipped and the output is byte-for-byte identical to today.
+   - **Step 2: Initialize** — **After backend injection (if any)**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
      - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
        - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
        - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
@@ -1112,10 +1246,10 @@ The CLI entry point (orchestrator):
 
 - **Returns**: `int` — a process exit code (0 for success, 1 for failure)
 - **Flow**:
-  1. Calls `parse_args()` to get user input (including the `--dry-run` flag and five metadata flags)
+  1. Calls `parse_args()` to get user input (including the `--dry-run`, `--backend`, and metadata flags)
   2. **If** `version` flag is set: prints `modernpackage <__version__>` and returns `0`
   3. **Elif** `package_name` is provided:
-     - Calls `init_new_package()` with the package name, all metadata keyword arguments, and the `dry_run` flag inside a `try`/`except RuntimeError` block:
+     - Calls `init_new_package()` with the package name, all metadata keyword arguments, the `dry_run` flag, and the `backend` flag inside a `try`/`except RuntimeError` block:
        ```python
        init_new_package(
            package_name=parsed_args.package_name,
@@ -1125,6 +1259,7 @@ The CLI entry point (orchestrator):
            package_license=parsed_args.license,
            repository_url=parsed_args.repository_url,
            dry_run=parsed_args.dry_run,
+           backend=parsed_args.backend,
        )
        ```
      - **If** `RuntimeError` is raised: catches it, prints the error message to `sys.stderr` (which includes captured stderr from the failed subprocess), and returns `1`

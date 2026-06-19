@@ -47,6 +47,7 @@ The version is read from `modernpackage/__version__` at runtime.
 ```bash
 modernpackage <package_name> --dry-run
 modernpackage <package_name> --dry-run --author-name "Ada Lovelace" --description "My package"
+modernpackage <package_name> --dry-run --backend
 ```
 
 Previews what scaffolding would do without making any changes. Runs preflight checks (same as a normal run), then exits cleanly with exit code 0 and prints a high-level plan showing:
@@ -54,6 +55,7 @@ Previews what scaffolding would do without making any changes. Runs preflight ch
 - The template URL that would be cloned
 - Per-field metadata substitutions (fields with values, fields keeping the template default)
 - The well-known `just init` outcomes (rename `modernpackage/ → <module>/`, version reset to `0.0.1`)
+- Whether the FastAPI backend would be injected (if `--backend` is set)
 
 No directory is created, no clone occurs, no subprocess is spawned beyond preflight.
 
@@ -82,9 +84,97 @@ Dry run — no changes will be made:
   run just init: reset version to 0.0.1
 ```
 
+**Example: Dry-run with backend**
+
+```bash
+modernpackage my-service --dry-run --backend
+```
+
+**Output (stdout):**
+```
+Preflight checks:
+  [ok]   package name valid
+  [ok]   required tools on PATH (git, just, uv)
+  [ok]   target directory available
+  [ok]   template remote reachable
+Dry run — no changes will be made:
+  clone https://github.com/albertas/modernpackage into /home/user/my_service
+  update pyproject.toml metadata:
+    author name: keeps template default
+    author email: keeps template default
+    description: keeps template default
+    license: keeps template default
+    repository URL: keeps template default
+  add FastAPI backend (app, migrations, container, recipes)
+  run just init: rename modernpackage/ -> my_service/
+  run just init: reset version to 0.0.1
+```
+
 **Exit code:** 0
 
 **Important**: The dry-run still performs preflight checks (including a network probe to verify the template repository is reachable). If preflight fails, the dry-run returns exit code 1 and no plan is printed.
+
+### Backend flag
+
+```bash
+modernpackage <package_name> --backend
+modernpackage <package_name> --fastapi            # alias for --backend
+modernpackage <package_name> --backend --author-name "Ada" --description "My service"
+```
+
+Scaffolds a FastAPI-based async web service with database, migrations, and containerization. When `--backend` (or its alias `--fastapi`) is provided, the scaffolder injects a complete backend template containing:
+
+- **FastAPI application factory** with lifespan engine/sessionmaker management
+- **Async SQLAlchemy 2.0 + asyncpg** for async database operations (PostgreSQL)
+- **Dependency injection** for session management with Annotated types
+- **Health probes**: `/livez` (liveness, no DB required) and `/readyz` (readiness, checks DB connectivity)
+- **Alembic async migrations** with auto-migration support (`just migrate`, `just makemigration`, `just migration-check`)
+- **Containerization**: multi-stage `Containerfile` and `compose.yml` with PostgreSQL service, automatic migration gating, and health checks
+- **Complete test suite** covering the backend modules with ≥95% coverage (satisfies generated `just check`)
+
+The generated package includes all backend dependencies (`fastapi`, `sqlalchemy[asyncio]`, `asyncpg`, `alembic`, `uvicorn`) in `[project.dependencies]` and `httpx` in the dev group (required by FastAPI's `TestClient`).
+
+**Without the flag**, output is **byte-for-byte identical** to today's scaffold (no backend is injected, no extra dependencies added).
+
+**Example: Scaffold with backend**
+
+```bash
+modernpackage my-service --backend
+```
+
+The generated package directory structure includes:
+
+```
+my_service/
+├── my_service/
+│   ├── __init__.py
+│   ├── app.py              # FastAPI app factory with lifespan
+│   ├── db.py               # Async engine and session management
+│   └── health.py           # Health probe routes
+├── tests/
+│   └── test_app.py         # Backend tests (≥95% coverage)
+├── migrations/
+│   ├── env.py              # Alembic async environment
+│   ├── script.py.mako      # Migration template
+│   └── versions/            # Auto-generated migrations
+├── alembic.ini             # Alembic configuration
+├── Containerfile           # Multi-stage Docker build
+├── compose.yml             # Docker Compose stack (app + Postgres + migrations)
+├── .dockerignore            # Container build exclusions
+├── Justfile                # Includes migrate, makemigration, migration-check
+├── pyproject.toml          # Backend deps: fastapi, sqlalchemy, asyncpg, alembic, uvicorn
+└── README.md
+```
+
+**Development workflow with backend:**
+
+```bash
+cd my_service
+just check              # Full validation including backend tests
+just migrate            # Run pending Alembic migrations
+just makemigration "add users table"  # Generate migration
+docker compose up       # Start app + Postgres + migration job
+```
 
 ### Package initialization
 

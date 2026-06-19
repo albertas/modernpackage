@@ -2,12 +2,11 @@
 
 [overview.md](overview.md)
 
-`modernpackage` ships no FastAPI, SQLAlchemy, or Alembic code today (the repo is a
-`uv`-managed package scaffolder, not a service). This document is a forward-looking
-reference for building a production-grade async FastAPI backend, to prepare for a future
-`--backend`/`--fastapi` scaffolder option. All code below is an illustrative template,
-not a committed file. For container, compose, and migration-gating mechanics this page
-cross-references [containerization.md](containerization.md) rather than restating them.
+When scaffolded with the `--backend` flag (or `--fastapi` alias), `modernpackage` generates a 
+complete, production-ready async FastAPI service with async SQLAlchemy 2.0 + asyncpg, 
+Kubernetes-style health probes, Alembic async migrations, and Docker containerization. 
+This document describes the generated backend template structure, application patterns, 
+and development workflow for generated backend packages. For containerization details, see [containerization.md](containerization.md).
 
 ## Application Structure & DI
 

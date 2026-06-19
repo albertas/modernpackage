@@ -361,6 +361,13 @@ def parse_args() -> Namespace:
         default=False,
     )
     parser.add_argument(
+        '--backend',
+        '--fastapi',
+        help='Include a FastAPI backend (app, async DB, migrations, container).',
+        action='store_true',
+        default=False,
+    )
+    parser.add_argument(
         'package_name',
         help='Name of a new package to initialise in a local directory.',
         nargs='?',
@@ -499,11 +506,15 @@ def _apply_license(content: str, package_license: str) -> str:
 
 # Clone-relative paths removed wholesale from a generated package. Looped over
 # like _METADATA_FIELDS; absent entries are tolerated (clone-shape-agnostic).
+# `backend_template` is always removed: the clone contains it (from the repo),
+# but the no-flag path must not include it. `_add_backend` re-injects from the
+# installed/source package path when --backend is set.
 _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'modernpackage/main.py',
     'tests/test_e2e.py',
     'docs',
     'BACKLOG.md',
+    'backend_template',  # Always removed; re-injected if --backend is set
 )
 
 # Stub tests/test_main.py: pytest needs >=1 collected test (empty collection
@@ -525,6 +536,40 @@ _README_STUB: str = """\
 # modernpackage
 
 A Python package.
+"""
+
+# Top-level template tree copied into a generated package by `_add_backend`.
+# Resolved relative to this file so it works from a source checkout and from an
+# installed wheel (shipped as package data via [tool.hatch.build] include).
+_BACKEND_TEMPLATE_DIR: Path = (
+    Path(__file__).resolve().parent.parent / 'backend_template'
+)
+
+# Runtime dependencies appended to the generated package's [project.dependencies]
+# (PEP 621 — these are service runtime deps, not dev tooling). Lower bounds only.
+_BACKEND_DEPENDENCIES: tuple[str, ...] = (
+    'fastapi>=0.115',
+    'sqlalchemy[asyncio]>=2.0',
+    'asyncpg>=0.30',
+    'alembic>=1.14',
+    'uvicorn>=0.34',
+)
+
+# Test-only dependency appended to the dev dependency-group: TestClient needs httpx.
+_BACKEND_DEV_DEPENDENCIES: tuple[str, ...] = ('httpx',)
+
+# Migration recipes appended to the generated package's Justfile (NOT added to the
+# `check` chain — they need a live database). Two-space body indent matches the
+# template Justfile; `: sync` follows the recipe convention (Justfile:8-42).
+_BACKEND_RECIPES: str = """
+migrate: sync
+  uv run alembic upgrade head
+
+makemigration message: sync
+  uv run alembic revision --autogenerate -m "{{message}}"
+
+migration-check: sync
+  uv run alembic check
 """
 
 
@@ -605,6 +650,7 @@ def _format_dry_run_plan(  # noqa: PLR0913
     description: str | None,
     package_license: str | None,
     repository_url: str | None,
+    backend: bool = False,
 ) -> str:
     """Return the multi-line dry-run preview (design Decision 3).
 
@@ -632,6 +678,8 @@ def _format_dry_run_plan(  # noqa: PLR0913
             lines.append(f'    {label}: {value}')
     lines.append(f'  run just init: rename modernpackage/ -> {module_name}/')
     lines.append(f'  run just init: reset version to {_RESET_VERSION}')
+    if backend:
+        lines.append('  add FastAPI backend (app, migrations, container, recipes)')
     return '\n'.join(lines)
 
 
@@ -644,6 +692,7 @@ def _print_dry_run_plan(  # noqa: PLR0913
     description: str | None,
     package_license: str | None,
     repository_url: str | None,
+    backend: bool = False,
 ) -> None:
     """Print the formatted dry-run plan to stdout (output convention, main.py:592)."""
     print(  # noqa: T201
@@ -655,6 +704,7 @@ def _print_dry_run_plan(  # noqa: PLR0913
             description=description,
             package_license=package_license,
             repository_url=repository_url,
+            backend=backend,
         )
     )
 
@@ -783,6 +833,83 @@ def _run_preflight_checks(target_path: Path) -> None:
         print(_format_check_line(check.label, ok=True))  # noqa: T201
 
 
+def _append_backend_dependencies(pyproject_path: Path) -> None:
+    """Populate [project.dependencies] and extend the dev group for the backend.
+
+    Replaces the empty `dependencies = []` array with the backend runtime deps and
+    prepends the dev-only deps (httpx) to the `dev` dependency-group. No-op with a
+    notice if the file is absent (graceful boundary, like `_write_package_metadata`).
+    """
+    try:
+        content = pyproject_path.read_text()
+    except FileNotFoundError:
+        print(  # noqa: T201
+            f'No pyproject.toml at {pyproject_path}; skipping backend deps.',
+            file=sys.stderr,
+        )
+        return
+    runtime = ''.join(f'    "{dep}",\n' for dep in _BACKEND_DEPENDENCIES)
+    content = content.replace(
+        'dependencies = []\n',
+        f'dependencies = [\n{runtime}]\n',
+    )
+    dev = ''.join(f'    "{dep}",\n' for dep in _BACKEND_DEV_DEPENDENCIES)
+    content = content.replace('dev = [\n', f'dev = [\n{dev}')
+    pyproject_path.write_text(content)
+
+
+def _append_backend_recipes(justfile_path: Path) -> None:
+    """Append the migration recipes to the generated package's Justfile.
+
+    No-op with a notice if the Justfile is absent (graceful boundary).
+    """
+    try:
+        content = justfile_path.read_text()
+    except FileNotFoundError:
+        print(  # noqa: T201
+            f'No Justfile at {justfile_path}; skipping backend recipes.',
+            file=sys.stderr,
+        )
+        return
+    justfile_path.write_text(content + _BACKEND_RECIPES)
+
+
+def _stage_injected_files(package_path: Path) -> None:
+    """Stage the injected backend files so `just init`'s `git grep` sees them.
+
+    Runs `git add -A` in the clone. Copied files are untracked until staged; the
+    rename sed (Justfile:62-67) only rewrites tracked files. Raises RuntimeError on
+    a non-zero exit, matching the other subprocess steps.
+    """
+    pipe = Popen(
+        ['git', 'add', '-A'],  # noqa: S607
+        stdin=PIPE,
+        stdout=PIPE,
+        stderr=PIPE,
+        cwd=package_path,
+    )
+    _stdout, stderr = pipe.communicate()
+    if pipe.returncode != 0:
+        stderr_text = stderr.decode().strip()
+        message = f'git add failed with exit code {pipe.returncode}: {stderr_text}'
+        raise RuntimeError(message)
+
+
+def _add_backend(package_path: Path) -> None:
+    """Copy the FastAPI backend template into a generated package and wire its deps.
+
+    Copies `_BACKEND_TEMPLATE_DIR` over the clone (merging into existing
+    `modernpackage/` and `tests/`), then appends backend runtime/dev dependencies
+    to the cloned pyproject.toml and migration recipes to the Justfile. Copied
+    files carry the literal `modernpackage` token so `just init`'s rename sed
+    rewrites their imports. Callers stage the copied files (`git add -A`) before
+    `just init` so `git grep` sees them.
+    """
+    shutil.copytree(_BACKEND_TEMPLATE_DIR, package_path, dirs_exist_ok=True)
+    _append_backend_dependencies(package_path / 'pyproject.toml')
+    _append_backend_recipes(package_path / 'Justfile')
+
+
 def init_new_package(  # noqa: PLR0913
     package_name: str,
     *,
@@ -792,6 +919,7 @@ def init_new_package(  # noqa: PLR0913
     package_license: str | None = None,
     repository_url: str | None = None,
     dry_run: bool = False,
+    backend: bool = False,
 ) -> int:
     """Clone modernpackage files into `package_name` and run `just init` in it."""
     module_name = normalize_module_name(package_name)
@@ -808,6 +936,7 @@ def init_new_package(  # noqa: PLR0913
             description=description,
             package_license=package_license,
             repository_url=repository_url,
+            backend=backend,
         )
         return 0
 
@@ -836,6 +965,10 @@ def init_new_package(  # noqa: PLR0913
     )
 
     _strip_scaffolding(new_package_path)
+
+    if backend:
+        _add_backend(new_package_path)
+        _stage_injected_files(new_package_path)
 
     try:
         pipe = Popen(  # noqa: S603
@@ -897,6 +1030,7 @@ def main() -> int:
                 package_license=parsed_args.license,
                 repository_url=parsed_args.repository_url,
                 dry_run=parsed_args.dry_run,
+                backend=parsed_args.backend,
             )
         except RuntimeError as error:
             print(error, file=sys.stderr)  # noqa: T201

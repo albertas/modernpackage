@@ -38,6 +38,7 @@ dev = [
 
 [tool.pytest.ini_options]
 addopts = "--cov=modernpackage --no-cov-on-fail --cov-fail-under=95.0 -m 'not e2e'"
+norecursedirs = ["backend_template"]
 markers = [
     "e2e: tests that perform real external calls (network/subprocess/fs)",
 ]
@@ -47,7 +48,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build]
-include = ["**/*.py"]
+include = ["**/*.py", "backend_template/**"]
 exclude = ["tests/**"]
 
 [tool.hatch.version]
@@ -73,7 +74,10 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "D"] # allow assert and no docs in tests
+"tests/*" = ["S101", "S108", "D", "PLR2004", "TRY003", "EM101"]  # allow assert, /tmp/ paths, no docs, magic values, inline exception messages in tests
+"backend_template/**" = ["INP001"]  # template dirs don't have __init__.py; they merge into the clone's package dirs
+"backend_template/tests/*" = ["S101", "S108", "D100", "D103", "PLR2004", "TRY003", "EM101"]  # test rules; tests/* doesn't match this path prefix
+"backend_template/migrations/*" = ["D103", "TC002"]  # migration env: no public function docstrings; Connection used at runtime
 
 [tool.ruff.lint.mccabe]
 max-complexity = 8

@@ -11,6 +11,9 @@ from modernpackage.main import (
     _GIT_CONFIG_USER_EMAIL_KEY,
     _GIT_CONFIG_USER_NAME_KEY,
     _REQUIRED_TOOLS,
+    _add_backend,
+    _append_backend_dependencies,
+    _append_backend_recipes,
     _config_file_default,
     _format_dry_run_plan,
     _format_init_summary,
@@ -210,7 +213,7 @@ def test_parse_args_invalid_env_author_email_exits(
         pytest.raises(SystemExit) as excinfo,
     ):
         parse_args()
-    assert excinfo.value.code == 2  # noqa: PLR2004
+    assert excinfo.value.code == 2
     assert 'Invalid author email' in capsys.readouterr().err
 
 
@@ -224,7 +227,7 @@ def test_parse_args_invalid_env_repository_url_exits(
         pytest.raises(SystemExit) as excinfo,
     ):
         parse_args()
-    assert excinfo.value.code == 2  # noqa: PLR2004
+    assert excinfo.value.code == 2
     assert 'Invalid repository URL' in capsys.readouterr().err
 
 
@@ -297,7 +300,7 @@ def test_init_new_package() -> None:
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
-    assert popen_mock.call_count == 3  # noqa: PLR2004
+    assert popen_mock.call_count == 3
     strip_mock.assert_called_once_with(Path.cwd() / 'mypackage')
 
 
@@ -550,6 +553,7 @@ def test_main_with_package_name() -> None:
         argparse_mock().parse_args().license = None
         argparse_mock().parse_args().repository_url = None
         argparse_mock().parse_args().dry_run = False
+        argparse_mock().parse_args().backend = False
         init_mock.return_value = 0
         result = main()
     init_mock.assert_called_once_with(
@@ -560,6 +564,7 @@ def test_main_with_package_name() -> None:
         package_license=None,
         repository_url=None,
         dry_run=False,
+        backend=False,
     )
     assert result == 0
 
@@ -710,7 +715,7 @@ def test_init_new_package_prints_summary_on_success() -> None:
     assert any(str(Path.cwd() / 'mypackage') in call for call in printed_calls)
     assert any('0.0.1' in call for call in printed_calls)
     assert any('cd mypackage && just check' in call for call in printed_calls)
-    assert popen_mock.call_count == 3  # noqa: PLR2004
+    assert popen_mock.call_count == 3
     assert result == 0
 
 
@@ -956,7 +961,7 @@ def test_parse_args_malformed_git_config_email_exits_two(
         )
         with pytest.raises(SystemExit) as exit_info:
             parse_args()
-    assert exit_info.value.code == 2  # noqa: PLR2004
+    assert exit_info.value.code == 2
 
 
 # ---------------------------------------------------------------------------
@@ -990,8 +995,8 @@ def _parse_args_with_config(
 
 
 def test_user_config_path_uses_xdg_config_home(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv('XDG_CONFIG_HOME', '/tmp/xdg')  # noqa: S108
-    assert _user_config_path() == Path('/tmp/xdg/modernpackage/config.toml')  # noqa: S108
+    monkeypatch.setenv('XDG_CONFIG_HOME', '/tmp/xdg')
+    assert _user_config_path() == Path('/tmp/xdg/modernpackage/config.toml')
 
 
 def test_user_config_path_falls_back_to_home_config(
@@ -1121,7 +1126,7 @@ def test_parse_args_invalid_config_email_exits_two(
     _write_config(tmp_path, 'author_email = "nope"\n')
     with pytest.raises(SystemExit) as exit_info:
         _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
-    assert exit_info.value.code == 2  # noqa: PLR2004
+    assert exit_info.value.code == 2
 
 
 def test_parse_args_invalid_config_url_exits_two(
@@ -1130,7 +1135,7 @@ def test_parse_args_invalid_config_url_exits_two(
     _write_config(tmp_path, 'repository_url = "ftp://nope"\n')
     with pytest.raises(SystemExit) as exit_info:
         _parse_args_with_config(tmp_path, monkeypatch, ['modernpackage', 'pkg'])
-    assert exit_info.value.code == 2  # noqa: PLR2004
+    assert exit_info.value.code == 2
 
 
 # ---------------------------------------------------------------------------
@@ -1386,7 +1391,7 @@ def test_init_new_package_proceeds_when_target_directory_absent(
         popen_mock.return_value.communicate.return_value = (b'', b'')
         result = init_new_package('mypackage')
     assert result == 0
-    assert popen_mock.call_count == 3  # noqa: PLR2004
+    assert popen_mock.call_count == 3
 
 
 def test_verify_target_directory_absent_raises_when_exists(tmp_path: Path) -> None:
@@ -1498,14 +1503,14 @@ def test_main_threads_dry_run() -> None:
 def test_format_dry_run_plan_reports_known_actions() -> None:
     plan = _format_dry_run_plan(
         'foo',
-        Path('/tmp/foo'),  # noqa: S108
+        Path('/tmp/foo'),
         author_name='Ada Lovelace',
         author_email=None,
         description=None,
         package_license=None,
         repository_url=None,
     )
-    assert '/tmp/foo' in plan  # noqa: S108
+    assert '/tmp/foo' in plan
     assert 'https://github.com/albertas/modernpackage' in plan
     assert 'Ada Lovelace' in plan
     assert 'keeps template default' in plan
@@ -1527,3 +1532,144 @@ def test_init_new_package_dry_run_prints_plan(
     captured = capsys.readouterr()
     assert 'Dry run — no changes will be made:' in captured.out
     assert 'Ada' in captured.out
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: --backend / --fastapi flag
+# ---------------------------------------------------------------------------
+
+
+def test_parse_args_backend_flag() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--backend']):
+        result = parse_args()
+    assert result.backend is True
+
+
+def test_parse_args_fastapi_alias_sets_backend() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage', '--fastapi']):
+        result = parse_args()
+    assert result.backend is True
+
+
+def test_parse_args_backend_defaults_false() -> None:
+    with patch('sys.argv', ['modernpackage', 'mypackage']):
+        result = parse_args()
+    assert result.backend is False
+
+
+def test_format_dry_run_plan_announces_backend() -> None:
+    plan = _format_dry_run_plan(
+        'foo',
+        Path('/tmp/foo'),
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+        backend=True,
+    )
+    assert 'add FastAPI backend' in plan
+
+
+def test_format_dry_run_plan_omits_backend_by_default() -> None:
+    plan = _format_dry_run_plan(
+        'foo',
+        Path('/tmp/foo'),
+        author_name=None,
+        author_email=None,
+        description=None,
+        package_license=None,
+        repository_url=None,
+    )
+    assert 'add FastAPI backend' not in plan
+
+
+def test_init_new_package_invokes_add_backend_when_flag_set() -> None:
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
+        patch('modernpackage.main._add_backend') as add_backend_mock,
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage', backend=True)
+    add_backend_mock.assert_called_once_with(Path.cwd() / 'mypackage')
+
+
+# ---------------------------------------------------------------------------
+# Phase 2: _add_backend injection mechanism
+# ---------------------------------------------------------------------------
+
+
+def test_add_backend_copies_template_and_appends_deps(tmp_path: Path) -> None:
+    clone = _seed_clone(tmp_path)
+    _add_backend(clone)
+    assert (clone / 'modernpackage' / 'app.py').exists()
+    assert (clone / 'modernpackage' / 'health.py').exists()
+    assert (clone / 'tests' / 'test_app.py').exists()
+    pyproject = (clone / 'pyproject.toml').read_text()
+    assert 'fastapi' in pyproject
+    assert 'sqlalchemy[asyncio]' in pyproject
+    assert 'httpx' in pyproject
+    assert tomllib.loads(pyproject)  # still valid TOML
+
+
+def test_append_backend_dependencies_missing_file(tmp_path: Path) -> None:
+    _append_backend_dependencies(tmp_path / 'pyproject.toml')  # must not raise
+
+
+def test_injected_files_have_no_unrenamed_token_after_sed(tmp_path: Path) -> None:
+    # Simulate just init's rename on the injected source files only.
+    clone = _seed_clone(tmp_path)
+    _add_backend(clone)
+    for source in (clone / 'modernpackage').glob('*.py'):
+        renamed = source.read_text().replace('modernpackage', 'newpkg')
+        source.write_text(renamed)
+    leftover = [
+        p
+        for p in (clone / 'modernpackage').glob('*.py')
+        if 'modernpackage' in p.read_text()
+    ]
+    assert leftover == []
+
+
+def test_strip_scaffolding_removes_backend_template(tmp_path: Path) -> None:
+    clone = _seed_clone(tmp_path)
+    (clone / 'backend_template').mkdir()
+    (clone / 'backend_template' / 'marker.py').write_text('# x\n')
+    _strip_scaffolding(clone)
+    assert not (clone / 'backend_template').exists()
+
+
+def test_init_new_package_backend_stages_then_inits() -> None:
+    expected_popen_calls = 4  # clone, git add, just init, just check
+    with (
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
+        patch('modernpackage.main._add_backend'),
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage', backend=True)
+    assert popen_mock.call_count == expected_popen_calls
+    second = popen_mock.call_args_list[1]
+    assert second.args[0] == ['git', 'add', '-A']
+    assert second.kwargs['cwd'] == Path.cwd() / 'mypackage'
+
+
+def test_add_backend_appends_migration_recipes(tmp_path: Path) -> None:
+    clone = _seed_clone(tmp_path)
+    (clone / 'Justfile').write_text('sync:\n  @uv sync\n')
+    _add_backend(clone)
+    justfile = (clone / 'Justfile').read_text()
+    assert 'migrate: sync' in justfile
+    assert 'makemigration message: sync' in justfile
+    assert 'migration-check: sync' in justfile
+
+
+def test_append_backend_recipes_missing_file(tmp_path: Path) -> None:
+    _append_backend_recipes(tmp_path / 'Justfile')  # must not raise

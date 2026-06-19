@@ -17,6 +17,9 @@ modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # creates a clean new package and validates it with just check
                                        # prints "just check passed" with a summary block, or "just check failed"
 
+# With the optional --backend flag, generates a FastAPI async service:
+modernpackage <your-service-name> --backend    # includes app, async DB, migrations, containers
+
 # Example: Preflight checklist and success summary (on success)
 modernpackage my-package
 
@@ -80,6 +83,19 @@ modernpackage my-package --dry-run --author-name "Ada Lovelace" --description "A
 modernpackage my-cool.package           # Valid PEP 508 distribution name
                                         # Creates directory: my_cool_package
                                         # All Python imports: from my_cool_package import ...
+
+# Example: Create a FastAPI backend service
+modernpackage my-service --backend      # or `--fastapi` (alias)
+                                        # Scaffolds a complete async FastAPI service
+                                        # Includes: app factory, async SQLAlchemy 2.0 + asyncpg
+                                        # Includes: Kubernetes-style /livez and /readyz health probes
+                                        # Includes: Alembic async migrations (just migrate, just makemigration)
+                                        # Includes: Docker Compose stack with Postgres + migration gating
+                                        # Created directory: my_service
+                                        # Development: cd my_service && docker compose up
+
+# Example: Dry-run with backend flag
+modernpackage my-service --backend --dry-run  # Preview backend scaffolding
 
 # Example: Create a package with metadata
 modernpackage my-package \
@@ -189,9 +205,27 @@ View the installed version:
 modernpackage --version               # or `mp -v`
 ```
 
+### Optional Feature Flags
+
+The CLI accepts optional feature flags for scaffolding:
+
+- **`--backend` / `--fastapi`**: Store-true flag (default `False`) that scaffolds a complete FastAPI async service. When set, injects a working backend with:
+  - FastAPI application factory with lifespan engine/sessionmaker management
+  - Async SQLAlchemy 2.0 + asyncpg for async database operations (PostgreSQL)
+  - Dependency injection for session management
+  - Kubernetes-style health probes (`/livez` liveness, `/readyz` readiness with DB check)
+  - Alembic async migrations with auto-migration support (`just migrate`, `just makemigration`, `just migration-check`)
+  - Multi-stage `Containerfile` for production builds
+  - Docker Compose stack with Postgres service and automatic migration gating
+  - Complete test suite with ≥95% code coverage (satisfies generated `just check`)
+  
+  Without this flag, the generated package output is byte-for-byte identical to today (no backend injected, no extra dependencies).
+
+- **`--dry-run`**: Store-true flag (default `False`) that previews what scaffolding would do without making changes. Runs preflight checks, prints a high-level plan to stdout, and exits with code 0. If the backend flag is also set, the dry-run plan indicates that the FastAPI backend would be injected.
+
 ### Optional Metadata Flags
 
-The CLI accepts five optional flags for package metadata:
+The CLI also accepts five optional flags for package metadata:
 
 - **`--author-name`**: Author name to include in the package (free string). Defaults in order: `$MODERNPACKAGE_AUTHOR_NAME` → `git config user.name` → config file → `None`.
 - **`--author-email`**: Author email address (must be a basic email format: `name@domain.tld`). Defaults in order: `$MODERNPACKAGE_AUTHOR_EMAIL` → `git config user.email` → config file → `None`.
@@ -239,6 +273,8 @@ When `git clone` fails, the error message is enhanced with a friendly, actionabl
 
 Once your new package is created and validated, you can begin development. The initialization process automatically removes the scaffolder's own CLI, tests, and documentation from the generated package, leaving you with a clean, minimal codebase. The process then runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed").
 
+### Standard Package
+
 The generated package includes:
 - A minimal `__init__.py` with version `0.0.1`
 - A stub `tests/test_main.py` with a single test (satisfying coverage requirements)
@@ -247,13 +283,31 @@ The generated package includes:
 
 **Note**: If you provided a package name with hyphens or dots (e.g., `my-cool.package`), the created directory will use underscores instead (e.g., `my_cool_package`). This ensures the directory name and all Python imports are valid identifiers.
 
+### Backend Package (with `--backend`)
+
+When scaffolded with `--backend`, the generated package additionally includes:
+- **Application layer**: `app.py` (FastAPI factory with lifespan), `db.py` (async engine + session management), `health.py` (health probes)
+- **Database layer**: Async SQLAlchemy 2.0 base class, asyncpg driver configuration, environment-based connection URL
+- **Testing**: `tests/test_app.py` with ≥95% coverage of backend modules (TestClient-based HTTP tests + async unit tests)
+- **Migrations**: Alembic async environment (`migrations/env.py`), template (`migrations/script.py.mako`), and versions directory
+- **Containerization**: `Containerfile` (multi-stage, BuildKit), `compose.yml` (app + Postgres + migration service), `.dockerignore`
+- **Dependencies**: `fastapi`, `sqlalchemy[asyncio]`, `asyncpg`, `alembic`, `uvicorn` in `[project.dependencies]`; `httpx` in dev group
+- **Justfile recipes**: `just migrate`, `just makemigration "message"`, `just migration-check` (standalone recipes, not part of `just check` chain)
+
 To continue development:
 
 ```bash
-cd my_cool_package              # Use the directory name (with underscores)
-just check    # Run tests and linters (already run during scaffolding; use for ongoing validation)
-just fix      # Auto-fix linting and formatting issues
-just publish  # Publish your package to PyPI.org
+cd my_package                   # Use the directory name (with underscores)
+just check                      # Run tests and linters (already run during scaffolding)
+just fix                        # Auto-fix linting and formatting issues
+just publish                    # Publish your package to PyPI.org
+
+# Backend-specific:
+cd my_service                   # Backend service package
+docker compose up               # Start app + Postgres + migration service
+just migrate                    # Run pending migrations manually
+just makemigration "add users"  # Generate a new migration
+curl http://localhost:8000/readyz  # Check readiness probe
 ```
 
 To push to a Git repository (create the project on GitLab/GitHub first):

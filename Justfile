@@ -73,5 +73,8 @@ init package_name="modernpackage":
   @git commit -m "Initial modern {{package_name}} package setup"
   @echo "Finished initializing {{package_name}}. You can now run: \033[0;32m cd {{package_name}} && just check\033[0m"
 
+check-backend-template: sync
+  uv run ruff check backend_template
+
 lock:
   uv lock --upgrade
