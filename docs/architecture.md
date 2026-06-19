@@ -1531,9 +1531,13 @@ The `e2e` marker is registered in `pyproject.toml` to categorize tests:
 
 - **`e2e`**: marks tests that perform real external calls (network, subprocess, filesystem). These are excluded from the default `just test` run (which runs only mocked unit tests) and are reserved for an explicit `just test-e2e` invocation. Pre-registering the marker prevents future `filterwarnings = error` strictness from breaking on unregistered marker usage.
 
-### End-to-End Test: Scaffolding Validation
+### End-to-End Tests: Scaffolding Validation
 
-The e2e test (`tests/test_e2e.py:test_scaffolded_package_passes_check`, marked with `@pytest.mark.e2e`) validates the core scaffolding workflow by:
+The e2e tests (`tests/test_e2e.py`, marked with `@pytest.mark.e2e`) validate different scaffolding configurations by cloning the local template, running `just init`, and verifying the generated packages pass their respective test suites. There are currently four e2e tests:
+
+#### No-Flag Scaffold: `test_scaffolded_package_passes_check`
+
+Validates the core no-flag scaffolding workflow:
 
 1. **Skipping gracefully** if required tools are missing: checks `git`, `just`, and `uv` are on `PATH`; skips the test with a diagnostic message if any are missing
 2. **Cloning the local template** from the repo root into a temporary directory (intentionally **not** the GitHub URL, so local template regressions are caught)
@@ -1541,22 +1545,54 @@ The e2e test (`tests/test_e2e.py:test_scaffolded_package_passes_check`, marked w
 4. **Verifying the result** by checking that the renamed `__init__.py` file exists and contains the pinned version `0.0.1`
 5. **Validating all quality gates** by running `just check` against the scaffolded package and asserting exit code 0 (passes format, lint, complexity, typecheck, unit tests, security audit, dead code detection)
 
-**Why this test is excluded by default:**
-- It requires network access for `uv sync` and `pip-audit` (slow, unreliable in offline/CI environments)
-- It requires `git`, `just`, and `uv` on `PATH` (extra tool dependencies)
-- It takes several minutes to complete (vs. ~1 second for mocked unit tests)
-- It is opt-in for developer workflow (`just test-e2e` for manual verification) and not enforced in default CI/CD (`just check`)
+#### Backend Scaffold: `test_scaffolded_backend_package_passes_check`
 
-**What it guarantees:**
-- The local template scaffolds correctly and produces a valid package
-- The scaffolded package passes all quality gates (same bar as production)
+Validates `--backend`/`--fastapi` scaffolding workflow, similar to the no-flag test but with backend injection:
+
+1. Same clone, metadata, strip, init steps as the no-flag test
+2. **Injects backend** via `main._add_backend()` after stripping
+3. **Stages injected files** via manual `git add -A` (this test predates the internal staging in `_inject_templates`)
+4. **Runs `just check`** and asserts backend passes all quality gates
+5. **Verifies backend artifacts**: `app.py` and `health.py` exist in the package source, token "modernpackage" is absent from all source files, health probes are present (`/readyz` endpoint), migration recipes exist in `Justfile`, Alembic config files exist, and containerization (Containerfile, Docker Compose) is present
+
+#### Fullstack Scaffold: `test_scaffolded_fullstack_package_passes_check`
+
+Validates `--fullstack`/`--reactjs` scaffolding workflow, running both backend and frontend test suites:
+
+1. Same clone, metadata, strip steps as the no-flag test
+2. **Injects fullstack** via `main._inject_templates(destination, fullstack=True)` which automatically stages via internal `_stage_injected_files` call
+3. **Runs `just init`** to replicate the package (no manual git staging needed due to internal staging in `_inject_templates`)
+4. **Validates backend** by running `just check` and asserting exit code 0 (pytest passes)
+5. **Installs frontend** via `just frontend-install` (runs `npm ci` to install Node dependencies)
+6. **Runs frontend tests** via `just frontend-test` (runs `vitest run` for React component tests)
+7. **Verifies structural expectations**: 
+   - Backend source files present (`app.py`, `health.py`)
+   - Frontend directory exists (`frontend/` is a directory)
+   - Frontend recipes injected in generated `Justfile` (`frontend-install`, `frontend-test`, `frontend-check`)
+   - Frontend recipes excluded from `check` chain (important because CI has no Node)
+   - Token "modernpackage" renamed in frontend files (`frontend/package.json`, `frontend/src/App.test.tsx`)
+
+**Graceful skipping for fullstack test**: Additionally requires `npm` on `PATH` for frontend test execution. When `npm` is unavailable (CI environments), the fullstack test skips while other e2e tests run.
+
+#### Common Characteristics
+
+**Why e2e tests are excluded by default:**
+- They require network access for `uv sync` and `pip-audit` (slow, unreliable in offline/CI environments)
+- They require external tools (`git`, `just`, `uv`, and `npm` for fullstack) on `PATH`
+- They take several minutes to complete (vs. ~1 second for mocked unit tests)
+- They are opt-in for developer workflow (`just test-e2e` for manual verification) and not enforced in default CI/CD (`just check`)
+
+**What they guarantee:**
+- The local template scaffolds correctly and produces valid packages
+- Generated packages pass their respective test suites (backend pytest, frontend Vitest, or both)
 - Regressions in the template code are caught end-to-end, not just in unit tests
+- For fullstack packages specifically: both backend and frontend components are correctly injected and functional
 
 **Intentional design choices:**
-- Clones the **local committed checkout** (not the GitHub URL) so template uncommitted edits are not exercised, matching CI behavior
-- Uses `subprocess.run(..., check=False, capture_output=True, text=True)` to gracefully capture and surface errors rather than crash on subprocess failure
-- Injects git author/committer identity (`GIT_AUTHOR_NAME`, etc.) because the inner `just init` runs `git commit` and requires a configured identity
-- Documents deviations in the module docstring to explain the intentional differences from production (`modernpackage.main:init_new_package`, which clones from GitHub)
+- Clone the **local committed checkout** (not the GitHub URL) so template uncommitted edits are not exercised, matching CI behavior
+- Use `subprocess.run(..., check=False, capture_output=True, text=True)` to gracefully capture and surface errors rather than crash on subprocess failure
+- Inject git author/committer identity (`GIT_AUTHOR_NAME`, etc.) because the inner `just init` runs `git commit` and requires a configured identity
+- Document deviations in the module docstring to explain the intentional differences from production (`modernpackage.main:init_new_package`, which clones from GitHub)
 
 ### No-Flag Verification Tests
 

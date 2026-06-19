@@ -97,6 +97,21 @@ modernpackage my-service --backend      # or `--fastapi` (alias)
 # Example: Dry-run with backend flag
 modernpackage my-service --backend --dry-run  # Preview backend scaffolding
 
+# Example: Create a fullstack application (backend + frontend)
+modernpackage my-app --fullstack              # or `--reactjs` (alias)
+                                              # Scaffolds a complete full-stack application
+                                              # Backend: async FastAPI service with SQLAlchemy 2.0 + asyncpg
+                                              # Frontend: Vite + React 19 + TypeScript with Vitest unit tests
+                                              # Includes: Kubernetes health probes, migrations, Docker Compose, OpenAPI client
+                                              # Created directory: my_app
+                                              # Development: cd my_app && docker compose up (runs backend + Postgres)
+                                              #             cd frontend && npm run dev (runs frontend dev server)
+
+# Example: Create a fullstack application with metadata
+modernpackage my-app --fullstack \
+  --author-name "Ada Lovelace" \
+  --license "MIT"                              # Scaffolds fullstack with supplied metadata
+
 # Example: Create a package with metadata
 modernpackage my-package \
   --author-name "Ada Lovelace" \
@@ -348,7 +363,7 @@ git push
 Commonly used commands for package development:
 - `just check` - run unit tests and linters (format, lint, complexity, typecheck, tests, security audit, dead code detection). Primary quality gate; excludes e2e tests.
 - `just test` - run unit tests only (mocked, parallel, excludes e2e). Includes: fast regression guards for the no-flag scaffold guarantee, metadata writing tests, and CLI argument parsing tests.
-- `just test-e2e` - run end-to-end tests that scaffold packages and validate them with `just check` (slow, requires network and git/just/uv on PATH; skips gracefully if tools missing). Includes: no-flag scaffold validation (verifies zero backend/frontend artifacts), backend scaffold validation (verifies FastAPI injection), and standard scaffold validation (verifies `just check` passes).
+- `just test-e2e` - run end-to-end tests that scaffold packages and validate them with their respective test suites (slow, requires network and git/just/uv on PATH; npm required for fullstack test; skips gracefully if tools missing). Includes: no-flag scaffold validation (verifies zero backend/frontend artifacts), backend scaffold validation (verifies FastAPI injection and `just check` passes), fullstack scaffold validation (verifies FastAPI backend and React frontend both inject correctly and their respective test suites pass), and negative test (verifies no-flag packages have zero backend/frontend artifacts).
 - `just fix` - format code and fix detected fixable issues.
 - `just publish` - publishes current package version to pypi.org.
 - `just lock` - refresh `uv.lock` to the latest resolvable dependency versions.

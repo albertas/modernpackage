@@ -581,51 +581,76 @@ All errors are printed to `sys.stderr` as clean messages, without a Python trace
 
 ## End-to-End Testing
 
-### Running the End-to-End Test
+### Running the End-to-End Tests
 
-The package includes an end-to-end test that validates the scaffolding workflow by cloning the local template, running `just init`, and verifying the scaffolded package passes `just check`. This test is excluded from the default `just check` run because it requires network access and several minutes to complete.
+The package includes a suite of end-to-end tests that validate different scaffolding configurations by cloning the local template, running `just init`, and verifying the generated package passes its respective test suites. These tests are excluded from the default `just check` run because they require network access and several minutes to complete.
 
-To run the e2e test explicitly:
+To run all e2e tests explicitly:
 
 ```bash
 just test-e2e
 ```
 
-This command runs only the test marked `@pytest.mark.e2e` in `tests/test_e2e.py`.
+This command runs only the tests marked `@pytest.mark.e2e` in `tests/test_e2e.py`. Currently there are four e2e tests:
+
+1. **No-flag scaffold** (`test_scaffolded_package_passes_check`) — verifies that a basic package scaffolds correctly and passes `just check` (all quality gates: format, lint, complexity, typecheck, unit tests, security audit, dead code detection)
+2. **Backend scaffold** (`test_scaffolded_backend_package_passes_check`) — verifies that a `--backend`/`--fastapi` package scaffolds correctly with FastAPI, async ORM, migrations, and containerization, and passes all quality gates
+3. **Fullstack scaffold** (`test_scaffolded_fullstack_package_passes_check`) — verifies that a `--fullstack`/`--reactjs` package scaffolds correctly with both backend (FastAPI) and frontend (React/Vitest), runs backend `just check` (pytest), and runs frontend Vitest test suite
+4. **No backend/frontend guarantee** (`test_scaffolded_package_has_no_backend_or_frontend`) — negative test verifying that a no-flag package contains zero backend/frontend artifacts (directories, files, dependencies, recipes, import tokens)
 
 ### Test Requirements & Graceful Skipping
 
-The e2e test gracefully skips if the required tools are not available on `PATH`:
+The e2e tests gracefully skip if the required tools are not available on `PATH`:
 - `git` — version control system
 - `just` — command runner / task automation
 - `uv` — Python package manager and virtual environment tool
+- `npm` — Node package manager (required for fullstack scaffold test only)
 
-If any tool is missing, the test skips with a diagnostic message instead of failing. This allows developers to run the test on machines that have the tools (e.g., for final validation) and skip gracefully on machines that don't.
+The first three tools (`git`, `just`, `uv`) are required by all e2e tests. The fullstack scaffold test additionally requires `npm` to install and run the frontend Vitest test suite; other e2e tests skip this requirement. If any required tool is missing, the corresponding test skips with a diagnostic message instead of failing. This allows developers to run the tests on machines that have the tools (e.g., for final validation) and skip gracefully on machines that don't. In CI environments without Node/npm, the fullstack test skips while other e2e tests run.
 
 **Note on git config in e2e**: The e2e test sets git author/committer identity via environment variables (`GIT_AUTHOR_NAME`, `GIT_COMMITTER_NAME`, etc.), not via `git config`. These environment variables do not populate `git config user.*` keys, so the git config fallback is not exercised by the e2e test. This is intentional — the e2e test exercises the git clone and init workflow, while unit tests verify the git config fallback behavior in isolation via mocked git calls.
 
 ### Test Duration & Network Requirements
 
-The e2e test takes several minutes to complete because the inner `just check` runs:
+The e2e tests take several minutes to complete because they invoke:
+
+**Common to all tests**:
 - `uv sync` — downloads and installs dependencies from PyPI and the internal GitLab index
 - `pip-audit` — queries the vulnerability database over the network
 - Full unit test suite with coverage measurement
 
-The test requires network connectivity; offline environments fail at the `uv sync` step.
+**Fullstack test additionally**:
+- `npm ci` — downloads and installs frontend dependencies from npm registry
+- `vitest run` — runs frontend unit tests (React component tests via Vitest and Testing Library)
 
-### What the Test Verifies
+All e2e tests require network connectivity; offline environments fail at the `uv sync` step. The fullstack test additionally requires a compatible Node.js/npm environment.
 
-The test scaffolds a package from the local template and validates:
+### What the Tests Verify
+
+The e2e tests scaffold packages from the local template and validate:
+
+**All e2e tests**:
 1. `git clone` succeeds and produces a copy of the template
 2. `just init <package_name>` succeeds and renames all "modernpackage" occurrences to the new name
 3. The renamed `__init__.py` exists and contains the version `0.0.1`
+
+**No-flag and backend tests**:
 4. `just check` passes, meaning the scaffolded package satisfies all quality gates (formatting, linting, complexity, type checking, unit tests, security audit, dead code detection)
+
+**Fullstack test additionally**:
+4. `just check` passes for the backend (`just frontend-install` not needed for this check)
+5. `just frontend-install` succeeds in installing frontend dependencies via `npm ci`
+6. `just frontend-test` succeeds in running the Vitest unit test suite for React components
+7. Structural expectations hold: `frontend/` directory exists, backend source files present (`app.py`, `health.py`), frontend recipes present in the generated `Justfile`, and the `modernpackage` token was renamed in frontend files (`package.json`, `src/App.test.tsx`)
+
+**No backend/frontend guarantee test**:
+4. The scaffolded no-flag package contains zero backend/frontend artifacts (directories, files, dependencies, recipes, import tokens)
 
 ### Test Outcome
 
-- **Pass**: The scaffolded package is valid and passes all quality gates. Exit code 0.
-- **Skip**: Required tools are missing from `PATH` (e.g., `just` not installed). Exit code 0, but the test report shows `1 skipped`. This is an honest outcome on machines without the required tools.
-- **Fail**: The scaffolding process failed or the scaffolded package does not pass `just check`. Exit code 1. This indicates a regression in the local template.
+- **Pass**: The scaffolded package(s) validated successfully. Exit code 0.
+- **Skip**: Required tools are missing from `PATH` (e.g., `npm` not available for fullstack test). Exit code 0, but the test report shows `1 skipped` or more. This is an honest outcome on machines without the required tools.
+- **Fail**: The scaffolding process failed or validation did not pass. Exit code 1. This indicates a regression in the local template.
 
 ## Metadata Defaults Resolution
 

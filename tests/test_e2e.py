@@ -267,3 +267,102 @@ def test_scaffolded_package_has_no_backend_or_frontend(tmp_path: Path) -> None:
     )
     for token in import_tokens:
         assert token not in source_text, f'unexpected import token: {token}'
+
+
+@pytest.mark.e2e
+def test_scaffolded_fullstack_package_passes_check(tmp_path: Path) -> None:
+    """Scaffold a fullstack package and run both backend and frontend test suites.
+
+    Injects backend + frontend via the production path
+    (`main._inject_templates(..., fullstack=True)`, which stages internally), runs
+    the generated `just check` (backend pytest), then installs and runs the
+    frontend Vitest suite directly.
+
+    Caveats (inherited from sibling tests, see module docstring): the inner
+    `just check` runs `uv sync` + networked `pip-audit`, and `just frontend-install`
+    runs `npm ci`, which hits the network and needs a compatible Node toolchain.
+    The `npm` skip guard makes Node-less environments (CI) skip rather than fail.
+    """
+    required_tools = (*REQUIRED_TOOLS, 'npm')
+    for tool in required_tools:
+        if shutil.which(tool) is None:
+            pytest.skip(f'required tool not on PATH: {tool}')
+
+    package_name = 'fullstack-check.pkg'
+    module_name = normalize_module_name(package_name)
+    destination = tmp_path / module_name
+
+    clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
+    assert clone.returncode == 0, f'git clone failed:\n{clone.stdout}\n{clone.stderr}'
+
+    main._write_package_metadata(  # noqa: SLF001
+        destination,
+        author_name='Test Author',
+        author_email='test@example.org',
+        description='An e2e fullstack package.',
+        package_license='Apache-2.0',
+        repository_url='https://example.org/repo',
+    )
+    main._strip_scaffolding(destination)  # noqa: SLF001
+    # Production fullstack injection path: backend + frontend, then `git add -A`
+    # internally (no manual staging needed, unlike the backend test).
+    main._inject_templates(destination, fullstack=True)  # noqa: SLF001
+
+    init = _run(
+        ['just', 'init', module_name],
+        cwd=destination,
+        env=os.environ | _GIT_IDENTITY_ENV,
+    )
+    assert init.returncode == 0, f'just init failed:\n{init.stdout}\n{init.stderr}'
+
+    check = _run(['just', 'check'], cwd=destination)
+    assert check.returncode == 0, f'just check failed:\n{check.stdout}\n{check.stderr}'
+
+    # Frontend: install deps then run Vitest. `frontend-test` (vitest run) does
+    # NOT depend on `frontend-install`, so install must run first (design
+    # decision 3). `npm ci` hits the network and needs a compatible Node.
+    install = _run(['just', 'frontend-install'], cwd=destination)
+    assert install.returncode == 0, (
+        f'just frontend-install failed:\n{install.stdout}\n{install.stderr}'
+    )
+
+    # Run `frontend-test` directly (vitest run) — NOT `frontend-check`, which
+    # also runs format/lint/typecheck (out of scope; design "Do NOT follow").
+    frontend_test = _run(['just', 'frontend-test'], cwd=destination)
+    assert frontend_test.returncode == 0, (
+        f'just frontend-test failed:\n{frontend_test.stdout}\n{frontend_test.stderr}'
+    )
+    # Confirm Vitest actually executed (not a silent no-op). Vitest prints a
+    # "Test Files" summary line to stdout/stderr on every run.
+    combined_output = frontend_test.stdout + frontend_test.stderr
+    assert 'Test Files' in combined_output, (
+        f'Vitest did not appear to run:\n{frontend_test.stdout}\n{frontend_test.stderr}'
+    )
+
+    # Backend sources present.
+    source_dir = destination / module_name
+    assert (source_dir / 'app.py').exists()
+    assert (source_dir / 'health.py').exists()
+
+    # Frontend injected.
+    frontend_dir = destination / 'frontend'
+    assert frontend_dir.is_dir()
+
+    # `just init`'s rename sed reached the staged frontend files (decision 5).
+    package_json = (frontend_dir / 'package.json').read_text()
+    app_test = (frontend_dir / 'src' / 'App.test.tsx').read_text()
+    assert 'modernpackage' not in package_json
+    assert 'modernpackage' not in app_test
+
+    # Frontend recipes injected into the generated Justfile.
+    generated_justfile = (destination / 'Justfile').read_text()
+    assert 'frontend-install' in generated_justfile
+    assert 'frontend-test' in generated_justfile
+    assert 'frontend-check' in generated_justfile
+
+    # Frontend recipes are excluded from the `check` chain (design "What We're
+    # NOT Doing"). The chain line begins with `check:` (Justfile:53).
+    check_line = next(
+        line for line in generated_justfile.splitlines() if line.startswith('check:')
+    )
+    assert 'frontend-' not in check_line
