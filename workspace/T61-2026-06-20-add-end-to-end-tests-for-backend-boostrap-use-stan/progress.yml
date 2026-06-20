@@ -1,0 +1,150 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 83118
+    cost_usd: 0.6644045000000001
+    input_tokens: 3279
+    output_tokens: 5117
+    cache_read_tokens: 337723
+    cache_creation_tokens: 34702
+    model: opus 4.8, Haiku 4.5
+    context_used: 37981
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 147150
+    cost_usd: 0.853317
+    input_tokens: 3152
+    output_tokens: 9195
+    cache_read_tokens: 380604
+    cache_creation_tokens: 41430
+    model: Haiku 4.5, opus 4.8
+    context_used: 44582
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 190379
+    cost_usd: 0.800754
+    input_tokens: 3142
+    output_tokens: 13217
+    cache_read_tokens: 179578
+    cache_creation_tokens: 36167
+    model: Haiku 4.5, opus 4.8
+    context_used: 39309
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 98735
+    cost_usd: 0.5211875
+    input_tokens: 3011
+    output_tokens: 6107
+    cache_read_tokens: 140379
+    cache_creation_tokens: 27999
+    model: Haiku 4.5, opus 4.8
+    context_used: 31010
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 128878
+    cost_usd: 0.7883470000000001
+    input_tokens: 3142
+    output_tokens: 11134
+    cache_read_tokens: 199972
+    cache_creation_tokens: 39091
+    model: Haiku 4.5, opus 4.8
+    context_used: 42233
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 306886
+    cost_usd: 0.5200188
+    input_tokens: 282
+    output_tokens: 18014
+    cache_read_tokens: 2722788
+    cache_creation_tokens: 76383
+    model: Haiku 4.5
+    context_used: 76665
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 162326
+    cost_usd: 2.5926884999999995
+    input_tokens: 3285
+    output_tokens: 8470
+    cache_read_tokens: 1765285
+    cache_creation_tokens: 139821
+    model: Haiku 4.5, opus 4.8
+    context_used: 143106
+    context_max: 1000000
+    lines_of_code: 94
+  sub_phases:
+  - num: 1
+    title: Scaffold helper + backend-only scaffold
+    done: true
+    metrics:
+      duration_ms: 308719
+      cost_usd: 3.7084495
+      input_tokens: 3565
+      output_tokens: 15810
+      cache_read_tokens: 3487421
+      cache_creation_tokens: 146801
+      model: Haiku 4.5, opus 4.8
+      context_used: 150366
+      context_max: 1000000
+      lines_of_code: 94
+  - num: 2
+    title: Bring the stack up + health asserts (pre-migration)
+    done: true
+    metrics:
+      duration_ms: 265194
+      cost_usd: 3.7117979999999986
+      input_tokens: 3436
+      output_tokens: 16421
+      cache_read_tokens: 3446436
+      cache_creation_tokens: 147724
+      model: Haiku 4.5, opus 4.8
+      context_used: 151160
+      context_max: 1000000
+      lines_of_code: 94
+  - num: 3
+    title: Real schema change via the scaffold's own migration targets
+    done: true
+    metrics:
+      duration_ms: 162326
+      cost_usd: 2.5926884999999995
+      input_tokens: 3285
+      output_tokens: 8470
+      cache_read_tokens: 1765285
+      cache_creation_tokens: 139821
+      model: Haiku 4.5, opus 4.8
+      context_used: 143106
+      context_max: 1000000
+      lines_of_code: 94
+cumulative:
+  total_cost: 6.7407173
+  total_ms: 1117472
+  total_cache_read: 5726329
+  total_cache_write: 395593
+  total_loc: 94
+  total_input_tokens: 19293
+  total_output_tokens: 71254
+  version: 0.0.10
+  completed_at: 2026-06-20 19:50:10.954843

@@ -1606,6 +1606,52 @@ Validates that a scaffolded fullstack application runs end-to-end in a real Dock
 
 **What it guarantees**: The scaffolded fullstack application is genuinely functional end-to-end: the compose stack brings up a real Postgres database with applied migrations, the FastAPI backend responds to health probes with a real database connection, the generated OpenAPI schema is consistent with the running backend, the frontend can be rebuilt against live schema, and TypeScript compilation succeeds against the generated client types. This is complementary to `test_scaffolded_fullstack_package_passes_check`, which validates file structure and unit tests; together they cover structural correctness, unit test execution, and end-to-end integration.
 
+#### Backend Runtime Integration: `test_backend_package_runs_end_to_end`
+
+Validates that a scaffolded backend-only application runs end-to-end in a real Docker Compose stack with a live Postgres database, exercising the complete migration workflow. This test verifies the backend bootstrapping process independently, without frontend complexity, ensuring that database health checks and schema changes work in a production-like environment.
+
+**Location**: `tests_e2e/test_backend_e2e.py` (standalone directory with shared helper module `tests_e2e/_scaffold.py`)
+
+**Test flow** (three phases, all in a single test function):
+
+1. **Phase 1 — Scaffold backend-only package**: Scaffolds a backend-only package from the local checkout using proven helper functions:
+   - Clones the local template repository into a temporary directory
+   - Writes metadata (author, description, license, repository URL)
+   - Strips scaffolder machinery (`main.py`, scaffolder tests, `docs/`, `BACKLOG.md`)
+   - Injects the backend via `_add_backend()` (FastAPI, async SQLAlchemy, Alembic)
+   - Stages injected files with `git add -A`
+   - Runs `just init <module_name>` to rename "modernpackage" tokens and make the initial commit
+   - **Assertion**: Backend-only layout verified — `app.py`, `db.py`, `health.py`, `compose.yml`, `alembic.ini`, `migrations/env.py`, and Justfile recipes are present; "modernpackage" token is absent from all source files
+
+2. **Phase 2 — Bring stack up and assert health**:
+   - Exposes the generated `db` service port to the host by appending `ports: ["127.0.0.1:5432:5432"]` to the ephemeral copy's `compose.yml` (design decision: modifies only the test's temporary copy, not the template)
+   - Runs `compose up -d --wait --build` to bring the stack up with automatic migration gating and health probe blocking
+   - Detects the compose command (probes `docker compose` → `podman compose` → `podman-compose`, skips if none found)
+   - **Assertions**: Pre-migration health probes pass:
+     - `GET http://127.0.0.1:8000/livez` returns 200 (liveness)
+     - `GET http://127.0.0.1:8000/readyz` returns 200 (readiness with live Postgres and applied base schema)
+
+3. **Phase 3 — Register a model, generate and apply a real migration, re-probe readiness**:
+   - Appends a `Product` SQLAlchemy 2.0 model to the generated `module/db.py` with `Mapped` columns and deterministic naming convention support
+   - Runs `just makemigration "add products"` and `just migrate` host-side with an explicit `DATABASE_URL` pointing to the exposed Postgres (design decision: Justfile recipes don't set `DATABASE_URL`, so the test injects it via environment)
+   - **Assertions**:
+     - At least one version file in `migrations/versions/` contains `create_table('products')` (proves autogenerate ran and produced the expected operation)
+     - `GET http://127.0.0.1:8000/readyz` still returns 200 post-migration (proves the database remains responsive after schema change — the task's core requirement)
+   - **Teardown**: Always runs `compose down -v` in `try/finally` to stop containers, remove the `pgdata` volume (preventing leakage between test runs), and free port 8000
+
+**Shared helper module** (`tests_e2e/_scaffold.py`):
+- Mirrors proven infra from `tests/test_e2e.py` (subprocess runner, compose detection, HTTP prober, git identity env) to avoid cross-test imports
+- Exports `scaffold_backend_package(tmp_path) -> (destination, module_name)` to encapsulate the clone → metadata → strip → backend-inject → stage → init flow
+- Exports `_expose_db_port(destination)` to modify the ephemeral compose.yml's `db` service
+- Exports `_register_product_model(source_dir)` to append the Product model to the generated `db.py`
+- Exports constants: `REPO_ROOT` (resolves to repo root from `tests_e2e/_scaffold.py`'s parent), `REQUIRED_TOOLS` (git, just, uv), `_HOST_DATABASE_URL` (postgresql+asyncpg connection string to localhost:5432)
+
+**Graceful skipping**: Requires `git`, `just`, `uv` on `PATH` for scaffolding and testing; additionally requires a compose command (`docker compose`, `podman compose`, or `podman-compose`) for stack operations. The test skips cleanly with a diagnostic message if any required tool is missing. Compose command auto-detection tries the portability set in precedence order.
+
+**Caveats**: This test pulls `postgres:17`, builds the application image, runs `uv sync` and `alembic` operations (which pull asyncpg and other deps), and makes real HTTP requests to a running stack. It takes several minutes and requires network access. It is excluded from `just check` (default quality gate) and requires explicit `just test-e2e` invocation.
+
+**What it guarantees**: A scaffolded backend-only application is genuinely functional end-to-end: the compose stack brings up a real Postgres database with applied base schema, the FastAPI backend responds to health probes with a real database connection, host-side migration tools can connect to the exposed Postgres, new models can be registered and migrated via the scaffold's own `just makemigration` and `just migrate` targets, and the readiness probe remains healthy after schema changes. This complements `test_scaffolded_backend_package_passes_check` (structural validation and unit test execution) by verifying actual runtime behavior with a real database.
+
 #### Common Characteristics
 
 **Why e2e tests are excluded by default:**

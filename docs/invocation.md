@@ -591,12 +591,17 @@ To run all e2e tests explicitly:
 just test-e2e
 ```
 
-This command runs only the tests marked `@pytest.mark.e2e` in `tests/test_e2e.py`. Currently there are four e2e tests:
+This command runs only the tests marked `@pytest.mark.e2e` in both `tests/test_e2e.py` and `tests_e2e/test_backend_e2e.py`. The tests validate different scaffolding configurations and runtime scenarios:
 
+**Scaffold validation tests** (in `tests/test_e2e.py`):
 1. **No-flag scaffold** (`test_scaffolded_package_passes_check`) — verifies that a basic package scaffolds correctly and passes `just check` (all quality gates: format, lint, complexity, typecheck, unit tests, security audit, dead code detection)
 2. **Backend scaffold** (`test_scaffolded_backend_package_passes_check`) — verifies that a `--backend`/`--fastapi` package scaffolds correctly with FastAPI, async ORM, migrations, and containerization, and passes all quality gates
 3. **Fullstack scaffold** (`test_scaffolded_fullstack_package_passes_check`) — verifies that a `--fullstack`/`--reactjs` package scaffolds correctly with both backend (FastAPI) and frontend (React/Vitest), runs backend `just check` (pytest), and runs frontend Vitest test suite
 4. **No backend/frontend guarantee** (`test_scaffolded_package_has_no_backend_or_frontend`) — negative test verifying that a no-flag package contains zero backend/frontend artifacts (directories, files, dependencies, recipes, import tokens)
+
+**Runtime integration tests**:
+5. **Fullstack runtime integration** (`test_fullstack_package_runs_end_to_end`, in `tests/test_e2e.py`) — verifies that a scaffolded fullstack application runs end-to-end in a real Docker Compose stack with live Postgres, HTTP health probes, API client generation, and frontend builds
+6. **Backend runtime integration** (`test_backend_package_runs_end_to_end`, in `tests_e2e/test_backend_e2e.py`) — verifies that a scaffolded backend-only application runs end-to-end in a real Docker Compose stack with live Postgres, health probes, and real schema migrations via the scaffold's own migration targets
 
 ### Test Requirements & Graceful Skipping
 
@@ -612,18 +617,24 @@ The first three tools (`git`, `just`, `uv`) are required by all e2e tests. The f
 
 ### Test Duration & Network Requirements
 
-The e2e tests take several minutes to complete because they invoke:
+The e2e tests take several minutes to complete. The scaffold validation tests invoke:
 
-**Common to all tests**:
+**Common to scaffold tests**:
 - `uv sync` — downloads and installs dependencies from PyPI and the internal GitLab index
 - `pip-audit` — queries the vulnerability database over the network
 - Full unit test suite with coverage measurement
 
-**Fullstack test additionally**:
+**Fullstack scaffold test additionally**:
 - `npm ci` — downloads and installs frontend dependencies from npm registry
 - `vitest run` — runs frontend unit tests (React component tests via Vitest and Testing Library)
 
-All e2e tests require network connectivity; offline environments fail at the `uv sync` step. The fullstack test additionally requires a compatible Node.js/npm environment.
+**Runtime integration tests additionally**:
+- `docker compose` or `podman compose` — container orchestration (pulled if not cached)
+- `postgres:17` image — pulled and started in a container
+- Alembic migrations — applied to the real database
+- `npm ci` + `vite build` — frontend build (fullstack runtime test only)
+
+All e2e tests require network connectivity; offline environments fail at the `uv sync` step. Runtime integration tests additionally require a compose command (`docker compose`, `podman compose`, or `podman-compose`) on `PATH`. The fullstack runtime test additionally requires Node.js/npm.
 
 ### What the Tests Verify
 
@@ -634,17 +645,35 @@ The e2e tests scaffold packages from the local template and validate:
 2. `just init <package_name>` succeeds and renames all "modernpackage" occurrences to the new name
 3. The renamed `__init__.py` exists and contains the version `0.0.1`
 
-**No-flag and backend tests**:
+**No-flag, backend scaffold, and fullstack scaffold tests**:
 4. `just check` passes, meaning the scaffolded package satisfies all quality gates (formatting, linting, complexity, type checking, unit tests, security audit, dead code detection)
 
-**Fullstack test additionally**:
-4. `just check` passes for the backend (`just frontend-install` not needed for this check)
+**Fullstack scaffold test additionally**:
 5. `just frontend-install` succeeds in installing frontend dependencies via `npm ci`
 6. `just frontend-test` succeeds in running the Vitest unit test suite for React components
 7. Structural expectations hold: `frontend/` directory exists, backend source files present (`app.py`, `health.py`), frontend recipes present in the generated `Justfile`, and the `modernpackage` token was renamed in frontend files (`package.json`, `src/App.test.tsx`)
 
 **No backend/frontend guarantee test**:
 4. The scaffolded no-flag package contains zero backend/frontend artifacts (directories, files, dependencies, recipes, import tokens)
+
+**Backend runtime integration test** (`test_backend_package_runs_end_to_end`):
+1. Backend-only package scaffolds correctly with `app.py`, `health.py`, `compose.yml`, migrations, and Justfile recipes
+2. `compose up -d --wait --build` succeeds and brings all services to healthy state
+3. `GET http://127.0.0.1:8000/livez` returns 200 (liveness check with base schema)
+4. `GET http://127.0.0.1:8000/readyz` returns 200 (readiness check with live database and applied schema)
+5. `just makemigration "add products"` and `just migrate` succeed on the host with an explicit `DATABASE_URL`
+6. At least one migration version file contains `create_table('products')` (proves autogenerate ran correctly)
+7. `GET http://127.0.0.1:8000/readyz` still returns 200 post-migration (proves database health after schema change)
+
+**Fullstack runtime integration test** (`test_fullstack_package_runs_end_to_end`):
+1. Fullstack package scaffolds correctly with backend (FastAPI, async ORM, migrations) and frontend (React, Vite, TypeScript)
+2. `compose up -d --wait --build` succeeds with Postgres, migrations, and backend all healthy
+3. Health probes return 200 (`/livez` and `/readyz` with live database)
+4. `just frontend-install` succeeds via `npm ci`
+5. `just generate-client` regenerates the OpenAPI client from the live backend schema
+6. Regenerated client contains correct operation names and differs from the committed placeholder
+7. `just frontend-build` compiles TypeScript against the regenerated client types and bundles with Vite
+8. Frontend build output is non-empty and usable
 
 ### Test Outcome
 
