@@ -608,6 +608,9 @@ frontend-lint:
 generate-client:
   cd frontend && npm run generate-client
 
+frontend-test-e2e:
+  cd frontend && npx playwright install --with-deps chromium && npm run test:e2e
+
 frontend-check: frontend-install
   cd frontend && npm run format:check && npm run lint \
     && npm run typecheck && npm run test

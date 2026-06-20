@@ -252,6 +252,131 @@ and `thresholds` (set `lines`/`functions`/`branches`/`statements` and `perFile` 
 **Real browsers.** Browser Mode (stable since Vitest 4.0) runs tests in real browsers via `@vitest/browser-playwright`
 or `@vitest/browser-webdriver`. Use it when jsdom/happy-dom can't replicate browser APIs (geolocation, WebGL).
 
+### Status Page Component & Health Endpoint Testing
+
+**Health-aware component.** The scaffolded `App.tsx` includes a status page that fetches the
+backend's Kubernetes-style health probes (`/livez` for liveness and `/readyz` for readiness) on mount
+and renders application and database health states. This provides a live integration demo of
+frontend-to-backend communication:
+
+```tsx
+import { useEffect, useState } from 'react';
+
+type AppHealth = 'checking' | 'healthy' | 'unhealthy' | 'unavailable';
+type DbHealth = 'checking' | 'ready' | 'not ready' | 'unavailable';
+
+async function fetchStatus(path: string): Promise<'pass' | 'fail' | 'unavailable'> {
+  try {
+    const response = await fetch(path);
+    const body = (await response.json()) as { status?: string };
+    if (response.ok && body.status === 'pass') {
+      return 'pass';
+    }
+    return 'fail';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+export function App() {
+  const [appHealth, setAppHealth] = useState<AppHealth>('checking');
+  const [dbHealth, setDbHealth] = useState<DbHealth>('checking');
+
+  useEffect(() => {
+    void fetchStatus('/livez').then((result) => {
+      setAppHealth(
+        result === 'pass' ? 'healthy' : result === 'fail' ? 'unhealthy' : 'unavailable',
+      );
+    });
+    void fetchStatus('/readyz').then((result) => {
+      setDbHealth(
+        result === 'pass' ? 'ready' : result === 'fail' ? 'not ready' : 'unavailable',
+      );
+    });
+  }, []);
+
+  return (
+    <main>
+      <h1>modernpackage</h1>
+      <dl>
+        <dt>Application</dt>
+        <dd>{appHealth}</dd>
+        <dt>Database</dt>
+        <dd>{dbHealth}</dd>
+      </dl>
+    </main>
+  );
+}
+```
+
+The `vite.config.ts` proxies both `/livez` and `/readyz` to the backend alongside `/api`,
+allowing the component to use same-origin relative paths that avoid CORS issues:
+
+```ts
+server: {
+  proxy: {
+    '/api': { target: 'http://localhost:8000', changeOrigin: true },
+    '/livez': { target: 'http://localhost:8000', changeOrigin: true },
+    '/readyz': { target: 'http://localhost:8000', changeOrigin: true },
+  },
+},
+preview: {
+  proxy: {
+    '/api': { target: 'http://localhost:8000', changeOrigin: true },
+    '/livez': { target: 'http://localhost:8000', changeOrigin: true },
+    '/readyz': { target: 'http://localhost:8000', changeOrigin: true },
+  },
+},
+```
+
+The `preview` block is required because `vite preview` does not apply `server.proxy` rules;
+it runs the production build against the backend at a different port.
+
+**Unit tests.** The status page is tested via Vitest with mocked `fetch`:
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { App } from './App';
+
+function mockFetch(impl: (path: string) => Promise<Response>) {
+  globalThis.fetch = vi.fn((input: RequestInfo | URL) =>
+    impl(String(input)),
+  ) as typeof fetch;
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    json: () => Promise.resolve(body),
+  } as Response;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('App', () => {
+  it('shows healthy and ready when both endpoints pass', async () => {
+    mockFetch(() => Promise.resolve(jsonResponse(200, { status: 'pass' })));
+    render(<App />);
+    expect(await screen.findByText('healthy')).toBeInTheDocument();
+    expect(await screen.findByText('ready')).toBeInTheDocument();
+  });
+
+  it('shows unavailable when fetch rejects', async () => {
+    mockFetch(() => Promise.reject(new Error('network down')));
+    render(<App />);
+    const unavailable = await screen.findAllByText('unavailable');
+    expect(unavailable).toHaveLength(2);
+  });
+});
+```
+
+Uses `findBy*` (async) to account for the microtasks waiting for the `fetch` promise
+and state updates.
+
 ### Anti-patterns to Avoid
 
 - Testing implementation details (component state, instance methods) instead of user-visible behavior.
@@ -259,6 +384,118 @@ or `@vitest/browser-webdriver`. Use it when jsdom/happy-dom can't replicate brow
   test pollution.
 - Overusing `data-testid` instead of accessible role and text queries — accessible queries make
   tests more resilient to refactors and reinforce accessible markup.
+- Hard-coding `http://localhost:8000` paths in client code — use Vite proxy paths instead to
+  avoid CORS issues and hard-coded host assumptions.
+
+---
+
+## Browser Automation (Playwright E2E)
+
+### Playwright Configuration
+
+**E2E tests run against the live stack.** When a fullstack package is scaffolded, a Playwright
+e2e setup is included under `frontend/e2e/` to drive a real browser against the running
+frontend and backend together. The `playwright.config.ts` serves the built frontend via
+`vite preview` and points the browser to it:
+
+```ts
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  testDir: './e2e',
+  use: { baseURL: 'http://localhost:4173' },
+  webServer: {
+    command: 'npm run preview',
+    url: 'http://localhost:4173',
+    reuseExistingServer: !process.env.CI,
+  },
+});
+```
+
+The `webServer` block auto-launches the preview server before running specs; under CI
+(`process.env.CI` set), it does not reuse an existing server (prevents stale builds). The browser
+tests run against the production bundle (post-`npm run build`), ensuring they validate the final
+shipped code — not just the dev-server version.
+
+### Playwright Dependencies & Scripts
+
+**Dev dependency and npm script.** Playwright is added as a `devDependency`:
+
+```json
+{
+  "devDependencies": {
+    "@playwright/test": "^1.50.0"
+  },
+  "scripts": {
+    "test:e2e": "playwright test"
+  }
+}
+```
+
+A separate `npm run test:e2e` script keeps Playwright independent of the Vitest unit-test runner.
+
+### Browser Installation & CI Skip Guards
+
+**Browser binaries are large and network-dependent.** The generated Justfile recipe handles
+browser installation and runs the e2e suite:
+
+```just
+frontend-test-e2e:
+  cd frontend && npx playwright install --with-deps chromium && npm run test:e2e
+```
+
+The recipe installs the Chromium browser (with system dependencies) once, then runs the suite.
+In CI or environments where browser binaries cannot be downloaded (network unavailable),
+the `just test-e2e` step in the Python e2e test suite skip-guards the browser install failure
+rather than failing the entire test, keeping the gate graceful when infrastructure is missing.
+
+### Vitest Exclude
+
+**Keep unit and browser tests separate by directory.** The `vite.config.ts` adds `e2e/**`
+to Vitest's exclude list so unit tests never collect browser specs:
+
+```ts
+test: {
+  environment: 'jsdom',
+  globals: true,
+  setupFiles: './src/setupTests.ts',
+  coverage: { provider: 'v8' },
+  exclude: [...configDefaults.exclude, 'e2e/**'],
+},
+```
+
+This ensures:
+- `npm run test` (Vitest) runs only `src/**/*.test.tsx` (mocked unit tests).
+- `npm run test:e2e` (Playwright) runs only `e2e/**/*.spec.ts` (browser specs).
+
+### Example Status-Page E2E Spec
+
+**Browser assertion.** A minimal spec validates that the status page renders correctly
+against a live backend:
+
+```ts
+import { expect, test } from '@playwright/test';
+
+test('status page shows healthy and ready', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: 'modernpackage' })).toBeVisible();
+  await expect(page.getByText('healthy')).toBeVisible();
+  await expect(page.getByText('ready')).toBeVisible();
+});
+```
+
+Assertions target stable text substrings (`'healthy'`, `'ready'`) that persist across
+refactors, not fragile DOM internals. The test is only run by `@pytest.mark.e2e` Python tests,
+which bring up the full Docker Compose stack before executing `just frontend-test-e2e`.
+
+### Anti-patterns to Avoid
+
+- Running Playwright in `just check` or CI by default — browser binaries are large and slow;
+  keep e2e off the fast path. Only `@pytest.mark.e2e` runs them (via `just test-e2e`).
+- Duplicating test coverage between Vitest (mocked) and Playwright (live). Unit test behavior;
+  e2e test integration and critical user flows.
+- Hard-coded backend URLs in specs — use `baseURL` and relative paths.
+- Assuming browser binaries are always available — always skip-guard download failures gracefully.
 
 ---
 
@@ -371,6 +608,7 @@ active development; **verify at scaffold time.** TanStack Form 1.33.x is an emer
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "generate-client": "openapi-ts"
   }
 }

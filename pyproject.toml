@@ -33,7 +33,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-xdist",
-    "vupi>=0.0.7",
+    "vupi>=0.0.10",
 ]
 
 [tool.pytest.ini_options]

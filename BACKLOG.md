@@ -1,8 +1,7 @@
 # ToDo
-- [ ] Add playwrite setup to --fullstack scaffolding that would allow to tests frontend, backend, database integration. Add status page to the frontend that would show application and database health based on /health endpoint output.
-
 
 # Done
+- [x] [T60] Add playwrite setup to --fullstack scaffolding that would allow to tests frontend, backend, database integration. Add status page to the frontend that would show application and database health based on /health endpoint output.
 - [x] [T59] Add end to end test that tests --fullstack application scaffolding.
 - [x] [T58] Add optional scaffolding capabilities for frontend and backend.
   - [x] [T51] Document containerization usage best practices researched online (year 2026) (using podman, but configuration comatible with docker)

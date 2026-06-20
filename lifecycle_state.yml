@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-19 15:50:02
+heart_beat: 2026-06-20 18:12:59
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T59-2026-06-19-add-end-to-end-test-that-tests-fullstack-applicati
-    heart_beat: 2026-06-19 15:50:02
+  - artifact_dir: T60-2026-06-19-add-playwrite-setup-to-fullstack-scaffolding-that
+    heart_beat: 2026-06-20 18:12:59

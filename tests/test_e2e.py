@@ -528,5 +528,23 @@ def test_fullstack_package_runs_end_to_end(tmp_path: Path) -> None:
         dist_dir = destination / 'frontend' / 'dist'
         assert dist_dir.is_dir(), 'frontend/dist not created by build'
         assert (dist_dir / 'index.html').is_file(), 'frontend/dist/index.html missing'
+
+        # Browser e2e (design pillar 2): drive the built frontend via
+        # `vite preview` against the LIVE compose stack. `frontend-test-e2e`
+        # runs `npx playwright install --with-deps chromium` first; that
+        # downloads a browser (network + minutes). Treat an install failure as
+        # "browsers unavailable" and skip, mirroring the compose/npm guards
+        # (design Open Risks), rather than failing the suite.
+        e2e_run = _run(['just', 'frontend-test-e2e'], cwd=destination)
+        if e2e_run.returncode != 0 and 'playwright install' in (
+            e2e_run.stdout + e2e_run.stderr
+        ):
+            pytest.skip(
+                'playwright browser install unavailable:\n'
+                f'{e2e_run.stdout}\n{e2e_run.stderr}'
+            )
+        assert e2e_run.returncode == 0, (
+            f'just frontend-test-e2e failed:\n{e2e_run.stdout}\n{e2e_run.stderr}'
+        )
     finally:
         _run([*compose, 'down', '-v'], cwd=destination)

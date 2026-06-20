@@ -1759,9 +1759,14 @@ def test_add_frontend_copies_template_and_appends_recipes(tmp_path: Path) -> Non
     assert (clone / 'frontend' / 'vite.config.ts').exists()
     assert (clone / 'frontend' / 'src' / 'App.test.tsx').exists()
     assert (clone / 'frontend' / 'src' / 'client').is_dir()
+    assert (clone / 'frontend' / 'playwright.config.ts').exists()
+    assert (clone / 'frontend' / 'e2e' / 'status.spec.ts').exists()
     justfile = (clone / 'Justfile').read_text()
     assert 'generate-client' in justfile
+    assert 'frontend-test-e2e' in justfile
     assert 'frontend-check' in justfile
+    package_json_text = (clone / 'frontend' / 'package.json').read_text()
+    assert '@playwright/test' in package_json_text
     # No Python deps added (design Decision 3).
     assert (clone / 'pyproject.toml').read_text() == original_pyproject
 

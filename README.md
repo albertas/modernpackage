@@ -102,10 +102,13 @@ modernpackage my-app --fullstack              # or `--reactjs` (alias)
                                               # Scaffolds a complete full-stack application
                                               # Backend: async FastAPI service with SQLAlchemy 2.0 + asyncpg
                                               # Frontend: Vite + React 19 + TypeScript with Vitest unit tests
-                                              # Includes: Kubernetes health probes, migrations, Docker Compose, OpenAPI client
+                                              # Includes: Kubernetes health probes, migrations, Docker Compose
+                                              # Includes: OpenAPI client, health-aware status page, Playwright e2e
                                               # Created directory: my_app
                                               # Development: cd my_app && docker compose up (runs backend + Postgres)
                                               #             cd frontend && npm run dev (runs frontend dev server)
+                                              # Testing: npm run test (Vitest unit tests in frontend/)
+                                              #          npm run test:e2e (Playwright against running stack)
 
 # Example: Create a fullstack application with metadata
 modernpackage my-app --fullstack \
@@ -241,12 +244,14 @@ The CLI accepts optional feature flags for scaffolding:
   - React 19 with TypeScript strict mode for type-safe component development
   - Vitest 4.1 unit testing framework with jsdom environment
   - React Testing Library 16.3 for component testing best practices
+  - Playwright 1.50+ for browser automation e2e testing (specs in `e2e/`, separate from unit tests)
+  - Health-aware status page component demonstrating frontend-to-backend integration
   - OpenAPI client generation via `@hey-api/openapi-ts` with client-fetch plugin
   - ESLint 10 + typescript-eslint 8 for code quality
   - Prettier 3.8 for consistent code formatting
   - Pre-generated `src/client/` OpenAPI client synced to the backend schema
   - Isolated in a `frontend/` subdirectory to keep the Python package root clean
-  - Node recipes in the generated Justfile: `frontend-install`, `frontend-build`, `frontend-test`, `frontend-lint`, `generate-client`, `frontend-check`
+  - Node recipes in the generated Justfile: `frontend-install`, `frontend-build`, `frontend-test`, `frontend-test-e2e`, `frontend-lint`, `generate-client`, `frontend-check`
   - Python `pyproject.toml` gains zero new dependencies (frontend is fully isolated)
   
   `--fullstack` is a superset of `--backend`: the backend is always injected when `--fullstack` is set. If both `--backend` and `--fullstack` are passed, `--fullstack` takes precedence.
@@ -328,13 +333,14 @@ When scaffolded with `--backend`, the generated package additionally includes:
 
 When scaffolded with `--fullstack`, the generated package includes both the backend (as above) **and** a frontend directory:
 - **Frontend subdirectory**: `frontend/` at the package root contains an isolated Node.js project
-- **Frontend source**: `frontend/src/` with React component tree starting from `App.tsx` and `main.tsx`, TypeScript strict mode configuration, app entry point in `index.html`
-- **Frontend build system**: Vite 8 configuration (`vite.config.ts`) with React plugin, dev server with proxy to `/api` (backend), production build optimization
-- **Frontend testing**: Vitest 4.1 unit test runner with jsdom environment, React Testing Library 16.3 for component testing, test configuration in `setupTests.ts`
+- **Frontend source**: `frontend/src/` with React component tree starting from `App.tsx` (a health-aware status page) and `main.tsx`, TypeScript strict mode configuration, app entry point in `index.html`
+- **Frontend build system**: Vite 8 configuration (`vite.config.ts`) with React plugin, dev server and preview server with proxy to `/api`, `/livez`, and `/readyz` (backend), production build optimization
+- **Frontend testing**: Vitest 4.1 unit test runner with jsdom environment, React Testing Library 16.3 for component testing, test configuration in `setupTests.ts`; Playwright 1.50+ for browser e2e specs in `frontend/e2e/`, separate from unit tests
+- **Status page**: `App.tsx` fetches backend health endpoints (`/livez` and `/readyz`) on mount and renders application and database health states, demonstrating frontend-to-backend integration and degrading gracefully when the backend is unreachable
 - **Frontend quality**: ESLint 10 + typescript-eslint 8 for linting, Prettier 3.8 for formatting, TypeScript strict mode for type safety
 - **API client**: Pre-generated `frontend/src/client/` containing OpenAPI client stubs (TypeScript), generated from the backend's OpenAPI schema via `@hey-api/openapi-ts`
-- **Frontend dependencies**: React 19, @hey-api/client-fetch for API calls, React Query for data fetching (as devDependency)
-- **Justfile recipes**: `just frontend-install`, `just frontend-build`, `just frontend-test`, `just frontend-lint`, `just generate-client`, `just frontend-check` (Node recipes, not part of Python `just check` chain)
+- **Frontend dependencies**: React 19, @hey-api/client-fetch for API calls, React Query for data fetching, @playwright/test for e2e (all as devDependency)
+- **Justfile recipes**: `just frontend-install`, `just frontend-build`, `just frontend-test`, `just frontend-test-e2e`, `just frontend-lint`, `just generate-client`, `just frontend-check` (Node recipes, not part of Python `just check` chain)
 - **No Python dependencies added**: The Python `pyproject.toml` remains unchanged; frontend is fully isolated in its own Node.js project
 
 To continue development:
@@ -363,7 +369,7 @@ git push
 Commonly used commands for package development:
 - `just check` - run unit tests and linters (format, lint, complexity, typecheck, tests, security audit, dead code detection). Primary quality gate; excludes e2e tests.
 - `just test` - run unit tests only (mocked, parallel, excludes e2e). Includes: fast regression guards for the no-flag scaffold guarantee, metadata writing tests, and CLI argument parsing tests.
-- `just test-e2e` - run end-to-end tests that scaffold packages and validate them with their respective test suites (slow, requires network and git/just/uv on PATH; npm required for fullstack test; docker/podman compose required for fullstack runtime test; skips gracefully if tools missing). Includes: no-flag scaffold validation (verifies zero backend/frontend artifacts), backend scaffold validation (verifies FastAPI injection and `just check` passes), fullstack scaffold validation (verifies FastAPI backend and React frontend both inject correctly and their respective test suites pass), fullstack runtime integration test (verifies the generated application runs end-to-end in a real Docker Compose stack with live Postgres, HTTP health endpoints, API client generation, and frontend builds), and negative test (verifies no-flag packages have zero backend/frontend artifacts).
+- `just test-e2e` - run end-to-end tests that scaffold packages and validate them with their respective test suites (slow, requires network and git/just/uv on PATH; npm required for fullstack test; docker/podman compose required for fullstack runtime test; skips gracefully if tools missing). Includes: no-flag scaffold validation (verifies zero backend/frontend artifacts), backend scaffold validation (verifies FastAPI injection and `just check` passes), fullstack scaffold validation (verifies FastAPI backend and React frontend both inject correctly and their respective test suites pass), fullstack runtime integration test (verifies the generated application runs end-to-end in a real Docker Compose stack with live Postgres, HTTP health endpoints, API client generation, frontend builds, and Playwright browser automation against the running frontend+backend stack), and negative test (verifies no-flag packages have zero backend/frontend artifacts).
 - `just fix` - format code and fix detected fixable issues.
 - `just publish` - publishes current package version to pypi.org.
 - `just lock` - refresh `uv.lock` to the latest resolvable dependency versions.
