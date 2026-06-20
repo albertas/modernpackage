@@ -1,7 +1,6 @@
 # ToDo
-- [ ] Add end-to-end tests for fullstack scaffolding boostrap. Add this test to end to end tests directory. Check in the end to end test scaffolded full stack application is functional by adding new products list page. The products should be stored in the database and the test should test creation and reading of the products in frontend page.
-
 # Done
+- [x] [T62] Add end-to-end tests for fullstack scaffolding boostrap. Add this test to end to end tests directory. Check in the end to end test scaffolded full stack application is functional by adding new products list page. The products should be stored in the database and the test should test creation and reading of the products in frontend page.
 - [x] [T61] Add end-to-end tests for backend boostrap.  Use standalone directory for end to end tests.  Test health check of the scaffolded application to verify that database connectivity is working. Also make a database schema change by introducing products table and run the migration using Jusfile target of the scaffold. Verify that health check passes after the database modification.
 - [x] [T60] Add playwrite setup to --fullstack scaffolding that would allow to tests frontend, backend, database integration. Add status page to the frontend that would show application and database health based on /health endpoint output.
 - [x] [T59] Add end to end test that tests --fullstack application scaffolding.

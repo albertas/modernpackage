@@ -5,6 +5,7 @@ Mirrors the proven scaffold/compose/http helpers in `tests/test_e2e.py`
 under pytest's default "prepend" import mode (the test dir is on `sys.path`).
 """
 
+import json
 import os
 import subprocess
 import urllib.error
@@ -155,6 +156,232 @@ def scaffold_backend_package(tmp_path: Path) -> tuple[Path, str]:
     )
     main._strip_scaffolding(destination)  # noqa: SLF001
     main._add_backend(destination)  # noqa: SLF001
+    stage = _run(['git', 'add', '-A'], cwd=destination)
+    assert stage.returncode == 0, f'git add failed:\n{stage.stderr}'
+
+    init = _run(
+        ['just', 'init', module_name],
+        cwd=destination,
+        env=os.environ | _GIT_IDENTITY_ENV,
+    )
+    assert init.returncode == 0, f'just init failed:\n{init.stdout}\n{init.stderr}'
+
+    return destination, module_name
+
+
+def _http_post_json(
+    url: str,
+    payload: dict[str, object],
+    timeout: float = 30.0,
+) -> tuple[int, str]:
+    """POST `payload` as JSON to `url`; return `(status_code, body)`.
+
+    Mirrors `_http_get`: returns HTTP error statuses (4xx/5xx) rather than
+    raising, so callers can assert on them (design decision 6).
+    """
+    data = json.dumps(payload).encode('utf-8')
+    request = urllib.request.Request(  # noqa: S310
+        url,
+        data=data,
+        headers={'Content-Type': 'application/json'},
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+            return response.status, response.read().decode('utf-8')
+    except urllib.error.HTTPError as error:
+        return error.code, error.read().decode('utf-8')
+
+
+_APP_TSX_SOURCE: str = """import { useEffect, useState } from 'react';
+
+type AppHealth = 'checking' | 'healthy' | 'unhealthy' | 'unavailable';
+type DbHealth = 'checking' | 'ready' | 'not ready' | 'unavailable';
+
+async function fetchStatus(path: string): Promise<'pass' | 'fail' | 'unavailable'> {
+  try {
+    const response = await fetch(path);
+    const body = (await response.json()) as { status?: string };
+    if (response.ok && body.status === 'pass') {
+      return 'pass';
+    }
+    return 'fail';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+interface Product {
+  id: number;
+  name: string;
+}
+
+export function App() {
+  const [appHealth, setAppHealth] = useState<AppHealth>('checking');
+  const [dbHealth, setDbHealth] = useState<DbHealth>('checking');
+  const [products, setProducts] = useState<Product[]>([]);
+
+  useEffect(() => {
+    void fetchStatus('/livez').then((result) => {
+      setAppHealth(
+        result === 'pass' ? 'healthy' : result === 'fail' ? 'unhealthy' : 'unavailable',
+      );
+    });
+    void fetchStatus('/readyz').then((result) => {
+      setDbHealth(
+        result === 'pass' ? 'ready' : result === 'fail' ? 'not ready' : 'unavailable',
+      );
+    });
+    void fetch('/api/products')
+      .then((response) => response.json() as Promise<Product[]>)
+      .then((rows) => setProducts(rows))
+      .catch(() => setProducts([]));
+  }, []);
+
+  return (
+    <main>
+      <h1>modernpackage</h1>
+      <dl>
+        <dt>Application</dt>
+        <dd>{appHealth}</dd>
+        <dt>Database</dt>
+        <dd>{dbHealth}</dd>
+      </dl>
+      <ul>
+        {products.map((product) => (
+          <li key={product.id}>{product.name}</li>
+        ))}
+      </ul>
+    </main>
+  );
+}
+"""
+
+
+_PRODUCTS_SPEC_SOURCE: str = """import { expect, test } from '@playwright/test';
+
+test('products page shows the seeded product', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByText('E2E Widget')).toBeVisible();
+});
+"""
+
+
+_PRODUCTS_ROUTER_SOURCE: str = '''"""Products router — injected by the e2e test."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter
+from pydantic import BaseModel
+from sqlalchemy import select
+
+from {module}.db import DbSessionDep, Product
+
+router = APIRouter()
+
+
+class ProductIn(BaseModel):
+    name: str
+
+
+class ProductOut(BaseModel):
+    id: int
+    name: str
+
+
+@router.get('/products')
+async def list_products(session: DbSessionDep) -> list[ProductOut]:
+    result = await session.execute(select(Product))
+    return [ProductOut(id=row.id, name=row.name) for row in result.scalars()]
+
+
+@router.post('/products')
+async def create_product(payload: ProductIn, session: DbSessionDep) -> ProductOut:
+    product = Product(name=payload.name)
+    session.add(product)
+    await session.commit()
+    await session.refresh(product)
+    return ProductOut(id=product.id, name=product.name)
+'''
+
+
+def _register_products_page(destination: Path) -> None:
+    """Overwrite `frontend/src/App.tsx` and add the products Playwright spec.
+
+    Runs before `just init` so the staged files are token-renamed (the `App.tsx`
+    heading keeps the literal `modernpackage` token for init's sed). The new
+    `App.tsx` preserves the heading + health `<dl>` (so `status.spec.ts` still
+    passes) and adds a `<ul>` fetched from `/api/products` (design decision 7).
+    """
+    frontend_dir = destination / 'frontend'
+    (frontend_dir / 'src' / 'App.tsx').write_text(_APP_TSX_SOURCE)
+    (frontend_dir / 'e2e' / 'products.spec.ts').write_text(_PRODUCTS_SPEC_SOURCE)
+
+
+def _register_products_feature(destination: Path, module_name: str) -> None:
+    """Inject the products feature into an already-initialized package.
+
+    Appends the `Product` model to `db.py`, writes `products.py` (router with
+    GET/POST `/products`), and wires the router into `app.py` under prefix `/api`.
+    Runs AFTER `just init`, so all source references the renamed module
+    (design decision 4); asserts each anchor before replacing (Open Risks).
+    """
+    source_dir = destination / module_name
+    _register_product_model(source_dir)
+
+    products_path = source_dir / 'products.py'
+    products_path.write_text(_PRODUCTS_ROUTER_SOURCE.format(module=module_name))
+
+    app_path = source_dir / 'app.py'
+    app_text = app_path.read_text()
+
+    import_anchor = f'from {module_name}.health import router as health_router'
+    assert import_anchor in app_text, 'app.py health import anchor not found'
+    products_import = f'from {module_name}.products import router as products_router'
+    app_text = app_text.replace(
+        import_anchor,
+        f'{import_anchor}\n{products_import}',
+        1,
+    )
+
+    include_anchor = '    app.include_router(health_router)'
+    assert include_anchor in app_text, 'app.py health include anchor not found'
+    app_text = app_text.replace(
+        include_anchor,
+        f"{include_anchor}\n    app.include_router(products_router, prefix='/api')",
+        1,
+    )
+
+    app_path.write_text(app_text)
+
+
+def scaffold_fullstack_package(tmp_path: Path) -> tuple[Path, str]:
+    """Scaffold a fullstack package into `tmp_path`; return (destination, module).
+
+    Reproduces the fullstack flow (`tests/test_e2e.py`): clone the local
+    checkout, write metadata, strip scaffolding, inject backend + frontend
+    templates, register the products page, stage with `git add -A`, then
+    `just init` to rename the `modernpackage` token and make the initial commit.
+    """
+    package_name = 'fullstack-feature.pkg'
+    module_name = normalize_module_name(package_name)
+    destination = tmp_path / module_name
+
+    clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
+    assert clone.returncode == 0, f'git clone failed:\n{clone.stderr}'
+
+    main._write_package_metadata(  # noqa: SLF001
+        destination,
+        author_name='Test Author',
+        author_email='test@example.org',
+        description='An e2e fullstack package.',
+        package_license='Apache-2.0',
+        repository_url='https://example.org/repo',
+    )
+    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._inject_templates(destination, fullstack=True)  # noqa: SLF001
+    _register_products_page(destination)
+
     stage = _run(['git', 'add', '-A'], cwd=destination)
     assert stage.returncode == 0, f'git add failed:\n{stage.stderr}'
 

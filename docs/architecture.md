@@ -1652,6 +1652,79 @@ Validates that a scaffolded backend-only application runs end-to-end in a real D
 
 **What it guarantees**: A scaffolded backend-only application is genuinely functional end-to-end: the compose stack brings up a real Postgres database with applied base schema, the FastAPI backend responds to health probes with a real database connection, host-side migration tools can connect to the exposed Postgres, new models can be registered and migrated via the scaffold's own `just makemigration` and `just migrate` targets, and the readiness probe remains healthy after schema changes. This complements `test_scaffolded_backend_package_passes_check` (structural validation and unit test execution) by verifying actual runtime behavior with a real database.
 
+#### Fullstack Feature Integration: `test_fullstack_feature_runs_end_to_end`
+
+Validates that a scaffolded fullstack application can host a database-backed feature working end-to-end: model → migration → backend API endpoints → HTTP round-trip → browser rendering. This test goes beyond the existing fullstack runtime test by exercising feature injection, database operations, and complete frontend-to-backend data flow through browser automation.
+
+**Location**: `tests_e2e/test_fullstack_feature_e2e.py` (standalone test file with shared helpers in `tests_e2e/_scaffold.py`)
+
+**Test flow** (three phases, all in a single test function):
+
+1. **Phase 1 — Scaffold fullstack package with feature framework**:
+   - Clones the local template repository into a temporary directory
+   - Writes metadata (author, description, license, repository URL)
+   - Strips scaffolder machinery (`main.py`, scaffolder tests, `docs/`, `BACKLOG.md`)
+   - Injects the fullstack via `main._inject_templates(destination, fullstack=True)` (backend + frontend templates with recipes)
+   - Registers a products feature page by overwriting `frontend/src/App.tsx` with a version that:
+     - Preserves the shipped health status display (so `status.spec.ts` still passes)
+     - Adds a products section that fetches `/api/products` on mount and renders product names in a `<ul>`
+   - Writes a Playwright spec `frontend/e2e/products.spec.ts` that asserts the seeded product name is visible
+   - Stages files with `git add -A`
+   - Runs `just init <module_name>` to rename "modernpackage" tokens and make the initial commit
+   - **Assertions**: Fullstack layout verified — `app.py`, `db.py`, `frontend/src/App.tsx`, `frontend/playwright.config.ts`, and Justfile recipes are present; "modernpackage" token is absent from all Python source files
+
+2. **Phase 2 — Register products feature and exercise backend API**:
+   - Injects the `Product` SQLAlchemy model into the generated `module/db.py` by appending model definition
+   - Writes `products.py` router with:
+     - `GET /api/products` to list all products as JSON array
+     - `POST /api/products` to create a new product (accepts `{"name": "..."}`, returns the created row with `id` and `name`)
+     - Both endpoints use async SQLAlchemy with the scaffold's `DbSessionDep` (dependency injection)
+   - Wires the router into `app.py` by editing it to import and include the products router under `/api` prefix (asserts anchors before replacing)
+   - Detects the compose command (auto-detects `docker compose` → `podman compose` → `podman-compose`, skips if none found)
+   - Exposes the generated `db` service's port 5432 to the host so host-side migration tools can reach Postgres
+   - Brings up the stack via `compose up -d --wait --build` (builds the app image with injected model + router, starts Postgres, runs migrations)
+   - **Assertions**:
+     - `GET http://127.0.0.1:8000/livez` returns 200 (liveness)
+     - `GET http://127.0.0.1:8000/readyz` returns 200 (readiness with live Postgres)
+   - Registers the `Product` model and runs host-side migrations:
+     - Runs `just makemigration "add products"` with explicit `DATABASE_URL` pointing to exposed Postgres
+     - Runs `just migrate` to apply the migration
+     - **Assertions**: At least one version file in `migrations/versions/` contains `create_table('products')`
+   - Tests the backend API with real HTTP round-trip:
+     - `POST http://127.0.0.1:8000/api/products` with `{"name": "E2E Widget"}` returns 200 or 201 and body contains "E2E Widget"
+     - `GET http://127.0.0.1:8000/api/products` returns 200 and body contains "E2E Widget"
+
+3. **Phase 3 — Build frontend and verify browser rendering**:
+   - Installs frontend Node dependencies via `just frontend-install` (runs `npm ci`)
+   - Regenerates the OpenAPI client via `just generate-client`:
+     - Fetches the live `http://localhost:8000/openapi.json` from the running backend
+     - Regenerates `frontend/src/client/` with product operation types
+     - **Assertions**: Regenerated client contains "products" substring
+   - Builds the frontend via `just frontend-build` (runs `vite build`):
+     - TypeScript type-checks pass
+     - Vite bundles to `frontend/dist/`
+     - **Assertions**: `frontend/dist/index.html` exists
+   - Runs Playwright e2e tests via `just frontend-test-e2e`:
+     - `products.spec.ts` navigates to `/` and asserts "E2E Widget" is visible in the DOM
+     - `status.spec.ts` confirms the health status display still renders (heading + app/database health)
+     - **Graceful skip**: If Playwright browser installation is unavailable (e.g., headless CI), skips cleanly instead of failing
+   - **Teardown**: Always runs `compose down -v` in `try/finally` to:
+     - Stop all containers
+     - Remove the `pgdata` volume (prevents port/volume leakage between test runs)
+     - Free port 8000 for subsequent test runs
+
+**Shared helper additions** (`tests_e2e/_scaffold.py`):
+- Exports `scaffold_fullstack_package(tmp_path) -> (destination, module_name)` to encapsulate the clone → metadata → strip → fullstack-inject → stage → init flow
+- Exports `_register_products_feature(destination, module_name)` to inject the Product model, products.py router, and wire it into app.py
+- Exports `_http_post_json(url, payload)` to mirror `_http_get` for POST operations (returns `(status_code, body)`, surfaces HTTP error statuses without raising)
+- Exports new constants: `_APP_TSX_SOURCE` (frontend App.tsx with products section), `_PRODUCTS_SPEC_SOURCE` (Playwright spec for products visibility), `_PRODUCTS_ROUTER_SOURCE` (FastAPI router with GET/POST `/products`)
+
+**Graceful skipping**: Requires `git`, `just`, `uv`, `npm` on `PATH` for scaffolding and frontend operations; additionally requires a compose command (`docker compose`, `podman compose`, or `podman-compose`) for stack operations and browsers for Playwright. The test skips cleanly with a diagnostic message if any required tool is missing, or if Playwright browser installation fails. Compose command auto-detection tries the portability set in precedence order.
+
+**Caveats**: This test pulls `postgres:17`, builds the application image, runs `npm ci` + client generation + `vite build`, and runs browser automation. It takes several minutes and requires network access. It is excluded from `just check` (default quality gate) and requires explicit `just test-e2e` invocation. Like other fullstack tests, it is slow and network-dependent.
+
+**What it guarantees**: A scaffolded fullstack application can successfully host a database-backed feature working end-to-end: the model lands in the database, migrations apply, endpoints serve HTTP correctly, and the frontend can fetch and render the data through browser automation. This complements `test_fullstack_package_runs_end_to_end` (which validates the shipped health page) by exercising the complete feature injection and data flow cycle — a realistic test of adding a new feature to a generated application.
+
 #### Common Characteristics
 
 **Why e2e tests are excluded by default:**
