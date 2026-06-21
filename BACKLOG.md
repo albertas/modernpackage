@@ -1,5 +1,6 @@
 # ToDo
 # Done
+- [x] [T64] End to end tests are failing when run using Justfile alias. In end to end tests install this package in editable mode, scaffold new package, run checks (they should pass), make modifications to the package and check if checks pass after modifications of the package. Task is not complete untill all the end to end tests are green.
 - [x] [T63] End to end tests seem to be failing. Fix them.
 - [x] [T62] Add end-to-end tests for fullstack scaffolding boostrap. Add this test to end to end tests directory. Check in the end to end test scaffolded full stack application is functional by adding new products list page. The products should be stored in the database and the test should test creation and reading of the products in frontend page.
 - [x] [T61] Add end-to-end tests for backend boostrap.  Use standalone directory for end to end tests.  Test health check of the scaffolded application to verify that database connectivity is working. Also make a database schema change by introducing products table and run the migration using Jusfile target of the scaffold. Verify that health check passes after the database modification.

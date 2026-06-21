@@ -26,6 +26,7 @@ The result (when scaffolding proceeds) is a clean, ready-to-build Python package
 |------|---------|
 | [invocation.md](invocation.md) | **CLI usage**: entry points, command-line flags, argument validation, examples. Covers the `--backend`/`--fastapi` flag for FastAPI service scaffolding and the `--fullstack`/`--reactjs` flag for frontend+backend scaffolding. |
 | [architecture.md](architecture.md) | **Design & modules**: package structure, module responsibilities, init flow, build & versioning, developer tooling, test strategy. Describes the backend and frontend template injection mechanisms. |
+| [data_flows.md](data_flows.md) | **Data flows**: argument parsing, validation, preflight checks, scaffolding pipeline, metadata resolution, target path computation. |
 | [backlog_formats.md](backlog_formats.md) | **Task tracking format**: BACKLOG.md structure, progress markers, category tags. |
 | [specification.md](specification.md) | **Complete architectural reference**: package goals, modules, CLI entry point, initialization flow, build/versioning, developer tooling, tests, repository structure, known gaps. Start here for deep understanding. |
 | [containerization.md](containerization.md) | **Containerization**: Containerfile authoring, multi-stage builds, Docker Compose with async migrations, health checks, Podman/Docker compatibility. |
