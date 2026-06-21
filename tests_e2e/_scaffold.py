@@ -8,6 +8,7 @@ under pytest's default "prepend" import mode (the test dir is on `sys.path`).
 import json
 import os
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -76,6 +77,32 @@ def _http_get(url: str, timeout: float = 30.0) -> tuple[int, str]:
             return response.status, response.read().decode('utf-8')
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode('utf-8')
+
+
+def _wait_for_ready(url: str, timeout: float = 120.0) -> None:
+    """Poll `url` until it returns HTTP 200 or `timeout` seconds elapse.
+
+    Backend-agnostic replacement for docker-compose's `up --wait` (design
+    decision 1): podman compose rejects `--wait` (research Q3). The stack builds
+    images and runs migrations on first `up`, so use a generous monotonic
+    deadline with a short sleep between polls. `_http_get` re-raises
+    connection-level failures (the port refuses connections before the app
+    binds), so wrap each poll in `try/except (URLError, OSError)` and retry.
+    Raises `RuntimeError` on timeout with the last status/body.
+    """
+    deadline = time.monotonic() + timeout
+    last_detail = 'no response received'
+    while time.monotonic() < deadline:
+        try:
+            status, body = _http_get(url, timeout=5.0)
+        except (urllib.error.URLError, OSError) as error:
+            last_detail = f'connection error: {error}'
+        else:
+            if status == 200:
+                return
+            last_detail = f'status {status}: {body}'
+        time.sleep(2.0)
+    raise RuntimeError(f'{url} not ready after {timeout}s ({last_detail})')
 
 
 _HOST_DATABASE_URL: str = 'postgresql+asyncpg://appuser:secret@localhost:5432/appdb'

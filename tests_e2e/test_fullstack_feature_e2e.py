@@ -15,6 +15,7 @@ from _scaffold import (
     _http_post_json,
     _register_products_feature,
     _run,
+    _wait_for_ready,
     scaffold_fullstack_package,
 )
 
@@ -51,8 +52,9 @@ def test_fullstack_feature_runs_end_to_end(tmp_path: Path) -> None:  # noqa: PLR
     _expose_db_port(destination)
 
     try:
-        up = _run([*compose, 'up', '-d', '--wait', '--build'], cwd=destination)
+        up = _run([*compose, 'up', '-d', '--build'], cwd=destination)
         assert up.returncode == 0, f'compose up failed:\n{up.stdout}\n{up.stderr}'
+        _wait_for_ready('http://127.0.0.1:8000/readyz')
 
         livez_status, livez_body = _http_get('http://127.0.0.1:8000/livez')
         assert livez_status == 200, f'/livez returned {livez_status}: {livez_body}'

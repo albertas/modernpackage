@@ -14,6 +14,7 @@ compile:
 test *args: sync
   uv run pytest -n "$(nproc --ignore=1)" {{args}}
 
+e: test-e2e 
 test-e2e *args: sync
   uv run pytest -m e2e --no-cov {{args}}
 

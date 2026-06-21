@@ -658,7 +658,7 @@ The e2e tests scaffold packages from the local template and validate:
 
 **Backend runtime integration test** (`test_backend_package_runs_end_to_end`):
 1. Backend-only package scaffolds correctly with `app.py`, `health.py`, `compose.yml`, migrations, and Justfile recipes
-2. `compose up -d --wait --build` succeeds and brings all services to healthy state
+2. `compose up -d --build` succeeds and services become healthy (verified via backend-agnostic polling of `/readyz` endpoint)
 3. `GET http://127.0.0.1:8000/livez` returns 200 (liveness check with base schema)
 4. `GET http://127.0.0.1:8000/readyz` returns 200 (readiness check with live database and applied schema)
 5. `just makemigration "add products"` and `just migrate` succeed on the host with an explicit `DATABASE_URL`
@@ -667,7 +667,7 @@ The e2e tests scaffold packages from the local template and validate:
 
 **Fullstack runtime integration test** (`test_fullstack_package_runs_end_to_end`):
 1. Fullstack package scaffolds correctly with backend (FastAPI, async ORM, migrations) and frontend (React, Vite, TypeScript)
-2. `compose up -d --wait --build` succeeds with Postgres, migrations, and backend all healthy
+2. `compose up -d --build` succeeds and services become healthy (verified via backend-agnostic polling of `/readyz` endpoint)
 3. Health probes return 200 (`/livez` and `/readyz` with live database)
 4. `just frontend-install` succeeds via `npm ci`
 5. `just generate-client` regenerates the OpenAPI client from the live backend schema

@@ -1,0 +1,150 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 497091
+    cost_usd: 1.2921705
+    input_tokens: 3876
+    output_tokens: 12285
+    cache_read_tokens: 1037959
+    cache_creation_tokens: 44256
+    model: Haiku 4.5, opus 4.8
+    context_used: 48132
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 207768
+    cost_usd: 1.2882335
+    input_tokens: 3297
+    output_tokens: 11916
+    cache_read_tokens: 857591
+    cache_creation_tokens: 54198
+    model: Haiku 4.5, opus 4.8
+    context_used: 57495
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 214598
+    cost_usd: 0.9363659999999999
+    input_tokens: 3283
+    output_tokens: 11917
+    cache_read_tokens: 449830
+    cache_creation_tokens: 39395
+    model: Haiku 4.5, opus 4.8
+    context_used: 42678
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 49937
+    cost_usd: 0.3589695
+    input_tokens: 3007
+    output_tokens: 4193
+    cache_read_tokens: 66739
+    cache_creation_tokens: 20245
+    model: Haiku 4.5, opus 4.8
+    context_used: 23252
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 121088
+    cost_usd: 0.9285660000000001
+    input_tokens: 3281
+    output_tokens: 9404
+    cache_read_tokens: 440388
+    cache_creation_tokens: 45349
+    model: Haiku 4.5, opus 4.8
+    context_used: 48630
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 188467
+    cost_usd: 0.5608978
+    input_tokens: 6427
+    output_tokens: 16460
+    cache_read_tokens: 3153698
+    cache_creation_tokens: 76093
+    model: Haiku 4.5
+    context_used: 82520
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 240574
+    cost_usd: 3.473779
+    input_tokens: 3430
+    output_tokens: 10956
+    cache_read_tokens: 3127524
+    cache_creation_tokens: 153299
+    model: Haiku 4.5, opus 4.8
+    context_used: 156729
+    context_max: 1000000
+    lines_of_code: 98
+  sub_phases:
+  - num: 1
+    title: Stop `tests_e2e/` leaking into scaffolds
+    done: true
+    metrics:
+      duration_ms: 176312
+      cost_usd: 2.5101035
+      input_tokens: 3287
+      output_tokens: 5384
+      cache_read_tokens: 1874771
+      cache_creation_tokens: 133569
+      model: Haiku 4.5, opus 4.8
+      context_used: 136856
+      context_max: 1000000
+      lines_of_code: 27
+  - num: 2
+    title: Backend-agnostic readiness poll in `tests/test_e2e.py`
+    done: true
+    metrics:
+      duration_ms: 323936
+      cost_usd: 3.4924815000000002
+      input_tokens: 3430
+      output_tokens: 15783
+      cache_read_tokens: 3001465
+      cache_creation_tokens: 149403
+      model: opus 4.8, Haiku 4.5
+      context_used: 152833
+      context_max: 1000000
+      lines_of_code: 63
+  - num: 3
+    title: Mirror readiness poll into `tests_e2e/`
+    done: true
+    metrics:
+      duration_ms: 240574
+      cost_usd: 3.473779
+      input_tokens: 3430
+      output_tokens: 10956
+      cache_read_tokens: 3127524
+      cache_creation_tokens: 153299
+      model: Haiku 4.5, opus 4.8
+      context_used: 156729
+      context_max: 1000000
+      lines_of_code: 98
+cumulative:
+  total_cost: 8.8389823
+  total_ms: 1519523
+  total_cache_read: 9133729
+  total_cache_write: 432835
+  total_loc: 98
+  total_input_tokens: 26601
+  total_output_tokens: 77131
+  version: 0.0.10
+  completed_at: 2026-06-21 04:06:42.693152

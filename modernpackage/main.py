@@ -519,6 +519,7 @@ def _apply_license(content: str, package_license: str) -> str:
 _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'modernpackage/main.py',
     'tests/test_e2e.py',
+    'tests_e2e',  # Newer runtime e2e dir (T61/T62); imports `main`, must not ship
     'docs',
     'BACKLOG.md',
     'backend_template',  # Always removed; re-injected if --backend is set

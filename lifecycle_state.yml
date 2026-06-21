@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-06-20 20:24:03
+heart_beat: 2026-06-21 04:06:23
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,5 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T62-2026-06-20-add-end-to-end-tests-for-fullstack-scaffolding-boo
-    heart_beat: 2026-06-20 20:24:03
+  - artifact_dir: T63-2026-06-21-end-to-end-tests-seem-to-be-failing-fix-them
+    heart_beat: 2026-06-21 04:06:23

@@ -262,6 +262,7 @@ Clone-relative paths deleted wholesale from a generated package:
 _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'modernpackage/main.py',
     'tests/test_e2e.py',
+    'tests_e2e',
     'docs',
     'BACKLOG.md',
     'backend_template',  # Always removed; re-injected if --backend is set
@@ -269,7 +270,7 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
 )
 ```
 
-Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The `backend_template` and `frontend_template` entries are always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects backend template files into the clone root after stripping. When `--fullstack` is set, both `_add_backend()` and `_add_frontend()` re-inject their respective templates after stripping.
+Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The `backend_template` and `frontend_template` entries are always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects backend template files into the clone root after stripping. When `--fullstack` is set, both `_add_backend()` and `_add_frontend()` re-inject their respective templates after stripping. The `tests_e2e` entry is removed to prevent the scaffolder's own end-to-end test directory from leaking into scaffolded packages and causing import errors in the generated package's test suite.
 
 **`_BACKEND_TEMPLATE_DIR: Path`**
 
@@ -1579,10 +1580,11 @@ Validates `--fullstack`/`--reactjs` scaffolding workflow, running both backend a
 Validates that a scaffolded fullstack application runs end-to-end in a real Docker Compose stack and exercises the backend↔frontend integration path. This test goes beyond structural validation by running the complete application stack and testing real HTTP endpoints, API client generation, and frontend builds:
 
 1. **Setup**: Same clone, metadata, strip, fullstack-inject, and init steps as the fullstack scaffold test
-2. **Compose up & wait**: Brings the stack up via `compose up -d --wait --build`, which blocks until all services are healthy:
-   - `db` service (Postgres 17) starts and becomes healthy (`pg_isready`)
-   - `migrate` service (Alembic) runs migrations and completes successfully
-   - `app` service (uvicorn with FastAPI factory) starts and its `/readyz` healthcheck passes (real `SELECT 1` on the live database)
+2. **Compose up & wait**: Brings the stack up via `compose up -d --build`, then polls `/readyz` until it returns HTTP 200:
+   - `db` service (Postgres 17) starts
+   - `migrate` service (Alembic) runs migrations
+   - `app` service (uvicorn with FastAPI factory) starts
+   - The `_wait_for_ready()` helper polls `http://127.0.0.1:8000/readyz` with a 120-second deadline, catching connection-level errors (port refuses early connections), sleeping 2 seconds between polls, and failing loudly if the timeout elapses. A green `/readyz` response (HTTP 200) indicates the app is healthy with a live database connection and applied migrations
 3. **Backend HTTP assertions**: With the stack live, makes real HTTP requests from the test host:
    - `GET http://127.0.0.1:8000/livez` returns 200 with `{"status":"pass"}` (liveness check)
    - `GET http://127.0.0.1:8000/readyz` returns 200 (readiness check with live DB)
@@ -1625,8 +1627,9 @@ Validates that a scaffolded backend-only application runs end-to-end in a real D
 
 2. **Phase 2 — Bring stack up and assert health**:
    - Exposes the generated `db` service port to the host by appending `ports: ["127.0.0.1:5432:5432"]` to the ephemeral copy's `compose.yml` (design decision: modifies only the test's temporary copy, not the template)
-   - Runs `compose up -d --wait --build` to bring the stack up with automatic migration gating and health probe blocking
+   - Runs `compose up -d --build` to bring the stack up, then polls `/readyz` until it returns HTTP 200
    - Detects the compose command (probes `docker compose` → `podman compose` → `podman-compose`, skips if none found)
+   - Uses the `_wait_for_ready()` helper to poll `http://127.0.0.1:8000/readyz` with a 120-second deadline, catching connection-level errors, sleeping 2 seconds between polls, and failing loudly if the timeout elapses. This backend-agnostic approach replaces docker-only `--wait` and works with both docker and podman
    - **Assertions**: Pre-migration health probes pass:
      - `GET http://127.0.0.1:8000/livez` returns 200 (liveness)
      - `GET http://127.0.0.1:8000/readyz` returns 200 (readiness with live Postgres and applied base schema)
@@ -1682,7 +1685,8 @@ Validates that a scaffolded fullstack application can host a database-backed fea
    - Wires the router into `app.py` by editing it to import and include the products router under `/api` prefix (asserts anchors before replacing)
    - Detects the compose command (auto-detects `docker compose` → `podman compose` → `podman-compose`, skips if none found)
    - Exposes the generated `db` service's port 5432 to the host so host-side migration tools can reach Postgres
-   - Brings up the stack via `compose up -d --wait --build` (builds the app image with injected model + router, starts Postgres, runs migrations)
+   - Brings up the stack via `compose up -d --build`, then polls `/readyz` until it returns HTTP 200 (builds the app image with injected model + router, starts Postgres, runs migrations)
+   - Uses the `_wait_for_ready()` helper to poll `http://127.0.0.1:8000/readyz` with a 120-second deadline, replacing docker-only `--wait` with a backend-agnostic approach that works with both docker and podman
    - **Assertions**:
      - `GET http://127.0.0.1:8000/livez` returns 200 (liveness)
      - `GET http://127.0.0.1:8000/readyz` returns 200 (readiness with live Postgres)
@@ -1769,6 +1773,7 @@ Located in `tests/test_e2e.py` with the `@pytest.mark.e2e` marker, this comprehe
 1. **Directory checks**: Verifies these directories do not exist:
    - `backend_template`, `frontend_template`, `frontend` (template injection remnants)
    - `migrations` (Alembic directory for databases)
+   - `tests_e2e` (scaffolder's end-to-end test directory that must not leak into generated packages)
 
 2. **File checks**: Verifies these configuration files do not exist:
    - `alembic.ini` (Alembic config)

@@ -14,6 +14,7 @@ from _scaffold import (
     _http_get,
     _register_product_model,
     _run,
+    _wait_for_ready,
     scaffold_backend_package,
 )
 
@@ -45,11 +46,12 @@ def test_backend_package_runs_end_to_end(tmp_path: Path) -> None:
     _expose_db_port(destination)
 
     # `compose.yml` lands at the package root (`destination`); `build: .` context
-    # is `destination`. `--wait` blocks until the app's `/readyz` healthcheck
+    # is `destination`. Polling `/readyz` blocks until the app's healthcheck
     # passes — proving db up + migrations applied + app ready (research Q2).
     try:
-        up = _run([*compose, 'up', '-d', '--wait', '--build'], cwd=destination)
+        up = _run([*compose, 'up', '-d', '--build'], cwd=destination)
         assert up.returncode == 0, f'compose up failed:\n{up.stdout}\n{up.stderr}'
+        _wait_for_ready('http://127.0.0.1:8000/readyz')
 
         livez_status, livez_body = _http_get('http://127.0.0.1:8000/livez')
         assert livez_status == 200, f'/livez returned {livez_status}: {livez_body}'

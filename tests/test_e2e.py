@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -102,6 +103,32 @@ def _http_get(url: str, timeout: float = 30.0) -> tuple[int, str]:
             return response.status, response.read().decode('utf-8')
     except urllib.error.HTTPError as error:
         return error.code, error.read().decode('utf-8')
+
+
+def _wait_for_ready(url: str, timeout: float = 120.0) -> None:
+    """Poll `url` until it returns HTTP 200 or `timeout` seconds elapse.
+
+    Backend-agnostic replacement for docker-compose's `up --wait` (design
+    decision 1): podman compose rejects `--wait` (research Q3). The stack builds
+    images and runs migrations on first `up`, so use a generous monotonic
+    deadline with a short sleep between polls. `_http_get` re-raises
+    connection-level failures (the port refuses connections before the app
+    binds), so wrap each poll in `try/except (URLError, OSError)` and retry.
+    Raises `RuntimeError` on timeout with the last status/body.
+    """
+    deadline = time.monotonic() + timeout
+    last_detail = 'no response received'
+    while time.monotonic() < deadline:
+        try:
+            status, body = _http_get(url, timeout=5.0)
+        except (urllib.error.URLError, OSError) as error:
+            last_detail = f'connection error: {error}'
+        else:
+            if status == 200:
+                return
+            last_detail = f'status {status}: {body}'
+        time.sleep(2.0)
+    raise RuntimeError(f'{url} not ready after {timeout}s ({last_detail})')
 
 
 _RECIPE_NAME_RE = re.compile(r'^([a-z][\w-]*)(?: \w+)*:', re.MULTILINE)
@@ -284,6 +311,7 @@ def test_scaffolded_package_has_no_backend_or_frontend(tmp_path: Path) -> None:
         'frontend_template',
         'frontend',
         'migrations',
+        'tests_e2e',
     ):
         assert not (destination / directory).exists(), f'unexpected dir: {directory}'
 
@@ -426,10 +454,10 @@ def test_fullstack_package_runs_end_to_end(tmp_path: Path) -> None:
     """Scaffold a fullstack package and prove it runs against a real stack.
 
     Brings the shipped `compose.yml` up (db + migrate + app) via
-    `compose up --wait` (which blocks until the app's `/readyz` healthcheck
-    passes, proving DB + migrations + app readiness), then asserts host-side
-    HTTP on `/livez` and `/readyz`, regenerates the API client against the live
-    backend, and builds the frontend against it.
+    `compose up -d --build`, then polls `/readyz` until it returns 200 (proving
+    DB + migrations + app readiness), then asserts host-side HTTP on `/livez`
+    and `/readyz`, regenerates the API client against the live backend, and
+    builds the frontend against it.
 
     Caveats (inherited from sibling tests, see module docstring): pulls
     `postgres:17`, builds the app image, and runs `npm ci` + `vite build` —
@@ -473,11 +501,12 @@ def test_fullstack_package_runs_end_to_end(tmp_path: Path) -> None:
     # `destination / module_name` — `_add_backend` copytrees the backend
     # template into `package_path`. The `build: .` context is `destination`.
     try:
-        up = _run([*compose, 'up', '-d', '--wait', '--build'], cwd=destination)
+        up = _run([*compose, 'up', '-d', '--build'], cwd=destination)
         assert up.returncode == 0, f'compose up failed:\n{up.stdout}\n{up.stderr}'
+        _wait_for_ready('http://127.0.0.1:8000/readyz')
 
-        # Backend HTTP assertions (design pillar 1). `--wait` already proved
-        # readiness; these confirm real behavior from the host.
+        # Backend HTTP assertions (design pillar 1). The `_wait_for_ready` poll
+        # already proved readiness; these confirm real behavior from the host.
         livez_status, livez_body = _http_get('http://127.0.0.1:8000/livez')
         assert livez_status == 200, f'/livez returned {livez_status}: {livez_body}'
         assert 'pass' in livez_body, f'/livez body unexpected: {livez_body}'
