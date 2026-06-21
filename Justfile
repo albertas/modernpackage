@@ -54,6 +54,7 @@ fix: format fix-lint
 check: check-format check-lint check-complexity check-typecheck test audit # deadcode
 
 publish:
+  git push  # Modernpacakge clones the code from gitlab, so the updated code has to be available both on gitlab and pypi for release
   rm -fr dist/*
   uv build
   uv publish

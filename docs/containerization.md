@@ -32,8 +32,12 @@ creates `.venv/`, then copy only the `.venv/` directory to the runtime stage. Us
 
 ### Layer Caching
 
-Split `uv sync` into two phases: **Phase 1** bind-mounts `uv.lock` and `pyproject.toml`, runs
-`uv sync --locked --no-install-project`, and caches until either file changes. **Phase 2**
+Split `uv sync` into two phases: **Phase 1** bind-mounts `uv.lock`, `pyproject.toml`, and the
+project's version source file (the `__init__.py` file defined in `pyproject.toml`'s
+`[tool.hatch.version] path` key), runs `uv sync --locked --no-install-project`, and caches
+until any bound file changes. When the project uses hatchling with a dynamic version,
+the version-source file must be available during editable metadata generation; binding it to
+Phase 1 allows dependency resolution to succeed without the full source tree. **Phase 2**
 copies the full source and runs `uv sync --locked`. Use `--mount=type=cache,target=/root/.cache/uv`
 with BuildKit to cache downloads/compilation across rebuilds. For the first workspace sync,
 `--frozen` is recommended over `--locked`: it installs straight from the lockfile and skips the
@@ -43,7 +47,9 @@ use `--locked` to assert the lockfile is current.
 `.dockerignore`: the official Astral example ships exactly one entry — `.venv`
 (platform-specific, must be rebuilt in-image). Recommended additions for this project:
 `.git`, `__pycache__`, `*.pyc`, `.ruff_cache`, `.mypy_cache` (community conventions, not
-part of the Astral baseline).
+part of the Astral baseline). Note: Version-source files (e.g., `modernpackage/__init__.py`)
+and `README.md` are **not** excluded — they are deliberately available for bind-mounting during
+Phase 1 dependency installation.
 
 ### Build Environment Variables
 
@@ -81,10 +87,12 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
 WORKDIR /app
-# phase 1: deps only — cached until uv.lock / pyproject.toml change
+# phase 1: deps only — cached until uv.lock / pyproject.toml / version-source change
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    --mount=type=bind,source=modernpackage/__init__.py,target=modernpackage/__init__.py \
+    --mount=type=bind,source=README.md,target=README.md \
     uv sync --locked --no-install-project --no-dev
 # phase 2: project
 COPY . /app
@@ -97,6 +105,14 @@ COPY --from=builder /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH"   # activate venv; no uv needed at runtime
 CMD ["modernpackage", "--help"]
 ```
+
+**Note**: The phase 1 RUN command binds three files beyond the core lockfile and manifest:
+- `modernpackage/__init__.py` — the dynamic-version source file (rewritten to `<module>/__init__.py`
+  by `just init` during scaffolding). Hatchling reads this during editable metadata generation.
+- `README.md` — listed in `pyproject.toml:readme`, read by hatchling for the long-description
+  metadata field. Both files exist in the build context (the package root) and are available for
+  bind-mounting before Phase 2's `COPY . /app`. This approach avoids dependency-layer cache
+  invalidation while still building editable metadata correctly.
 
 **Note**: Confirm a `python:3.14-slim` (and matching `ghcr.io/astral-sh/uv:python3.14-*`) tag
 exists in the registry before using it; if unavailable, pin a digest or use the nearest
