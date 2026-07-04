@@ -387,6 +387,24 @@ A Python package.
 
 Replaces the scaffolder's detailed README (which documents the scaffolder, not the generated package). Required by `pyproject.toml:7` which specifies `readme = "README.md"`. Written with the literal `modernpackage` token so that `just init`'s rename sed rewrites the heading to the new module name.
 
+**`_ANSI_GREEN: str`**
+
+ANSI escape code for green text color:
+```python
+_ANSI_GREEN: str = '\033[32m'
+```
+
+Used by `_green()` to wrap text in green when color is enabled. Only rendered on an interactive TTY when the `NO_COLOR` environment variable is not set.
+
+**`_ANSI_RESET: str`**
+
+ANSI escape code to reset text styling to default:
+```python
+_ANSI_RESET: str = '\033[0m'
+```
+
+Used by `_green()` to restore normal text color after a green-wrapped section, ensuring subsequent output is not affected by the color state.
+
 #### Functions
 
 The main CLI orchestrator with type-annotated functions:
@@ -495,23 +513,74 @@ class PreflightCheck:
 
 **Usage**: Created and used by `_run_preflight_checks()` to build a registry of checks in order. Each check is independent and encapsulates one verifier.
 
+#### `_color_enabled() -> bool`
+
+A private helper that determines whether ANSI color output should be used based on TTY and environment variables.
+
+- **Purpose**: Probes the process boundary (TTY + environment) to decide whether to emit ANSI escape codes. Color is enabled only when **both** conditions hold: stdout is an interactive TTY **and** the `NO_COLOR` environment variable is not set (including the empty string). Called by `_green()` on every invocation.
+- **Parameters**: none
+- **Returns**: `bool` — `True` if color should be enabled, `False` otherwise
+- **Algorithm**: 
+  1. Checks `sys.stdout.isatty()` to determine if stdout is attached to an interactive terminal
+  2. Checks `os.environ.get('NO_COLOR') is None` to ensure the `NO_COLOR` variable is unset (the check is `is None`, not truthiness, so empty string disables color per the `NO_COLOR` standard)
+  3. Returns `True` only if both checks pass; otherwise returns `False`
+- **Examples**:
+  - In an interactive shell with no `NO_COLOR` set: returns `True`
+  - When output is piped (`| cat`): returns `False` (stdout is not a TTY)
+  - When `NO_COLOR=1` is set: returns `False`
+  - When `NO_COLOR=''` is set: returns `False` (empty string disables color)
+  - Under pytest `capsys`: returns `False` (capture is via a pipe, not a TTY)
+
+**Design rationale**:
+- Checks `isatty()` on the real `sys.stdout` object, not a cached value, so color is responsive to runtime redirection
+- Never raises an exception; degrades gracefully to plain text if stdout lacks the `isatty` method or any other probe fails (graceful boundary style per `main.py`)
+- The `is None` check (not truthiness) honors the `NO_COLOR` standard: any value, including the empty string, disables color
+
+#### `_green(text: str) -> str`
+
+A private helper that wraps text in ANSI green color when color is enabled, otherwise returns the text unchanged.
+
+- **Purpose**: Wraps affirmative status tokens (e.g., `'[ok]'`, `'passed'`, `'valid'`) in ANSI green/reset codes when stdout is an interactive TTY and `NO_COLOR` is unset. When color is disabled, returns the input unchanged, ensuring piped/redirected output is byte-for-byte identical to plain text.
+- **Parameters**:
+  - `text: str` — the text to optionally wrap in green
+- **Returns**: `str` — the input text wrapped in `_ANSI_GREEN` + `_ANSI_RESET` if color is enabled; the input text unchanged otherwise
+- **Algorithm**:
+  1. Calls `_color_enabled()` to check if color should be applied
+  2. If `True`: returns `f'{_ANSI_GREEN}{text}{_ANSI_RESET}'` (text wrapped in escape codes)
+  3. If `False`: returns `text` unchanged
+- **Examples**:
+  - With color enabled: `_green('[ok]')` → `'\033[32m[ok]\033[0m'` (visible as green in terminal)
+  - With color disabled: `_green('[ok]')` → `'[ok]'` (unchanged)
+  - Used in `_format_check_line`: wraps the padded marker field when `ok=True`
+  - Used in `init_new_package`: wraps `'passed'` and `'valid'` in the success message
+
+**Design rationale**:
+- Wraps the entire field (including padding) in `_format_check_line` to ensure alignment is computed on the plain text before escape codes are added (escape codes have zero visible width)
+- Reuses the same helper for all affirmative tokens, ensuring consistent color application across the output
+- Returns the input unchanged when color is disabled, making the output identical to non-color output for piped/pytest scenarios, so existing exact-string tests pass unchanged
+
 #### `_format_check_line(label: str, *, ok: bool) -> str`
 
-A private helper that formats one checklist line with a status marker and label.
+A private helper that formats one checklist line with a status marker and label, applying green coloring to successful markers on interactive terminals.
 
 - **Parameters**:
   - `label: str` — the check label (e.g., `'required tools on PATH (git, just, uv)'`)
   - `ok: bool` — keyword-only; whether the check passed (True) or failed (False)
-- **Returns**: `str` — one indented checklist line with marker and label, e.g., `'  [ok]   required tools on PATH (git, just, uv)'` or `'  [FAIL] required tools on PATH (git, just, uv)'`
-- **Marker formatting**: The marker (`[ok]` or `[FAIL]`) is left-justified in a 6-character field so that labels align vertically:
-  - `[ok]` (3 chars) → padded to `'[ok]  '` (6 chars) → with the literal space yields 3 spaces before the label
-  - `[FAIL]` (5 chars) → no padding, fits exactly (6 chars) → with the literal space yields 1 space before the label
+- **Returns**: `str` — one indented checklist line with marker and label. When `ok=True` and color is enabled, the padded marker is wrapped in green; otherwise plain. Examples:
+  - Plain (non-TTY): `'  [ok]   required tools on PATH (git, just, uv)'`
+  - Colored (TTY): `'  \033[32m[ok]  \033[0m required tools on PATH (git, just, uv)'`
+  - Failed (never colored): `'  [FAIL] required tools on PATH (git, just, uv)'`
+- **Marker formatting**: The marker (`[ok]` or `[FAIL]`) is left-justified in a 6-character field so that labels align vertically. Padding is computed on the plain marker **before** wrapping with `_green()`, so column alignment is measured on visible width, not escape codes:
+  - `[ok]` (3 chars) → padded to `'[ok]  '` (6 chars) → optionally wrapped in green → with the literal space yields 3 spaces before the label
+  - `[FAIL]` (5 chars) → no padding, fits exactly (6 chars) → never wrapped → with the literal space yields 1 space before the label
+- **Coloring**: When `ok=True`, the padded field is passed to `_green()`, which wraps it in ANSI codes if color is enabled (TTY + no `NO_COLOR`). When `ok=False`, the field is not colored (failure markers stay plain per design Decision 7 of `design.md`).
 - **Indentation**: Each line is indented with 2 spaces at the start for visual hierarchy under the `Preflight checks:` header
 
 **Examples:**
-- `_format_check_line('package name valid', ok=True)` → `'  [ok]   package name valid'`
-- `_format_check_line('required tools on PATH (git, just, uv)', ok=True)` → `'  [ok]   required tools on PATH (git, just, uv)'`
-- `_format_check_line('target directory available', ok=False)` → `'  [FAIL] target directory available'`
+- `_format_check_line('package name valid', ok=True)` on a TTY → `'  \033[32m[ok]  \033[0m package name valid'` (visible as green `[ok]`)
+- `_format_check_line('package name valid', ok=True)` off a TTY → `'  [ok]   package name valid'` (plain text)
+- `_format_check_line('required tools on PATH (git, just, uv)', ok=True)` → same as above, with the longer label
+- `_format_check_line('target directory available', ok=False)` → `'  [FAIL] target directory available'` (never colored)
 
 #### `_format_dry_run_plan(module_name: str, target_path: Path, *, author_name: str | None, author_email: str | None, description: str | None, package_license: str | None, repository_url: str | None) -> str`
 

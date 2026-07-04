@@ -678,12 +678,33 @@ _DRY_RUN_HEADER: str = 'Dry run — no changes will be made:'
 _RESET_VERSION: str = '0.0.1'
 _INIT_SUMMARY_HEADER: str = 'Created package:'
 _NEXT_COMMANDS_HEADER: str = 'Next steps:'
+_ANSI_GREEN: str = '\033[32m'
+_ANSI_RESET: str = '\033[0m'
+
+
+def _color_enabled() -> bool:
+    """Return True when stdout is an interactive TTY and NO_COLOR is unset.
+
+    Probes the environment/TTY at a process boundary; never raises — degrades to
+    plain text (graceful boundary style).
+    """
+    return sys.stdout.isatty() and os.environ.get('NO_COLOR') is None
+
+
+def _green(text: str) -> str:
+    """Wrap `text` in ANSI green/reset when color is enabled, else return as-is."""
+    if _color_enabled():
+        return f'{_ANSI_GREEN}{text}{_ANSI_RESET}'
+    return text
 
 
 def _format_check_line(label: str, *, ok: bool) -> str:
     """Return one indented checklist line; marker padded to 6 chars so labels align."""
     marker = '[ok]' if ok else '[FAIL]'
-    return f'  {marker:<6} {label}'
+    field = f'{marker:<6}'
+    if ok:
+        field = _green(field)
+    return f'  {field} {label}'
 
 
 def _format_dry_run_plan(  # noqa: PLR0913
@@ -1090,23 +1111,35 @@ def init_new_package(  # noqa: PLR0913
         message = f'just init failed with exit code {pipe.returncode}: {stderr_text}'
         raise RuntimeError(message)
 
+    # Inherit the parent's stdout/stderr (no PIPE) so `just check` streams its
+    # progress live — the chained ruff/mypy/pytest/pip-audit steps are slow and a
+    # silent capture makes the CLI look hung. The header gives that output context;
+    # flush=True keeps it ordered ahead of the child's direct-to-fd writes.
+    print(flush=True)  # noqa: T201
+    print(  # noqa: T201
+        f'Running just check in {module_name} (this can take a while)…',
+        flush=True,
+    )
     pipe = Popen(
         ['just', 'check'],  # noqa: S607
         stdin=PIPE,
-        stdout=PIPE,
-        stderr=PIPE,
         cwd=new_package_path,
     )
     pipe.communicate()
 
     if pipe.returncode == 0:
-        print(f'just check passed — {module_name} scaffold is valid.')  # noqa: T201
+        print(  # noqa: T201
+            f'just check {_green("passed")} — '
+            f'{module_name} scaffold is {_green("valid")}.'
+        )
+        print()  # noqa: T201
         _print_init_summary(package_name, new_package_path)
+        print()  # noqa: T201
         _print_next_commands(module_name)
         return 0
     print(  # noqa: T201
         f'just check failed with exit code {pipe.returncode}'
-        f' — review the output in {module_name}.',
+        ' — see the check output above.',
         file=sys.stderr,
     )
     return 1

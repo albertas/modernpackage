@@ -23,17 +23,22 @@ modernpackage <your-service-name> --backend    # includes app, async DB, migrati
 # Example: Preflight checklist and success summary (on success)
 modernpackage my-package
 
-# Output:
+# Output (on a TTY; [ok], passed, and valid render in green):
 # Preflight checks:
 #   [ok]   package name valid
 #   [ok]   required tools on PATH (git, just, uv)
 #   [ok]   target directory available
 #   [ok]   template remote reachable
+#
+# Running just check in my_package (this can take a while)…
+# (just check output)
 # just check passed — my_package scaffold is valid.
+#
 # Created package:
 #   package name: my-package
 #   path: /home/user/my_package
 #   version: 0.0.1
+#
 # Next steps:
 #   cd my_package && just check
 

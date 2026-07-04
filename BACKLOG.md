@@ -3,6 +3,7 @@
 - Have end to end test to test capabilities.
 
 # Done
+- [x] [T66] Use colorful (green) highlighting  for ok and success words. Also empty line for separating paragraphs in intialization output.
 - [x] [T65] End to end tests are failing when run using Justfile alias. In end to end tests install this package in editable mode, scaffold new package, run checks (they should pass), make modifications to the package and check if checks pass after modifications of the package. Task is not complete until all the end to end tests are green.
 - [x] [T64] End to end tests are failing when run using Justfile alias. In end to end tests install this package in editable mode, scaffold new package, run checks (they should pass), make modifications to the package and check if checks pass after modifications of the package. Task is not complete untill all the end to end tests are green.
 - [x] [T63] End to end tests seem to be failing. Fix them.

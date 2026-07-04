@@ -799,6 +799,43 @@ modernpackage my-package      # stderr: "Ignoring unreadable config file …"
                               # description="From env" (env used after config file error)
 ```
 
+## Output Formatting
+
+### Color Output
+
+`modernpackage` automatically detects whether the output terminal supports color and renders affirmative status markers (`[ok]`, `passed`, `valid`) in green on interactive terminals. The color detection respects the `NO_COLOR` environment variable standard.
+
+**Color is enabled when:**
+- stdout is connected to an interactive terminal (TTY), **and**
+- The `NO_COLOR` environment variable is unset (or not just set, but truly unset — the environment variable check uses `is None`, so even an empty string disables color)
+
+**Color is disabled when:**
+- stdout is piped or redirected (not a TTY), **or**
+- The `NO_COLOR` environment variable is set to any value (including the empty string)
+- Tests are run under pytest (piped capture)
+
+**Examples:**
+
+```bash
+# Color enabled (interactive terminal, no NO_COLOR)
+modernpackage my-package          # [ok] markers render green in terminal
+
+# Color disabled (piped output)
+modernpackage my-package | cat    # [ok] markers stay plain
+
+# Color disabled (NO_COLOR set)
+NO_COLOR=1 modernpackage my-package        # [ok] markers stay plain
+NO_COLOR= modernpackage my-package         # [ok] markers stay plain (empty string also disables)
+
+# Color in success message (TTY with no NO_COLOR)
+modernpackage my-package          # "passed" and "valid" render green
+
+# Plain text in success message (piped or NO_COLOR set)
+modernpackage my-package | cat    # "passed" and "valid" stay plain
+```
+
+**Design**: Color output respects the Unix `NO_COLOR` standard (`https://no-color.org/`), ensuring compatibility with automated tools and environments where color is undesired or unsupported. The color detection is performed at print time by checking `sys.stdout.isatty()` and the `NO_COLOR` environment variable, so color is responsive to runtime redirection. Non-TTY output is byte-for-byte identical to output without color, ensuring existing tests that assert on exact string output continue to pass unchanged.
+
 ## Argument Parser
 
 The CLI uses `argparse.ArgumentParser` with the following configuration:

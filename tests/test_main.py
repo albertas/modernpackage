@@ -1,4 +1,5 @@
 import inspect
+import sys
 import tomllib
 from argparse import ArgumentTypeError, Namespace
 from pathlib import Path
@@ -11,17 +12,21 @@ from modernpackage import __version__
 from modernpackage.main import (
     _GIT_CONFIG_USER_EMAIL_KEY,
     _GIT_CONFIG_USER_NAME_KEY,
+    _INIT_SUMMARY_HEADER,
     _REQUIRED_TOOLS,
     _add_backend,
     _add_frontend,
     _append_backend_dependencies,
     _append_backend_recipes,
     _append_frontend_recipes,
+    _color_enabled,
     _config_file_default,
+    _format_check_line,
     _format_dry_run_plan,
     _format_init_summary,
     _format_next_commands,
     _git_config_default,
+    _green,
     _load_config_file,
     _remove_project_scripts,
     _strip_scaffolding,
@@ -750,6 +755,34 @@ def test_run_preflight_checks_prints_full_checklist_on_clean_run(
     assert all(line in out for line in expected)
     assert indices == sorted(indices)
     assert popen_mock.call_count >= 1  # reached scaffolding
+
+
+def test_init_output_has_blank_separators(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with (
+        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
+        patch('modernpackage.main.Popen') as popen_mock,
+        patch('modernpackage.main.run') as run_mock,
+        patch('modernpackage.main._strip_scaffolding'),
+    ):
+        run_mock.return_value = MagicMock(returncode=0, stderr='')
+        popen_mock.return_value.returncode = 0
+        popen_mock.return_value.communicate.return_value = (b'', b'')
+        init_new_package('mypackage')
+    lines = capsys.readouterr().out.split('\n')
+
+    # blank line between the last preflight line and the progress line
+    last_preflight = max(
+        i for i, line in enumerate(lines) if 'template remote reachable' in line
+    )
+    progress = next(i for i, line in enumerate(lines) if 'Running just check' in line)
+    assert '' in lines[last_preflight + 1 : progress]
+
+    # blank line between the passed-line and the summary header
+    passed = next(i for i, line in enumerate(lines) if 'just check passed' in line)
+    summary = next(i for i, line in enumerate(lines) if line == _INIT_SUMMARY_HEADER)
+    assert '' in lines[passed + 1 : summary]
 
 
 def test_init_new_package_reports_check_failed() -> None:
@@ -1841,3 +1874,54 @@ def test_init_new_package_backend_only_does_not_add_frontend() -> None:
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage', backend=True)
     add_frontend_mock.assert_not_called()
+
+
+def test_green_wraps_when_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    assert _green('x') == '\033[32mx\033[0m'
+
+
+def test_green_noop_when_not_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.stdout, 'isatty', lambda: False)
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    assert _green('x') == 'x'
+
+
+def test_green_noop_when_no_color_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
+    monkeypatch.setenv('NO_COLOR', '')
+    assert _green('x') == 'x'
+    assert _color_enabled() is False
+
+
+def test_check_line_ok_is_green_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    line = _format_check_line('package name valid', ok=True)
+    assert '\033[32m' in line
+    assert '\033[0m' in line
+
+
+def test_check_line_ok_is_plain_off_tty(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.stdout, 'isatty', lambda: False)
+    line = _format_check_line('package name valid', ok=True)
+    assert line == '  [ok]   package name valid'
+    assert '\033' not in line
+
+
+def test_check_line_fail_is_never_green(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    line = _format_check_line('template remote reachable', ok=False)
+    assert '\033' not in line
+
+
+def test_success_line_words_are_green_on_tty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
+    monkeypatch.delenv('NO_COLOR', raising=False)
+    line = f'just check {_green("passed")} — demo scaffold is {_green("valid")}.'
+    assert '\033[32mpassed\033[0m' in line
+    assert '\033[32mvalid\033[0m' in line
