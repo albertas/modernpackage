@@ -302,7 +302,7 @@ def test_init_new_package() -> None:
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
-    assert popen_mock.call_count == 3
+    assert popen_mock.call_count == 5
     strip_mock.assert_called_once_with(Path.cwd() / 'mypackage')
 
 
@@ -336,9 +336,19 @@ def test_init_new_package_runs_just_check() -> None:
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
-    third_call = popen_mock.call_args_list[2]
-    assert third_call.args[0] == ['just', 'check']
-    assert third_call.kwargs['cwd'] == Path.cwd() / 'mypackage'
+    package_path = Path.cwd() / 'mypackage'
+
+    compile_call = popen_mock.call_args_list[2]
+    assert compile_call.args[0] == ['just', 'compile']
+    assert compile_call.kwargs['cwd'] == package_path
+
+    sync_call = popen_mock.call_args_list[3]
+    assert sync_call.args[0] == ['just', 'sync']
+    assert sync_call.kwargs['cwd'] == package_path
+
+    check_call = popen_mock.call_args_list[4]
+    assert check_call.args[0] == ['just', 'check']
+    assert check_call.kwargs['cwd'] == package_path
 
 
 def test_init_new_package_strips_before_just_init() -> None:
@@ -590,7 +600,7 @@ def test_init_new_package_prints_summary_on_success() -> None:
     assert any(str(Path.cwd() / 'mypackage') in call for call in printed_calls)
     assert any('0.0.1' in call for call in printed_calls)
     assert any('cd mypackage && just check' in call for call in printed_calls)
-    assert popen_mock.call_count == 3
+    assert popen_mock.call_count == 5
     assert result == 0
 
 
@@ -622,6 +632,12 @@ def test_init_new_package_reports_check_failed() -> None:
     just_init_mock = MagicMock()
     just_init_mock.returncode = 0
     just_init_mock.communicate.return_value = (b'', b'')
+    just_compile_mock = MagicMock()
+    just_compile_mock.returncode = 0
+    just_compile_mock.communicate.return_value = (b'', b'')
+    just_sync_mock = MagicMock()
+    just_sync_mock.returncode = 0
+    just_sync_mock.communicate.return_value = (b'', b'')
     just_check_mock = MagicMock()
     just_check_mock.returncode = 1
     just_check_mock.communicate.return_value = (b'', b'')
@@ -632,7 +648,13 @@ def test_init_new_package_reports_check_failed() -> None:
         patch('modernpackage.main._strip_scaffolding'),
     ):
         run_mock.return_value = MagicMock(returncode=0, stderr='')
-        popen_mock.side_effect = [git_clone_mock, just_init_mock, just_check_mock]
+        popen_mock.side_effect = [
+            git_clone_mock,
+            just_init_mock,
+            just_compile_mock,
+            just_sync_mock,
+            just_check_mock,
+        ]
         result = init_new_package('mypackage')  # must not raise
     printed_calls = [str(call) for call in print_mock.call_args_list]
     assert any('just check failed' in call for call in printed_calls)
@@ -1334,7 +1356,7 @@ def test_init_new_package_invokes_add_backend_when_flag_set() -> None:
 
 
 def test_init_new_package_no_flags_injects_nothing() -> None:
-    expected_popen_calls = 3  # clone, just init, just check
+    expected_popen_calls = 5  # clone, just init, just compile, just sync, just check
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
@@ -1397,7 +1419,9 @@ def test_strip_scaffolding_removes_backend_template(tmp_path: Path) -> None:
 
 
 def test_init_new_package_backend_stages_then_inits() -> None:
-    expected_popen_calls = 4  # clone, git add, just init, just check
+    expected_popen_calls = (
+        6  # clone, git add, just init, just compile, just sync, just check
+    )
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
@@ -1540,7 +1564,9 @@ def test_init_new_package_invokes_add_frontend_when_fullstack() -> None:
 
 
 def test_init_new_package_fullstack_stages_then_inits() -> None:
-    expected_popen_calls = 4  # clone, git add, just init, just check
+    expected_popen_calls = (
+        6  # clone, git add, just init, just compile, just sync, just check
+    )
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,

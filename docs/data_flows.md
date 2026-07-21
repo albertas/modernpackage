@@ -131,14 +131,34 @@ Spawn subprocess via `Popen(['just', 'init', module_name], cwd=new_package_path,
 - Capture stdout and stderr
 - If returncode != 0: raise `RuntimeError` with message "just init failed with exit code {code}: {stderr}"
 - If FileNotFoundError (just not on PATH): raise `RuntimeError` with install message
-- **Note**: operates on the already-stripped tree (see Step 7); renames the stub test and README files using the standard sed rename pass
+- **Note**: operates on the already-stripped tree (see Step 6.5); renames the stub test and README files using the standard sed rename pass
+
+### Step 7.5: Just Compile
+
+Spawn subprocess via `Popen(['just', 'compile'], cwd=new_package_path, ...)`:
+- Does not capture stdout/stderr; inherits parent streams so progress is visible to user
+- This step regenerates the `uv.lock` file based on the scaffolded package's current dependencies (after metadata writing and template injection)
+- If returncode != 0:
+  - Print error message to stderr: "compile failed with exit code {code}: {stderr}"
+  - Return exit code 1 (short-circuit; skip compile, sync, and check)
+- **Purpose**: ensures the lockfile is fresh and reflects all injected dependencies (both runtime and dev), so subsequent sync and check steps operate on a valid locked environment
+
+### Step 7.6: Just Sync
+
+Spawn subprocess via `Popen(['just', 'sync'], cwd=new_package_path, ...)`:
+- Does not capture stdout/stderr; inherits parent streams so progress is visible to user
+- This step creates/updates the virtual environment and installs locked dependencies (dev group + editable package)
+- If returncode != 0:
+  - Print error message to stderr: "sync failed with exit code {code}: {stderr}"
+  - Return exit code 1 (short-circuit; skip check)
+- **Purpose**: ensures the package's dependencies are installed before the comprehensive quality gate runs, so import statements in tests work correctly
 
 ### Step 8: Just Check and Summary
 
 Spawn subprocess via `Popen(['just', 'check'], cwd=new_package_path, ...)`:
-- Capture stdout and stderr
+- Does not capture stdout/stderr; inherits parent streams so progress is visible to user
 - Communicate (wait for process to finish)
-- At this point, the generated package contains only the stripped tree: no scaffolder CLI, no end-to-end tests, no scaffolder documentation — only a minimal stub test and generic README
+- At this point, the generated package contains only the stripped tree: no scaffolder CLI, no end-to-end tests, no scaffolder documentation — only a minimal stub test and generic README; dependencies are locked and synced
 - If returncode == 0:
   - Print "just check passed — {module_name} scaffold is valid." to stdout
   - Call `_print_init_summary(package_name, new_package_path)` to output a multi-line summary block to stdout:
@@ -162,7 +182,7 @@ In `main()`:
 
 **Final outputs:**
 - Exit code 0: Success
-- Exit code 1: Runtime failure (git, just init, or just check)
+- Exit code 1: Runtime failure (git, just init, just compile, just sync, or just check)
 - Exit code 2: Argument validation error (invalid name, email, URL, or metadata)
 
 ## Config File Resolution

@@ -16,9 +16,9 @@ Both route to `modernpackage.main:main()`, so they are functionally identical.
 
 `modernpackage` returns exit codes as follows:
 - **Exit code 0**: successful operation (version printed, package initialized with all quality gates passing, or no arguments provided)
-- **Exit code 1**: failure in package initialization (git clone, just init, or just check failed)
+- **Exit code 1**: failure in package initialization (git clone, just init, just compile, just sync, or just check failed)
 
-The exit code is reflected in the process exit status, allowing shell scripts and CI/CD pipelines to detect failures. Importantly, failures of the validation step (`just check`) now result in exit code 1, allowing automated tools to detect when the scaffolded package does not meet quality standards.
+The exit code is reflected in the process exit status, allowing shell scripts and CI/CD pipelines to detect failures. Importantly, failures at any stage of package initialization (git clone, just init, dependency compilation/sync, or the validation step `just check`) result in exit code 1, allowing automated tools to detect failures.
 
 ### No arguments (no-op)
 

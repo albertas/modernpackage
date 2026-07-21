@@ -1,10 +1,9 @@
 # ToDo
-- [ ] Run compile, sync targets on the package before running check during package instantiation.
-
 # Stragegic Goal:
 - Have end to end test to test capabilities.
 
 # Done
+- [x] [T70] Run compile, sync targets on the package before running check during package instantiation.
 - [x] [T69] Exclude errors, issues, workspace directories and lifecycle_state.yml, metrics.yml files when instantiating a package.
 - [x] [T68] Add Justfile action to bump version (increase patch part of the version). Bump patch version of the package programmatically before running publish Justfile action.
 - [x] [T67] Remove preflight checks from the initialization of the package.

@@ -1143,8 +1143,19 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
        - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
          - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
          - **If `returncode == 0`**: continues to Step 6
-   - **Step 6: Validate** — **If Step 5 succeeds**: runs `just check` (cwd: the cloned directory) via `Popen` and reports the outcome using the module name
-     - Spawns the subprocess and captures both stdout and stderr via `communicate()`
+   - **Step 6: Compile** — **If Step 5 succeeds**: spawns `just compile` (cwd: the cloned directory) via `Popen` to regenerate the `uv.lock` file, incorporating all cloned and injected dependencies
+     - Does not capture stdout/stderr; inherits parent streams so compilation progress is visible to the user
+     - Spawns the subprocess and waits for completion via `communicate()`
+       - **If `returncode != 0`**: prints error message to stderr and raises `RuntimeError` with message `'compile failed with exit code {returncode}: {decoded stderr}'`
+       - **If `returncode == 0`**: continues to Step 7
+   - **Step 7: Sync** — **If Step 6 succeeds**: spawns `just sync` (cwd: the cloned directory) via `Popen` to create the virtual environment and install locked dependencies
+     - Does not capture stdout/stderr; inherits parent streams so sync progress is visible to the user
+     - Spawns the subprocess and waits for completion via `communicate()`
+       - **If `returncode != 0`**: prints error message to stderr and raises `RuntimeError` with message `'sync failed with exit code {returncode}: {decoded stderr}'`
+       - **If `returncode == 0`**: continues to Step 8
+   - **Step 8: Validate** — **If Step 7 succeeds**: runs `just check` (cwd: the cloned directory) via `Popen` and reports the outcome using the module name
+     - Does not capture stdout/stderr; inherits parent streams so check progress is visible to the user
+     - Spawns the subprocess and waits for completion via `communicate()`
      - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {module_name} scaffold is valid.'` (using the normalized module name), then calls `_print_init_summary(package_name, new_package_path)` to print a summary block showing the created package name, directory path, and reset version (`_RESET_VERSION`), then returns `0`
      - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {module_name}.'` (using the normalized module name) and returns `1`
      - Does not raise an error on non-zero exit code; `just check` failure is reported but does not block the function; the failure is propagated via the return code instead
@@ -1609,11 +1620,11 @@ The scaffolder enforces this guarantee through two layers of testing:
 
 Located in `tests/test_main.py`, this fast mocked test verifies that a no-flag `init_new_package()` call:
 - Does **not** invoke `_add_backend()` or `_add_frontend()` (the injector functions)
-- Makes exactly **3** subprocess calls: `git clone`, `just init`, `just check` (no extra calls like `git add -A` that would appear on the inject path)
+- Makes exactly **5** subprocess calls in order: `git clone`, `just init`, `just compile`, `just sync`, `just check` (no extra calls like `git add -A` that would appear on the inject path)
 
 This test runs in ~1 ms and serves as a regression guard on the control-flow gate (`if backend or fullstack:` at the injector entry point). It complements existing positive guards that verify `--backend` and `--fullstack` correctly invoke their injectors.
 
-**Why this test is valuable**: It fails immediately if any code path accidentally injects backend/frontend into the no-flag flow, catching regressions at development time before they propagate to e2e tests.
+**Why this test is valuable**: It fails immediately if any code path accidentally injects backend/frontend into the no-flag flow, or if the compile/sync steps are skipped, catching regressions at development time before they propagate to e2e tests.
 
 #### End-to-End Test: `test_scaffolded_package_has_no_backend_or_frontend`
 
@@ -1707,8 +1718,10 @@ When a user runs `modernpackage my-cool.package --author-name "Ada Lovelace" --l
    - Resets version to `0.0.1`
    - Reinitializes git
    - The metadata is already in place in the initial git commit
-6. On successful initialization, `just check` is run to validate the newly scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
-7. Result: a new, independent Python package ready for development, in a directory named `my_cool_package` with supplied metadata already written to `pyproject.toml` and included in the initial commit, all import paths using underscores instead of hyphens/dots
+6. On successful initialization, `just compile` is run to regenerate the `uv.lock` file, incorporating all cloned and injected dependencies (if any)
+7. On successful compile, `just sync` is run to create the virtual environment and install all locked dependencies
+8. On successful sync, `just check` is run to validate the newly scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
+9. Result: a new, independent Python package ready for development, in a directory named `my_cool_package` with supplied metadata already written to `pyproject.toml` and included in the initial commit, all import paths using underscores instead of hyphens/dots, with a fresh lockfile and installed dependencies
 
 This self-replication pattern allows the package to be both a tool and a template, bootstrapping new projects with the same modern tooling setup. The clone, initialization, and validation steps report detailed error output if they fail, making it easy to diagnose issues (network errors, missing dependencies, permission problems, etc.). The normalization of the distribution name to a module name ensures that the created directory and all import paths are valid Python identifiers.
 

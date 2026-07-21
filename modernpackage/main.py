@@ -909,6 +909,35 @@ def _add_backend(package_path: Path) -> None:
     _append_backend_recipes(package_path / 'Justfile')
 
 
+def _compile_and_sync_package(package_path: Path, module_name: str) -> bool:
+    """Run `just compile` then `just sync` on the scaffolded package.
+
+    Inherits the parent's stdout/stderr (no PIPE) so both steps stream their
+    progress live, matching the `just check` rationale. Returns True on success;
+    on a non-zero exit prints a failure notice to stderr and returns False.
+    """
+    for target in ('compile', 'sync'):
+        print(flush=True)  # noqa: T201
+        print(  # noqa: T201
+            f'Running just {target} in {module_name}…',
+            flush=True,
+        )
+        pipe = Popen(  # noqa: S603
+            ['just', target],  # noqa: S607
+            stdin=PIPE,
+            cwd=package_path,
+        )
+        pipe.communicate()
+        if pipe.returncode != 0:
+            print(  # noqa: T201
+                f'just {target} failed with exit code {pipe.returncode}'
+                f' — see the {target} output above.',
+                file=sys.stderr,
+            )
+            return False
+    return True
+
+
 def init_new_package(  # noqa: PLR0913
     package_name: str,
     *,
@@ -988,6 +1017,11 @@ def init_new_package(  # noqa: PLR0913
     if pipe.returncode != 0:
         message = f'just init failed with exit code {pipe.returncode}: {stderr_text}'
         raise RuntimeError(message)
+
+    # Regenerate the lockfile and sync dependencies before checking, so `just
+    # check` runs against a fresh lockfile and an up-to-date virtual environment.
+    if not _compile_and_sync_package(new_package_path, module_name):
+        return 1
 
     # Inherit the parent's stdout/stderr (no PIPE) so `just check` streams its
     # progress live — the chained ruff/mypy/pytest/pip-audit steps are slow and a

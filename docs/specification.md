@@ -30,12 +30,18 @@ init_new_package(name)
         │
         ├─▶ strip scaffolding (main.py, tests, docs, entry points)
         │
-        └─▶ just init <name>   (cwd=./<name>)
-                  │
-                  ├─ git grep + sed: rename every "modernpackage" → <name>
-                  ├─ sed: reset __init__ version → 0.0.1
-                  ├─ mv modernpackage/ → <name>/
-                  └─ rm .git → git init → git add → git commit
+        ├─▶ just init <name>   (cwd=./<name>)
+        │       │
+        │       ├─ git grep + sed: rename every "modernpackage" → <name>
+        │       ├─ sed: reset __init__ version → 0.0.1
+        │       ├─ mv modernpackage/ → <name>/
+        │       └─ rm .git → git init → git add → git commit
+        │
+        ├─▶ just compile       (cwd=./<name>) — regenerate uv.lock
+        │
+        ├─▶ just sync          (cwd=./<name>) — install dependencies
+        │
+        └─▶ just check         (cwd=./<name>) — validate all quality gates
 ```
 
 ## CLI entry point
@@ -69,8 +75,10 @@ init_new_package(name)
      - Overwrites `README.md` with generic template
      - Removes `[project.scripts]` table from pyproject.toml (entry points)
   5. Spawns `subprocess.Popen`: `just init <name>` with `cwd=<new_package_path>`.
-  6. Spawns `subprocess.Popen`: `just check` to validate the scaffolded package.
-  7. Returns exit code 0 on success, 1 on failure.
+  6. Spawns `subprocess.Popen`: `just compile` with `cwd=<new_package_path>` to regenerate `uv.lock`.
+  7. Spawns `subprocess.Popen`: `just sync` with `cwd=<new_package_path>` to install dependencies.
+  8. Spawns `subprocess.Popen`: `just check` to validate the scaffolded package.
+  9. Returns exit code 0 on success, 1 on failure.
 - **`just init` recipe** transforms the already-stripped cloned repository:
   - **Rename**: `git grep -l 'modernpackage' | xargs sed -i` (Linux) or `sed -i ''` (Darwin) to replace all occurrences of token "modernpackage" with the new package name (including renamed stub test and README).
   - **Version reset**: `sed` to replace the version string to `0.0.1`.

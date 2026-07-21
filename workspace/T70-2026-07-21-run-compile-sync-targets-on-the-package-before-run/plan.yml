@@ -1,0 +1,71 @@
+# plan.yml
+overview: |
+  In modernpackage/main.py, `init_new_package` clones the template, runs
+  `just init`, then runs `just check` on the scaffolded package (main.py:992-1023).
+  This task inserts a `just compile` (uv lock) and `just sync` (uv sync) run on
+  the package immediately before the existing `just check` run, so the lockfile
+  is regenerated and dependencies are synced before check executes. The change
+  mirrors the existing `just check` Popen block. Several tests in
+  tests/test_main.py assert on the exact Popen call order/count and must be
+  updated accordingly.
+
+phases:
+  - num: 1
+    title: Run compile and sync before check during instantiation
+    body: |
+      **Implementation (modernpackage/main.py, in `init_new_package`)**
+
+      - Locate the block after `just init` succeeds and before the `just check`
+        run (currently main.py:992-1006, the `print(...)` header + the
+        `Popen(['just', 'check'], ...)` call).
+      - Before the `just check` Popen call, add a step that runs `just compile`
+        and then `just sync` on the scaffolded package. Mirror the existing
+        subprocess style used in this function:
+          - Use `Popen([...], cwd=new_package_path)` (inherit parent stdout/stderr
+            so progress streams live, matching the `just check` call rationale in
+            the comment at main.py:992-995), or run both in one `just compile sync`
+            invocation. Prefer two explicit calls (`['just', 'compile']` then
+            `['just', 'sync']`) for clarity and to match how targets are named in
+            the ticket.
+          - Print a short header line before the compile/sync step, consistent
+            with the existing `Running just check in {module_name}…` header, so the
+            output has context.
+          - Check `returncode` after each; on non-zero, print a failure message to
+            `sys.stderr` and `return 1`, mirroring the existing `just check`
+            failure handling at main.py:1018-1023. Use `_green(...)` only where the
+            existing code does; keep messages plain otherwise.
+      - Do not alter the `just check` block itself beyond its new position.
+      - Keep the scaffolded package's Justfile untouched — it already defines
+        `compile` (uv lock) and `sync` (uv sync) targets (Justfile:8-12), which are
+        cloned into the package and survive `_strip_scaffolding`.
+
+      **Tests (tests/test_main.py)** — the new Popen calls shift the call
+      indices/counts that existing tests assert on:
+
+      - `test_init_new_package_runs_just_check` (line 329): the `just check` call
+        is no longer `call_args_list[2]`. Update the index (or assert by matching
+        the call whose `args[0] == ['just', 'check']`) and add assertions that
+        `['just', 'compile']` and `['just', 'sync']` are invoked before it with the
+        correct `cwd`.
+      - `expected_popen_calls` counts (lines ~1337, 1400, 1543) and their
+        `# clone, just init, just check` comments: increase counts by 2 and update
+        the comments to include compile and sync.
+      - `test_init_new_package_strips_before_just_init` (line 344) and any test
+        that filters Popen calls by prefix: verify they still pass; extend the
+        ordering assertions if they enumerate the full call sequence.
+
+      **Verification**
+
+      - [x] `just check` passes (runs format, lint, complexity, typecheck, unit
+            tests, audit) — run via the Justfile, not raw tools.
+            NOTE: format, lint, complexity, typecheck, and unit tests all pass.
+            `audit` fails on a pre-existing, unrelated transitive vulnerability
+            in the `mcp` package (CVE-2026-59950), not introduced by this change.
+            Complexity of `init_new_package` was kept ≤ 8 by extracting the
+            compile/sync loop into a new `_compile_and_sync_package` helper.
+      - [x] `just test` green, specifically the `init_new_package` tests in
+            tests/test_main.py assert compile and sync run before check with the
+            correct order and `cwd` (131 passed).
+      - [x] Manually inspect: in `init_new_package`, the order is
+            clone → just init → just compile → just sync → just check, and a
+            non-zero compile/sync exit returns 1 with a stderr message.

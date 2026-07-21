@@ -10,8 +10,9 @@ pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # validates the name (rejects stdlib collisions before scaffolding)
                                        # clones the template and removes scaffolder machinery
-                                       # creates a clean new package and validates it with just check
-                                       # prints "just check passed" with a summary block, or "just check failed"
+                                       # runs just compile to regenerate the lockfile
+                                       # runs just sync to install dependencies
+                                       # validates the package with just check and prints result summary
 
 # With the optional --backend flag, generates a FastAPI async service:
 modernpackage <your-service-name> --backend    # includes app, async DB, migrations, containers
@@ -20,6 +21,10 @@ modernpackage <your-service-name> --backend    # includes app, async DB, migrati
 modernpackage my-package
 
 # Output (on a TTY; passed and valid render in green):
+# Running just compile in my_package…
+# (uv lock output — regenerating lockfile)
+# Running just sync in my_package…
+# (uv sync output — installing dependencies)
 # Running just check in my_package (this can take a while)…
 # (just check output)
 # just check passed — my_package scaffold is valid.
