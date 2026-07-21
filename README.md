@@ -8,10 +8,6 @@ Install and run:
 ```bash
 pip install modernpackage
 modernpackage <your-package-name>     # or `mp <your-package-name>`
-                                       # prints preflight checklist to stdout ([ok] / [FAIL])
-                                       # verifies git, just, and uv are on PATH
-                                       # checks that target directory does not already exist
-                                       # probes template repository reachability (fails fast on network issues)
                                        # validates the name (rejects stdlib collisions before scaffolding)
                                        # clones the template and removes scaffolder machinery
                                        # creates a clean new package and validates it with just check
@@ -20,16 +16,10 @@ modernpackage <your-package-name>     # or `mp <your-package-name>`
 # With the optional --backend flag, generates a FastAPI async service:
 modernpackage <your-service-name> --backend    # includes app, async DB, migrations, containers
 
-# Example: Preflight checklist and success summary (on success)
+# Example: Success summary (on success)
 modernpackage my-package
 
-# Output (on a TTY; [ok], passed, and valid render in green):
-# Preflight checks:
-#   [ok]   package name valid
-#   [ok]   required tools on PATH (git, just, uv)
-#   [ok]   target directory available
-#   [ok]   template remote reachable
-#
+# Output (on a TTY; passed and valid render in green):
 # Running just check in my_package (this can take a while)…
 # (just check output)
 # just check passed — my_package scaffold is valid.
@@ -46,11 +36,6 @@ modernpackage my-package
 modernpackage my-package --dry-run
 
 # Output:
-# Preflight checks:
-#   [ok]   package name valid
-#   [ok]   required tools on PATH (git, just, uv)
-#   [ok]   target directory available
-#   [ok]   template remote reachable
 # Dry run — no changes will be made:
 #   clone https://github.com/albertas/modernpackage into /home/user/my_package
 #   update pyproject.toml metadata:
@@ -67,11 +52,6 @@ modernpackage my-package --dry-run
 modernpackage my-package --dry-run --author-name "Ada Lovelace" --description "A cool package"
 
 # Output:
-# Preflight checks:
-#   [ok]   package name valid
-#   [ok]   required tools on PATH (git, just, uv)
-#   [ok]   target directory available
-#   [ok]   template remote reachable
 # Dry run — no changes will be made:
 #   clone https://github.com/albertas/modernpackage into /home/user/my_package
 #   update pyproject.toml metadata:
@@ -101,6 +81,7 @@ modernpackage my-service --backend      # or `--fastapi` (alias)
 
 # Example: Dry-run with backend flag
 modernpackage my-service --backend --dry-run  # Preview backend scaffolding
+# (Similar to above, but includes "add FastAPI backend" in the plan)
 
 # Example: Create a fullstack application (backend + frontend)
 modernpackage my-app --fullstack              # or `--reactjs` (alias)
@@ -173,54 +154,24 @@ modernpackage my-package --repository-url "github.com/user/repo"  # Error: Inval
                                         # Exit code 2 (argument validation error)
                                         # No scaffolding occurs
 
-# Example: Preflight checklist failure (missing git)
-modernpackage my-package
-
-# Output (stdout):
-# Preflight checks:
-#   [ok]   package name valid
-#   [FAIL] required tools on PATH (git, just, uv)
-#
-# Output (stderr):
-# required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding:
-#   - git: https://git-scm.com/downloads
-# Exit code 1 (preflight check fails)
-# No scaffolding occurs, no directory created
-
-# Example: Preflight checklist failure (directory exists)
+# Example: Clone failure (directory exists)
 mkdir my-package
 modernpackage my-package
 
-# Output (stdout):
-# Preflight checks:
-#   [ok]   package name valid
-#   [ok]   required tools on PATH (git, just, uv)
-#   [FAIL] target directory available
-#
 # Output (stderr):
-# target directory already exists: /path/to/my_package — choose a different package name or remove the existing directory
-# Exit code 1 (preflight check fails)
+# destination directory already exists — choose a different package name
+#
+# git clone failed with exit code 128: fatal: destination path already exists and is not an empty directory.
+# Exit code 1 (git clone fails)
 # No scaffolding occurs
 
-# Example: Multiple required tools missing (missing git and uv)
-modernpackage my-package                # Error: required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding:
-                                        #   - git: https://git-scm.com/downloads
-                                        #   - uv: https://docs.astral.sh/uv/getting-started/installation/
-                                        # Exit code 1 (preflight check fails)
-                                        # No scaffolding occurs, no directory created
-
-# Example: Target directory already exists
-mkdir my-package
-modernpackage my-package                # Error: target directory already exists: /path/to/my_package — choose a different package name or remove the existing directory
-                                        # Exit code 1 (preflight check fails)
-                                        # No scaffolding occurs
-
 # Example: Template repository unreachable (network down or DNS failure)
-modernpackage my-package                # Error: repository unreachable — check your network connection
+modernpackage my-package                # Output (stderr):
+                                        # repository unreachable — check your network connection
                                         # 
-                                        # template remote unreachable (git ls-remote exit code 2): fatal: Could not resolve host: github.com
-                                        # Exit code 1 (preflight check fails)
-                                        # No scaffolding occurs, no directory created
+                                        # git clone failed with exit code 2: fatal: Could not resolve host: github.com
+                                        # Exit code 1 (git clone fails)
+                                        # No scaffolding occurs
 ```
 
 View the installed version:
@@ -261,7 +212,7 @@ The CLI accepts optional feature flags for scaffolding:
   
   `--fullstack` is a superset of `--backend`: the backend is always injected when `--fullstack` is set. If both `--backend` and `--fullstack` are passed, `--fullstack` takes precedence.
 
-- **`--dry-run`**: Store-true flag (default `False`) that previews what scaffolding would do without making changes. Runs preflight checks, prints a high-level plan to stdout, and exits with code 0. If the backend flag is set, the dry-run plan indicates that the FastAPI backend would be injected. If the fullstack flag is set, the dry-run plan indicates that both the backend and React frontend would be injected.
+- **`--dry-run`**: Store-true flag (default `False`) that previews what scaffolding would do without making changes. Prints a high-level plan to stdout and exits with code 0. If the backend flag is set, the dry-run plan indicates that the FastAPI backend would be injected. If the fullstack flag is set, the dry-run plan indicates that both the backend and React frontend would be injected.
 
 ### Optional Metadata Flags
 

@@ -8,7 +8,7 @@ import tomllib
 from argparse import ArgumentParser, ArgumentTypeError, Namespace
 from dataclasses import dataclass
 from pathlib import Path
-from subprocess import PIPE, Popen, TimeoutExpired, run
+from subprocess import PIPE, Popen, run
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -52,27 +52,9 @@ _GIT_CLONE_ERROR_MESSAGES: list[tuple[re.Pattern[str], str]] = [
 ]
 
 
-# Required executables that must resolve on PATH before scaffolding begins.
-_REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
-
-
-# Canonical install page per required tool, surfaced as a remediation hint when
-# the tool is missing from PATH. Keyed by tool name; iteration order is driven by
-# `_REQUIRED_TOOLS`/`missing`, not by this dict.
-_TOOL_INSTALL_HINTS: dict[str, str] = {
-    'git': 'https://git-scm.com/downloads',
-    'just': 'https://github.com/casey/just#installation',
-    'uv': 'https://docs.astral.sh/uv/getting-started/installation/',
-}
-
-
-# Template repository cloned to scaffold a new package; used by the reachability
-# probe and the clone, and as the metadata-replacement target.
+# Template repository cloned to scaffold a new package; used by the clone and as
+# the metadata-replacement target.
 _TEMPLATE_REPOSITORY_URL: str = 'https://github.com/albertas/modernpackage'
-
-# Upper bound (seconds) on the pre-flight `git ls-remote` reachability probe so a
-# hung DNS/connect cannot defeat fail-fast.
-_REMOTE_REACHABILITY_TIMEOUT_SECONDS: int = 10
 
 
 def humanize_git_clone_error(stderr_text: str) -> str | None:
@@ -661,17 +643,6 @@ def _strip_scaffolding(package_path: Path) -> None:
     _remove_project_scripts(package_path / 'pyproject.toml')
 
 
-@dataclass(frozen=True)
-class PreflightCheck:
-    """One entry in the preflight check registry."""
-
-    label: str  # text shown after the status marker on the checklist line
-    run: Callable[
-        [], None
-    ]  # verifier; returns None on success, raises RuntimeError on failure
-
-
-_PREFLIGHT_HEADER: str = 'Preflight checks:'
 _DRY_RUN_HEADER: str = 'Dry run — no changes will be made:'
 # Version the template is reset to by `just init` (mirrors the Justfile sed
 # value at Justfile:67; coupled by convention, not programmatically).
@@ -696,15 +667,6 @@ def _green(text: str) -> str:
     if _color_enabled():
         return f'{_ANSI_GREEN}{text}{_ANSI_RESET}'
     return text
-
-
-def _format_check_line(label: str, *, ok: bool) -> str:
-    """Return one indented checklist line; marker padded to 6 chars so labels align."""
-    marker = '[ok]' if ok else '[FAIL]'
-    field = f'{marker:<6}'
-    if ok:
-        field = _green(field)
-    return f'  {field} {label}'
 
 
 def _format_dry_run_plan(  # noqa: PLR0913
@@ -815,95 +777,6 @@ def _format_next_commands(module_name: str) -> str:
 def _print_next_commands(module_name: str) -> None:
     """Print the formatted next-steps hint to stdout."""
     print(_format_next_commands(module_name))  # noqa: T201
-
-
-def _verify_required_tools() -> None:
-    """Raise RuntimeError if any required executable is absent from PATH."""
-    missing = [tool for tool in _REQUIRED_TOOLS if shutil.which(tool) is None]
-    if missing:
-        header = (
-            f'required tool(s) not found on PATH: {", ".join(missing)}'
-            ' — install the missing tool(s) before scaffolding:'
-        )
-        hints = ''.join(
-            f'\n  - {tool}: {_TOOL_INSTALL_HINTS[tool]}' for tool in missing
-        )
-        raise RuntimeError(header + hints)
-
-
-def _verify_target_directory_absent(target_path: Path) -> None:
-    """Raise RuntimeError if the target package directory already exists."""
-    if target_path.exists():
-        message = (
-            f'target directory already exists: {target_path}'
-            ' — choose a different package name or remove the existing directory'
-        )
-        raise RuntimeError(message)
-
-
-def _verify_template_remote_reachable() -> None:
-    """Raise RuntimeError if the template remote cannot be reached.
-
-    Pre-flight probe (design Decision 1): `git ls-remote` contacts the remote
-    without cloning, and its stderr is already classified by
-    `humanize_git_clone_error`. Returns None silently when reachable. Bounded by
-    `_REMOTE_REACHABILITY_TIMEOUT_SECONDS` so a hung connect still fails fast.
-    """
-    try:
-        result = run(  # noqa: S603
-            ['git', 'ls-remote', _TEMPLATE_REPOSITORY_URL],  # noqa: S607
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=_REMOTE_REACHABILITY_TIMEOUT_SECONDS,
-        )
-    except TimeoutExpired as error:
-        friendly = 'repository unreachable — check your network connection'
-        raw = (
-            'template remote unreachable (git ls-remote timed out after'
-            f' {_REMOTE_REACHABILITY_TIMEOUT_SECONDS}s)'
-        )
-        message = f'{friendly}\n\n{raw}'
-        raise RuntimeError(message) from error
-
-    if result.returncode != 0:
-        stderr_text = result.stderr.strip()
-        raw = (
-            'template remote unreachable (git ls-remote exit code'
-            f' {result.returncode}): {stderr_text}'
-        )
-        friendly_msg = humanize_git_clone_error(stderr_text)
-        message = f'{friendly_msg}\n\n{raw}' if friendly_msg else raw
-        raise RuntimeError(message)
-
-
-def _run_preflight_checks(target_path: Path) -> None:
-    """Print the preflight checklist to stdout, running each check in order.
-
-    The registry is built per-call so `_verify_target_directory_absent` binds
-    `target_path` via closure. Each check's verifier raises RuntimeError on
-    failure; the success path emits all `[ok]` lines.
-    """
-    checks = (
-        PreflightCheck('package name valid', lambda: None),
-        PreflightCheck(
-            f'required tools on PATH ({", ".join(_REQUIRED_TOOLS)})',
-            _verify_required_tools,
-        ),
-        PreflightCheck(
-            'target directory available',
-            lambda: _verify_target_directory_absent(target_path),
-        ),
-        PreflightCheck('template remote reachable', _verify_template_remote_reachable),
-    )
-    print(_PREFLIGHT_HEADER)  # noqa: T201
-    for check in checks:
-        try:
-            check.run()
-        except RuntimeError:
-            print(_format_check_line(check.label, ok=False))  # noqa: T201
-            raise
-        print(_format_check_line(check.label, ok=True))  # noqa: T201
 
 
 def _append_backend_dependencies(pyproject_path: Path) -> None:
@@ -1044,8 +917,6 @@ def init_new_package(  # noqa: PLR0913
     """Clone modernpackage files into `package_name` and run `just init` in it."""
     module_name = normalize_module_name(package_name)
     new_package_path = Path.cwd() / module_name
-
-    _run_preflight_checks(new_package_path)
 
     if dry_run:
         _print_dry_run_plan(

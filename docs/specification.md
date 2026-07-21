@@ -58,10 +58,9 @@ init_new_package(name)
 
 - **`init_new_package(package_name)` orchestration**:
   1. Resolves target path: `Path.cwd() / package_name`.
-  2. Runs preflight checks (tools on PATH, target directory absent, template reachable).
-  3. Spawns `subprocess.Popen`: `git clone https://github.com/albertas/modernpackage <cwd>/<name>` to target path.
-  4. Calls `_write_package_metadata()` to update cloned pyproject.toml with user metadata.
-  5. Calls `_strip_scaffolding()` to remove scaffolder machinery:
+  2. Spawns `subprocess.Popen`: `git clone https://github.com/albertas/modernpackage <cwd>/<name>` to target path.
+  3. Calls `_write_package_metadata()` to update cloned pyproject.toml with user metadata.
+  4. Calls `_strip_scaffolding()` to remove scaffolder machinery:
      - Deletes `modernpackage/main.py` (self-replicating CLI)
      - Deletes `tests/test_e2e.py` (scaffolder end-to-end test)
      - Deletes `docs/` directory (scaffolder documentation)
@@ -69,9 +68,9 @@ init_new_package(name)
      - Overwrites `tests/test_main.py` with minimal stub test
      - Overwrites `README.md` with generic template
      - Removes `[project.scripts]` table from pyproject.toml (entry points)
-  6. Spawns `subprocess.Popen`: `just init <name>` with `cwd=<new_package_path>`.
-  7. Spawns `subprocess.Popen`: `just check` to validate the scaffolded package.
-  8. Returns exit code 0 on success, 1 on failure.
+  5. Spawns `subprocess.Popen`: `just init <name>` with `cwd=<new_package_path>`.
+  6. Spawns `subprocess.Popen`: `just check` to validate the scaffolded package.
+  7. Returns exit code 0 on success, 1 on failure.
 - **`just init` recipe** transforms the already-stripped cloned repository:
   - **Rename**: `git grep -l 'modernpackage' | xargs sed -i` (Linux) or `sed -i ''` (Darwin) to replace all occurrences of token "modernpackage" with the new package name (including renamed stub test and README).
   - **Version reset**: `sed` to replace the version string to `0.0.1`.

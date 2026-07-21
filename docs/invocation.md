@@ -50,14 +50,14 @@ modernpackage <package_name> --dry-run --author-name "Ada Lovelace" --descriptio
 modernpackage <package_name> --dry-run --backend
 ```
 
-Previews what scaffolding would do without making any changes. Runs preflight checks (same as a normal run), then exits cleanly with exit code 0 and prints a high-level plan showing:
+Previews what scaffolding would do without making any changes. Exits cleanly with exit code 0 and prints a high-level plan showing:
 - The target directory that would be created
 - The template URL that would be cloned
 - Per-field metadata substitutions (fields with values, fields keeping the template default)
 - The well-known `just init` outcomes (rename `modernpackage/ → <module>/`, version reset to `0.0.1`)
 - Whether the FastAPI backend would be injected (if `--backend` is set)
 
-No directory is created, no clone occurs, no subprocess is spawned beyond preflight.
+No directory is created, no clone occurs, no subprocess is spawned.
 
 **Example: Dry-run with metadata**
 
@@ -67,11 +67,6 @@ modernpackage my-package --dry-run --author-name "Ada Lovelace" --description "A
 
 **Output (stdout):**
 ```
-Preflight checks:
-  [ok]   package name valid
-  [ok]   required tools on PATH (git, just, uv)
-  [ok]   target directory available
-  [ok]   template remote reachable
 Dry run — no changes will be made:
   clone https://github.com/albertas/modernpackage into /home/user/my_package
   update pyproject.toml metadata:
@@ -92,11 +87,6 @@ modernpackage my-service --dry-run --backend
 
 **Output (stdout):**
 ```
-Preflight checks:
-  [ok]   package name valid
-  [ok]   required tools on PATH (git, just, uv)
-  [ok]   target directory available
-  [ok]   template remote reachable
 Dry run — no changes will be made:
   clone https://github.com/albertas/modernpackage into /home/user/my_service
   update pyproject.toml metadata:
@@ -120,11 +110,6 @@ modernpackage my-app --dry-run --fullstack
 
 **Output (stdout):**
 ```
-Preflight checks:
-  [ok]   package name valid
-  [ok]   required tools on PATH (git, just, uv)
-  [ok]   target directory available
-  [ok]   template remote reachable
 Dry run — no changes will be made:
   clone https://github.com/albertas/modernpackage into /home/user/my_app
   update pyproject.toml metadata:
@@ -140,8 +125,6 @@ Dry run — no changes will be made:
 ```
 
 **Exit code:** 0
-
-**Important**: The dry-run still performs preflight checks (including a network probe to verify the template repository is reachable). If preflight fails, the dry-run returns exit code 1 and no plan is printed.
 
 ### Backend flag
 
@@ -395,118 +378,9 @@ After all steps complete, the outcome of `just check` is reported and the exit c
 
 The package directory is created in both cases; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory). However, the exit code now reflects the validation outcome, allowing CI/CD pipelines and automated tools to detect when the scaffolded package does not meet quality standards.
 
-#### Preflight checks and checklist
-
-Before any subprocess is spawned or any directory is created, `init_new_package()` performs a series of preflight checks and prints a concise checklist to stdout showing each check's outcome.
-
-The checklist is printed to **stdout** (informational output) with one line per check and status markers (`[ok]` or `[FAIL]`). If any check fails, the checklist is printed up to and including the failing check, and the error details are printed to **stderr**. This separation of streams keeps the checklist visible while error details stay distinct.
-
-##### Preflight Checklist Output (Happy Path)
-
-When all checks pass, the full checklist is printed to stdout:
-
-```bash
-modernpackage my-package
-```
-
-**Output:**
-```
-Preflight checks:
-  [ok]   package name valid
-  [ok]   required tools on PATH (git, just, uv)
-  [ok]   target directory available
-  [ok]   template remote reachable
-```
-
-Scaffolding then proceeds to clone, initialize, and validate the package.
-
-##### Check Details
-
-The checklist includes four checks run in order:
-
-1. **Package name valid** — display-only check confirming the package name passed PEP 508 validation (already validated at argparse time, so never fails at this point)
-2. **Required tools on PATH** — verifies that all required tools (`git`, `just`, `uv`) are available on `PATH` via `shutil.which()`
-3. **Target directory available** — verifies that the target package directory does not already exist (file or directory)
-4. **Template remote reachable** — verifies that the template repository is reachable via a `git ls-remote` probe with a 10-second timeout
-
-##### Preflight Checklist Output (Failure Path)
-
-When a check fails, the checklist is printed up to and including the failing check (marked `[FAIL]`), and scaffolding aborts before any clone or filesystem operation.
-
-**Example: Missing git tool**
-
-```bash
-modernpackage my-package
-```
-
-**Output (stdout):**
-```
-Preflight checks:
-  [ok]   package name valid
-  [FAIL] required tools on PATH (git, just, uv)
-```
-
-**Output (stderr):**
-```
-required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding:
-  - git: https://git-scm.com/downloads
-```
-
-**Exit code:** 1
-
-**Example: Target directory exists**
-
-```bash
-mkdir my-package
-modernpackage my-package
-```
-
-**Output (stdout):**
-```
-Preflight checks:
-  [ok]   package name valid
-  [ok]   required tools on PATH (git, just, uv)
-  [FAIL] target directory available
-```
-
-**Output (stderr):**
-```
-target directory already exists: /home/user/my_package — choose a different package name or remove the existing directory
-```
-
-**Exit code:** 1
-
-**Important**: The target directory name is derived by normalizing the package name (replacing hyphens and dots with underscores). For example, `my-cool.package` becomes `my_cool_package`. This check verifies that a directory with this normalized name does not exist before attempting to clone.
-
-**Example: Template remote unreachable**
-
-```bash
-modernpackage my-package
-```
-
-**Output (stdout):**
-```
-Preflight checks:
-  [ok]   package name valid
-  [ok]   required tools on PATH (git, just, uv)
-  [ok]   target directory available
-  [FAIL] template remote reachable
-```
-
-**Output (stderr):**
-```
-repository unreachable — check your network connection
-
-template remote unreachable (git ls-remote exit code 2): fatal: Could not resolve host: github.com
-```
-
-**Exit code:** 1
-
-These preflight checks ensure that scaffolding fails fast and clearly when requirements are not met, with a visible checklist showing exactly which checks passed and which failed, preventing confusing late failures or incomplete clones.
-
 #### Failure path
 
-If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1. This occurs only after the preflight check has passed, so the required tools are guaranteed to be present.
+If the `git clone` step fails (e.g., due to network errors, invalid URL, or repository not found), the error is caught in `main()` and printed to stderr with exit code 1.
 
 For common failure modes, a friendly, actionable message is displayed first, followed by the raw stderr for diagnostics:
 
@@ -577,7 +451,7 @@ If the `just` command is not installed (detected at subprocess spawn time before
 
 The command exits with exit code 1 and the `<package_name>` directory is left in the incomplete state from the successful `git clone`.
 
-All errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users.
+All errors are printed to `sys.stderr` as clean messages, without a Python traceback, making error diagnosis straightforward for end users. Note that missing tools (`git`, `just`, `uv`) or unreachable template repository are discovered at the time of clone/init and result in git clone errors.
 
 ## End-to-End Testing
 

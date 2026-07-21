@@ -45,15 +45,6 @@ A per-user config file can supply defaults so the maintainer never re-enters the
 same metadata. The outcome is a package whose metadata is correct and personal
 from the first commit.
 
-## V5 — Preflight environment checks before cloning
-
-Before doing any work, this vision verifies that the environment can succeed:
-that `git`, `just`, and `uv` are on `PATH`, that the target directory does not
-already exist (refusing to overwrite existing work), and that the GitHub remote
-is reachable. The tool prints a concise checklist and, if any precondition
-fails, aborts early with a specific remediation hint — catching problems before
-they cause a half-finished scaffold.
-
 ## V6 — Dry-run and post-init summary output
 
 This vision replaces the current silent success/no-op behavior with clear

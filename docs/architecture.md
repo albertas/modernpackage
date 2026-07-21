@@ -38,31 +38,6 @@ The main CLI orchestrator with type-annotated functions and module-level constan
 
 #### Module-Level Constants
 
-**`_REQUIRED_TOOLS: tuple[str, ...]`**
-
-Tuple of required external executables that must resolve on `PATH` before scaffolding begins:
-```python
-_REQUIRED_TOOLS: tuple[str, ...] = ('git', 'just', 'uv')
-```
-
-Used by `_verify_required_tools()` to check that all required tools are available. The set includes:
-- `git` — cloning the template repository
-- `just` — initializing and validating the scaffolded package
-- `uv` — invoked transitively by `just check` for dependency management, building, and publishing
-
-**`_TOOL_INSTALL_HINTS: dict[str, str]`**
-
-Canonical install page per required tool, keyed by tool name. Surfaced as a remediation hint when the tool is missing from PATH:
-```python
-_TOOL_INSTALL_HINTS: dict[str, str] = {
-    'git': 'https://git-scm.com/downloads',
-    'just': 'https://github.com/casey/just#installation',
-    'uv': 'https://docs.astral.sh/uv/getting-started/installation/',
-}
-```
-
-When `_verify_required_tools()` detects a missing tool, the error message includes one hint line per missing tool, each with its specific install URL. Iteration order is driven by `_REQUIRED_TOOLS`, not by the dict's internal order, ensuring consistent presentation.
-
 **`_TEMPLATE_REPOSITORY_URL: str`**
 
 The GitHub URL of the template repository cloned to scaffold a new package:
@@ -70,25 +45,7 @@ The GitHub URL of the template repository cloned to scaffold a new package:
 _TEMPLATE_REPOSITORY_URL: str = 'https://github.com/albertas/modernpackage'
 ```
 
-Used by both the pre-flight reachability probe (`_verify_template_remote_reachable()`) and the git clone command in `init_new_package()`. Centralizing the URL as a constant avoids duplication and ensures consistency across all references to the template repository.
-
-**`_REMOTE_REACHABILITY_TIMEOUT_SECONDS: int`**
-
-Upper bound (in seconds) on the pre-flight `git ls-remote` reachability probe to prevent hung DNS or connection attempts from defeating fail-fast behavior:
-```python
-_REMOTE_REACHABILITY_TIMEOUT_SECONDS: int = 10
-```
-
-Passed as the `timeout=` parameter to `subprocess.run()` in `_verify_template_remote_reachable()`. If the probe does not complete within this timeout, a `TimeoutExpired` exception is caught and converted to a friendly error message. The timeout is a constant (not a CLI flag) to avoid unrequested configurability while still providing a reasonable bound on hung connections.
-
-**`_PREFLIGHT_HEADER: str`**
-
-The header line printed at the start of the preflight checklist:
-```python
-_PREFLIGHT_HEADER: str = 'Preflight checks:'
-```
-
-Printed to stdout by `_run_preflight_checks()` before any check lines, establishing the section heading for the checklist.
+Used by the git clone command in `init_new_package()`. Centralizing the URL as a constant avoids duplication and ensures consistency across all references to the template repository.
 
 **`_DRY_RUN_HEADER: str`**
 
@@ -409,110 +366,6 @@ Used by `_green()` to restore normal text color after a green-wrapped section, e
 
 The main CLI orchestrator with type-annotated functions:
 
-#### `_verify_required_tools() -> None`
-
-A private helper that verifies all required executables resolve on `PATH` before scaffolding begins, emitting specific install URLs for each missing tool.
-
-- **Purpose**: Called at the start of `init_new_package()` to fail fast if any required tool is missing, preventing filesystem changes or subprocess calls when tools are unavailable. Provides actionable remediation by pointing users to the install URL for each specific missing tool.
-- **Parameters**: none
-- **Returns**: `None` (raises an exception on failure)
-- **Algorithm**: 
-  1. Iterates over `_REQUIRED_TOOLS` and calls `shutil.which(tool)` for each
-  2. Collects all tools where `shutil.which()` returns `None` (tool not found on PATH)
-  3. If any tools are missing:
-     - Constructs a header line: `f'required tool(s) not found on PATH: {", ".join(missing)} — install the missing tool(s) before scaffolding:'`
-     - Appends one hint line per missing tool: `f'\n  - {tool}: {_TOOL_INSTALL_HINTS[tool]}'`
-     - Raises `RuntimeError` with the header + concatenated hints
-  4. If all tools are present, returns normally with no exception
-- **Error message**: The message format is:
-  ```
-  required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding:
-    - git: https://git-scm.com/downloads
-    - uv: https://docs.astral.sh/uv/getting-started/installation/
-  ```
-  The tool order matches `_REQUIRED_TOOLS`, not the dict order.
-
-Examples:
-- If `git` is missing: raises `RuntimeError("required tool(s) not found on PATH: git — install the missing tool(s) before scaffolding:\n  - git: https://git-scm.com/downloads")`
-- If both `git` and `uv` are missing: raises `RuntimeError("required tool(s) not found on PATH: git, uv — install the missing tool(s) before scaffolding:\n  - git: https://git-scm.com/downloads\n  - uv: https://docs.astral.sh/uv/getting-started/installation/")`
-- If all tools are present: returns normally with no exception
-
-**Design rationale:**
-- Checks all missing tools in a single pass, so the user sees all gaps at once rather than rerunning after each install
-- Each missing tool has its own hint line with the specific, canonical install URL, making remediation unambiguous
-- Iteration over `missing` (which is ordered by `_REQUIRED_TOOLS`) ensures consistent tool ordering in the message, not dict order
-- Raises `RuntimeError` to funnel through the existing `main()` exception handler (`except RuntimeError`) for clean error output
-- Called before any `Popen` subprocess or filesystem operation, ensuring a missing tool aborts scaffolding before the clone directory is created
-
-#### `_verify_target_directory_absent(target_path: Path) -> None`
-
-A private helper that verifies the target package directory does not already exist before scaffolding begins.
-
-- **Purpose**: Called in `init_new_package()` right after `_verify_required_tools()` to fail fast if the computed target directory already exists, preventing git clone from failing with a cryptic error and ensuring the user is aware of the conflict before any filesystem mutation.
-- **Parameter**: `target_path: Path` — the computed target directory path (e.g., `Path.cwd() / 'my_cool_package'`)
-- **Returns**: `None` (raises an exception on failure)
-- **Algorithm**: 
-  1. Calls `target_path.exists()` to check if the path exists (file or directory)
-  2. If the path exists: raises `RuntimeError` with an actionable message
-  3. If the path does not exist: returns normally with no exception
-- **Error message**: Includes the target path and an actionable remedy ("choose a different package name or remove the existing directory")
-
-Examples:
-- If `/home/user/my_cool_package/` directory exists: raises `RuntimeError("target directory already exists: /home/user/my_cool_package — choose a different package name or remove the existing directory")`
-- If `/home/user/my_cool_package` file exists: raises `RuntimeError("target directory already exists: /home/user/my_cool_package — choose a different package name or remove the existing directory")`
-- If the path does not exist: returns normally with no exception
-
-**Design rationale:**
-- Checks for both files and directories (broad check via `Path.exists()`) to handle all conflict cases
-- Runs after `_verify_required_tools()` but before git clone, ensuring all preflight checks are grouped together
-- Raises `RuntimeError` to funnel through the existing `main()` exception handler for clean error output
-- Provides the full path in the error message so the user knows exactly what exists and where
-
-#### `_verify_template_remote_reachable() -> None`
-
-A private helper that verifies the template repository is reachable before attempting to clone it. This is a pre-flight reachability probe that fails fast if the remote cannot be reached, before any clone operation begins.
-
-- **Purpose**: Called in `init_new_package()` after the two existing preflight checks (`_verify_required_tools()` and `_verify_target_directory_absent()`) and before the git clone `Popen` to fail fast on network/reachability issues rather than discovering them during the clone.
-- **Parameters**: none
-- **Returns**: `None` (raises an exception on failure)
-- **Algorithm**: 
-  1. Invoke `subprocess.run(['git', 'ls-remote', _TEMPLATE_REPOSITORY_URL], check=False, capture_output=True, text=True, timeout=_REMOTE_REACHABILITY_TIMEOUT_SECONDS)`
-  2. Check the return code: if 0, reachability is confirmed and the function returns normally
-  3. If return code != 0, classify the error:
-     - Run the stderr through `humanize_git_clone_error()` (existing pattern table that classifies git errors)
-     - If a friendly message is found: raise `RuntimeError(f'{friendly}\n\n{raw}')` where raw includes the exit code and stderr
-     - If no pattern matches: raise `RuntimeError(raw)` with just the raw message
-  4. On `TimeoutExpired`: catch the exception and raise `RuntimeError()` with a network-friendly message directly (no stderr to classify)
-  
-- **Error messages**:
-  - **Network unreachable** (e.g., DNS fails, connection times out): `RuntimeError('repository unreachable — check your network connection\n\ntemplate remote unreachable (git ls-remote exit code 2): fatal: Could not resolve host: github.com')`
-  - **Repository not found** (e.g., 404 or private repo): `RuntimeError('template repository not found — it may have moved or been removed\n\ntemplate remote unreachable (git ls-remote exit code 128): remote: Repository not found')`
-  - **Timeout**: `RuntimeError('repository unreachable — check your network connection\n\ntemplate remote unreachable (git ls-remote timed out after 10s)')`
-
-**Design rationale:**
-- Uses `git ls-remote` (not raw socket or HTTP) because `git` is already a required tool and `ls-remote` contacts the remote without cloning
-- The same error patterns (`_GIT_CLONE_ERROR_MESSAGES`) that humanize clone failures already understand `git ls-remote` stderr, so no new pattern vocabulary is needed
-- Uses `subprocess.run(check=False, capture_output=True, text=True)` (the existing module's probe idiom, per `_git_config_default()`) rather than `Popen`, keeping the `Popen` pipeline and test assertions unchanged
-- Bounded by `_REMOTE_REACHABILITY_TIMEOUT_SECONDS` to prevent hung DNS/connections from defeating the "fail fast" goal
-- Raises `RuntimeError` to funnel through the existing `main()` exception handler for clean error output
-
-#### `PreflightCheck` dataclass
-
-An immutable data record that represents one entry in the preflight check registry.
-
-```python
-@dataclass(frozen=True)
-class PreflightCheck:
-    label: str  # text shown after the status marker on the checklist line
-    run: 'Callable[[], None]'  # verifier; returns None on success, raises RuntimeError on failure
-```
-
-**Fields:**
-- `label: str` — the human-readable label for this check (e.g., `'required tools on PATH (git, just, uv)'`), printed on the checklist line after the status marker
-- `run: 'Callable[[], None]'` — a callable with no parameters that executes the check. It returns `None` on success or raises `RuntimeError` on failure. The type annotation is a string (forward-reference) because `Callable` is only imported under `TYPE_CHECKING`.
-
-**Usage**: Created and used by `_run_preflight_checks()` to build a registry of checks in order. Each check is independent and encapsulates one verifier.
-
 #### `_color_enabled() -> bool`
 
 A private helper that determines whether ANSI color output should be used based on TTY and environment variables.
@@ -551,36 +404,11 @@ A private helper that wraps text in ANSI green color when color is enabled, othe
 - **Examples**:
   - With color enabled: `_green('[ok]')` → `'\033[32m[ok]\033[0m'` (visible as green in terminal)
   - With color disabled: `_green('[ok]')` → `'[ok]'` (unchanged)
-  - Used in `_format_check_line`: wraps the padded marker field when `ok=True`
   - Used in `init_new_package`: wraps `'passed'` and `'valid'` in the success message
 
 **Design rationale**:
-- Wraps the entire field (including padding) in `_format_check_line` to ensure alignment is computed on the plain text before escape codes are added (escape codes have zero visible width)
 - Reuses the same helper for all affirmative tokens, ensuring consistent color application across the output
 - Returns the input unchanged when color is disabled, making the output identical to non-color output for piped/pytest scenarios, so existing exact-string tests pass unchanged
-
-#### `_format_check_line(label: str, *, ok: bool) -> str`
-
-A private helper that formats one checklist line with a status marker and label, applying green coloring to successful markers on interactive terminals.
-
-- **Parameters**:
-  - `label: str` — the check label (e.g., `'required tools on PATH (git, just, uv)'`)
-  - `ok: bool` — keyword-only; whether the check passed (True) or failed (False)
-- **Returns**: `str` — one indented checklist line with marker and label. When `ok=True` and color is enabled, the padded marker is wrapped in green; otherwise plain. Examples:
-  - Plain (non-TTY): `'  [ok]   required tools on PATH (git, just, uv)'`
-  - Colored (TTY): `'  \033[32m[ok]  \033[0m required tools on PATH (git, just, uv)'`
-  - Failed (never colored): `'  [FAIL] required tools on PATH (git, just, uv)'`
-- **Marker formatting**: The marker (`[ok]` or `[FAIL]`) is left-justified in a 6-character field so that labels align vertically. Padding is computed on the plain marker **before** wrapping with `_green()`, so column alignment is measured on visible width, not escape codes:
-  - `[ok]` (3 chars) → padded to `'[ok]  '` (6 chars) → optionally wrapped in green → with the literal space yields 3 spaces before the label
-  - `[FAIL]` (5 chars) → no padding, fits exactly (6 chars) → never wrapped → with the literal space yields 1 space before the label
-- **Coloring**: When `ok=True`, the padded field is passed to `_green()`, which wraps it in ANSI codes if color is enabled (TTY + no `NO_COLOR`). When `ok=False`, the field is not colored (failure markers stay plain per design Decision 7 of `design.md`).
-- **Indentation**: Each line is indented with 2 spaces at the start for visual hierarchy under the `Preflight checks:` header
-
-**Examples:**
-- `_format_check_line('package name valid', ok=True)` on a TTY → `'  \033[32m[ok]  \033[0m package name valid'` (visible as green `[ok]`)
-- `_format_check_line('package name valid', ok=True)` off a TTY → `'  [ok]   package name valid'` (plain text)
-- `_format_check_line('required tools on PATH (git, just, uv)', ok=True)` → same as above, with the longer label
-- `_format_check_line('target directory available', ok=False)` → `'  [FAIL] target directory available'` (never colored)
 
 #### `_format_dry_run_plan(module_name: str, target_path: Path, *, author_name: str | None, author_email: str | None, description: str | None, package_license: str | None, repository_url: str | None) -> str`
 
@@ -596,7 +424,7 @@ A private helper that formats the dry-run preview plan into a multi-line string.
   - `package_license: str | None` — license identifier (keyword-only)
   - `repository_url: str | None` — repository URL (keyword-only)
 - **Returns**: `str` — a multi-line formatted plan with a header, clone action, metadata substitutions, and `just init` outcomes
-- **Format**: Uses the `_DRY_RUN_HEADER` constant for the header line, followed by action lines with two-space indentation (matching `_format_check_line` aesthetic). For each metadata field, reports either the value (if non-`None`) or a note that it "keeps template default" (if `None`).
+- **Format**: Uses the `_DRY_RUN_HEADER` constant for the header line, followed by action lines with two-space indentation. For each metadata field, reports either the value (if non-`None`) or a note that it "keeps template default" (if `None`).
 - **Example output**:
   ```
   Dry run — no changes will be made:
@@ -621,7 +449,7 @@ A private helper that formats the dry-run preview plan into a multi-line string.
 
 A private helper that prints the dry-run preview plan to stdout.
 
-- **Purpose**: Called by `init_new_package()` when `dry_run=True` after preflight checks pass. Prints the formatted plan to stdout and lets the caller return.
+- **Purpose**: Called by `init_new_package()` when `dry_run=True`. Prints the formatted plan to stdout and lets the caller return.
 - **Parameters**: Same as `_format_dry_run_plan()` (forwarded directly)
 - **Returns**: `None`
 - **Behavior**: 
@@ -669,57 +497,6 @@ A private helper that prints the formatted post-scaffold summary to stdout.
   1. Calls `_format_init_summary(package_name, created_path)` to get the formatted block
   2. Prints the result to stdout via `print(...) # noqa: T201`
 - **Output convention**: Matches the existing output convention (progress/informational text to stdout)
-
-#### `_run_preflight_checks(target_path: Path) -> None`
-
-A private orchestrator that runs a registry of preflight checks in order, prints each result to stdout, and aborts on the first failure.
-
-- **Purpose**: Called in `init_new_package()` before any subprocess spawning or filesystem operation, to run all preflight checks and emit a human-readable checklist. The checklist gives users visibility into exactly which checks passed and which failed (if any).
-- **Parameter**: `target_path: Path` — the computed target directory path (e.g., `Path.cwd() / 'my_cool_package'`), used to bind the `_verify_target_directory_absent()` check via closure
-- **Returns**: `None` (raises `RuntimeError` on first check failure)
-- **Algorithm**:
-  1. Constructs a registry (tuple) of `PreflightCheck` instances, each with a label and a verifier callable:
-     - `PreflightCheck('package name valid', lambda: None)` — display-only check (name is already validated at argparse time, so the verifier is a no-op)
-     - `PreflightCheck('required tools on PATH (git, just, uv)', _verify_required_tools)` — verifies all required tools via `shutil.which()`
-     - `PreflightCheck('target directory available', lambda: _verify_target_directory_absent(target_path))` — closure binding the target path
-     - `PreflightCheck('template remote reachable', _verify_template_remote_reachable)` — verifies template reachability via `git ls-remote`
-  2. Prints the header line `'Preflight checks:'` to stdout
-  3. Iterates over the registry in order:
-     - Calls `check.run()` (the verifier)
-     - **If the verifier returns normally** (no exception): prints `_format_check_line(check.label, ok=True)` to stdout and continues to the next check
-     - **If the verifier raises `RuntimeError`**: prints `_format_check_line(check.label, ok=False)` to stdout, then bare-`raise` (re-raises the exception untouched, preserving the message and `__cause__` chain)
-     - Checks after the failure never run and are never printed
-- **Output (happy path)**:
-  ```
-  Preflight checks:
-    [ok]   package name valid
-    [ok]   required tools on PATH (git, just, uv)
-    [ok]   target directory available
-    [ok]   template remote reachable
-  ```
-- **Output (failure on the last check)**:
-  ```
-  Preflight checks:
-    [ok]   package name valid
-    [ok]   required tools on PATH (git, just, uv)
-    [ok]   target directory available
-    [FAIL] template remote reachable
-  ```
-  (followed by the re-raised `RuntimeError` caught in `main()` and printed to stderr)
-- **Design rationale**:
-  - The registry is built per-call so that `_verify_target_directory_absent()` can be bound to the runtime `target_path` via closure, avoiding a module-global that cannot see the runtime path
-  - The package name check is display-only because the name is already validated at argparse time; by the time the checklist prints, the name is guaranteed valid. This check is listed for "at a glance" completeness without redundant re-validation.
-  - The tools label is derived from `_REQUIRED_TOOLS` constant (never hardcoded), so if the tuple changes, the checklist label stays truthful
-  - Checks after the failure are never printed (they never ran), so the printed lines reflect exactly what was executed
-  - Only `RuntimeError` is caught — the sole exception type raised by the verifiers. Other exceptions propagate untouched.
-  - Bare `raise` preserves the original `RuntimeError` message and any `__cause__` chain (important for re-raised timeouts or nested errors)
-  - The orchestrator prints directly to stdout (not stderr), keeping informational output separate from error details (which go to stderr via the caught `RuntimeError` in `main()`)
-
-**Integration with `init_new_package()`**: Called at the start of `init_new_package()`, replacing the three direct calls to verifiers (`_verify_required_tools()`, `_verify_target_directory_absent(new_package_path)`, `_verify_template_remote_reachable()`). The orchestrator call is a single line:
-```python
-_run_preflight_checks(new_package_path)
-```
-where `new_package_path = Path.cwd() / module_name`
 
 #### `_explain_invalid_package_name(value: str) -> str`
 
@@ -1277,7 +1054,7 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 
 - **Arguments**:
   - `-v` / `--version`: optional flag (default `False`) — prints the package version and exits
-  - `--dry-run`: optional flag (default `False`) — previews what scaffolding would do without making changes; runs preflight, then prints a plan and exits
+  - `--dry-run`: optional flag (default `False`) — previews what scaffolding would do without making changes; prints a plan and exits
   - `--backend` / `--fastapi`: optional store-true flag (default `False`) — scaffolds a FastAPI backend service with async SQLAlchemy, migrations, and containerization
   - `--fullstack` / `--reactjs`: optional store-true flag (default `False`) — scaffolds both FastAPI backend (as above) and React frontend (Vite, Vitest, generated OpenAPI client) in isolated `frontend/` subdirectory
   - `package_name`: optional positional argument (validated via `validate_package_name`)
@@ -1320,7 +1097,7 @@ Parses command-line arguments using `argparse.ArgumentParser`, applies environme
 
 #### `init_new_package(package_name: str, *, author_name: str | None = None, author_email: str | None = None, description: str | None = None, package_license: str | None = None, repository_url: str | None = None, dry_run: bool = False, backend: bool = False, fullstack: bool = False) -> int`
 
-Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name. When `dry_run=True`, performs preflight checks and prints a preview plan, then exits without cloning or making any changes. When `backend=True`, injects a FastAPI backend template with async SQLAlchemy, health probes, and containerization. When `fullstack=True`, injects both the FastAPI backend and a React frontend (Vite, Vitest, OpenAPI client) in an isolated `frontend/` subdirectory.
+Orchestrates the package initialization flow by cloning, rewriting, and validating. Uses `normalize_module_name` to derive the import-safe directory name from the user-provided distribution name. When `dry_run=True`, prints a preview plan, then exits without cloning or making any changes. When `backend=True`, injects a FastAPI backend template with async SQLAlchemy, health probes, and containerization. When `fullstack=True`, injects both the FastAPI backend and a React frontend (Vite, Vitest, OpenAPI client) in an isolated `frontend/` subdirectory.
 
 1. **Positional Parameter**: `package_name: str` — name of the new package to create (validated distribution name, may contain `.` or `-`)
 2. **Keyword Parameters** (optional, all default to `None` or `False`):
@@ -1342,30 +1119,24 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
    For example, if the user provides `my-cool.package`, the derived `module_name` is `my_cool_package`.
 4. **Process**:
    - Resolves target path using the module name: `Path.cwd() / module_name`
-   - **Step 0: Preflight checks & checklist** — **Before any subprocess or filesystem operation**, calls `_run_preflight_checks(target_path)` to run a series of preflight checks and print a checklist to stdout:
-     1. Package name valid — display-only check (already validated at argparse time)
-     2. Required tools on PATH — calls `_verify_required_tools()` to verify that `git`, `just`, and `uv` all resolve on `PATH`. If any tool is missing, raises `RuntimeError` with an actionable message naming all absent tools, preventing the clone directory from being created and subprocess calls from being attempted.
-     3. Target directory available — calls `_verify_target_directory_absent(target_path)` to verify that the computed target directory does not already exist (file or directory). If the path exists, raises `RuntimeError` with an actionable message suggesting the user choose a different package name or remove the existing directory, preventing git clone from failing with a cryptic error.
-     4. Template remote reachable — calls `_verify_template_remote_reachable()` to verify the template is reachable via `git ls-remote` with a timeout. If unreachable, raises `RuntimeError` with a friendly message and diagnostic details.
-     The checklist is printed to stdout showing each check as `[ok]` or `[FAIL]`. If any check fails, the checklist up to the failure is printed, the error is re-raised to be caught in `main()` for stderr printing, and subsequent checks never run.
-   - **Step 0.5: Dry-run short-circuit** — **If `dry_run=True`**: after preflight checks pass, calls `_print_dry_run_plan()` to print a high-level preview plan to stdout, then returns `0` immediately without proceeding to the clone. The plan includes the target directory, template URL, per-field metadata substitutions (showing which fields have values and which keep the template default), and the well-known `just init` outcomes (rename `modernpackage/ → <module>/`, version reset to `0.0.1`). No directory is created, no clone occurs, and no other subprocess is spawned. If preflight checks fail, the dry-run returns `1` via the standard error path (error message printed to stderr by `main()`).
+   - **Step 0: Dry-run short-circuit** — **If `dry_run=True`**: calls `_print_dry_run_plan()` to print a high-level preview plan to stdout, then returns `0` immediately without proceeding to the clone. The plan includes the target directory, template URL, per-field metadata substitutions (showing which fields have values and which keep the template default), and the well-known `just init` outcomes (rename `modernpackage/ → <module>/`, version reset to `0.0.1`). No directory is created, no clone occurs, and no other subprocess is spawned.
    - **Step 1: Clone** — Spawns `git clone https://github.com/albertas/modernpackage <module_name>` via `Popen` with `stderr=PIPE` (target directory uses underscores, not hyphens/dots)
      - Waits for completion via `communicate()` and captures both stdout and stderr
      - **If `returncode != 0`**: calls `humanize_git_clone_error(decoded stderr)` to map common failure patterns to friendly messages; raises `RuntimeError` with either:
        - `'{friendly message}\n\ngit clone failed with exit code {returncode}: {decoded stderr}'` if a known pattern is found, or
        - `'git clone failed with exit code {returncode}: {decoded stderr}'` as fallback for unknown errors
-   - **Step 1.5: Write metadata** — **If clone succeeds (`returncode == 0`)**: calls `_write_package_metadata()` to write user-supplied metadata into the package's `pyproject.toml`. All non-`None` values are applied as targeted TOML-escaped substitutions of known template placeholders; `None` values are skipped. If the `pyproject.toml` file is missing, a notice is printed to stderr and the step continues without raising.
-   - **Step 1.75: Strip scaffolding** — **After metadata writing**: calls `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. This deletes the scaffolder CLI (`main.py`), its tests (`test_e2e.py`), documentation (`docs/`), and project-metadata files (`BACKLOG.md`); replaces the test suite with a minimal stub; replaces the README with a generic template; and removes console-script entry points. Also ensures the cloned `backend_template/` directory is removed (present in the clone by default but always stripped, so the no-flag output remains byte-for-byte identical). Runs **before** `just init` so the single git commit captures a clean tree. Missing paths are tolerated (graceful degradation for variant template shapes).
-   - **Step 1.85: Inject backend and/or frontend (if requested)** — **If `backend=True` or `fullstack=True`**: after stripping, calls `_add_backend()` to inject the FastAPI backend template. This copies the committed `backend_template/` directory (from the installed package or source checkout) into the clone root, merges FastAPI, SQLAlchemy, asyncpg, alembic, and uvicorn runtime dependencies into `[project.dependencies]`, appends the test-only `httpx` dependency to the dev group, and appends migration recipes (`just migrate`, `just makemigration`, `just migration-check`) to the clone's `Justfile`.
+   - **Step 2: Write metadata** — **If clone succeeds (`returncode == 0`)**: calls `_write_package_metadata()` to write user-supplied metadata into the package's `pyproject.toml`. All non-`None` values are applied as targeted TOML-escaped substitutions of known template placeholders; `None` values are skipped. If the `pyproject.toml` file is missing, a notice is printed to stderr and the step continues without raising.
+   - **Step 3: Strip scaffolding** — **After metadata writing**: calls `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. This deletes the scaffolder CLI (`main.py`), its tests (`test_e2e.py`), documentation (`docs/`), and project-metadata files (`BACKLOG.md`); replaces the test suite with a minimal stub; replaces the README with a generic template; and removes console-script entry points. Also ensures the cloned `backend_template/` directory is removed (present in the clone by default but always stripped, so the no-flag output remains byte-for-byte identical). Runs **before** `just init` so the single git commit captures a clean tree. Missing paths are tolerated (graceful degradation for variant template shapes).
+   - **Step 4: Inject backend and/or frontend (if requested)** — **If `backend=True` or `fullstack=True`**: after stripping, calls `_add_backend()` to inject the FastAPI backend template. This copies the committed `backend_template/` directory (from the installed package or source checkout) into the clone root, merges FastAPI, SQLAlchemy, asyncpg, alembic, and uvicorn runtime dependencies into `[project.dependencies]`, appends the test-only `httpx` dependency to the dev group, and appends migration recipes (`just migrate`, `just makemigration`, `just migration-check`) to the clone's `Justfile`.
      — **Additionally, if `fullstack=True`** (and the backend was just injected): calls `_add_frontend()` to inject the React frontend template. This copies the committed `frontend_template/` directory (from the installed package or source checkout) into `frontend/` subdirectory, appending frontend recipes (`just frontend-install`, `just frontend-build`, `just frontend-test`, `just frontend-lint`, `just generate-client`, `just frontend-check`) to the clone's `Justfile`. Frontend is isolated in a subdirectory and adds NO Python dependencies.
      — After all injections complete, calls `_stage_injected_files()` to run `git add -A` so the injected files (which carry the literal `modernpackage` token) are staged and seen by `just init`'s rename sed. If both `backend=False` and `fullstack=False`, this step is skipped and the output is byte-for-byte identical to today.
-   - **Step 2: Initialize** — **After backend injection (if any)**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
+   - **Step 5: Initialize** — **After backend injection (if any)**: continues to spawn `just init <module_name>` (cwd: the cloned directory, using the normalized module name) with `stderr=PIPE`
      - Wraps the `just init` `Popen` call in a `try`/`except FileNotFoundError` block:
        - **If `FileNotFoundError` is raised**: catches the exception and raises `RuntimeError` with an actionable message: `"'just' command not found — install it to initialize the package. See https://github.com/casey/just#installation"`
        - **If `Popen` succeeds**: waits for completion via `communicate()` and captures both stdout and stderr
          - **If `returncode != 0`**: raises `RuntimeError` with message `'just init failed with exit code {returncode}: {decoded stderr}'`
-         - **If `returncode == 0`**: continues to Step 3
-   - **Step 3: Validate** — **If Step 2 succeeds**: runs `just check` (cwd: the cloned directory) via `Popen` and reports the outcome using the module name
+         - **If `returncode == 0`**: continues to Step 6
+   - **Step 6: Validate** — **If Step 5 succeeds**: runs `just check` (cwd: the cloned directory) via `Popen` and reports the outcome using the module name
      - Spawns the subprocess and captures both stdout and stderr via `communicate()`
      - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {module_name} scaffold is valid.'` (using the normalized module name), then calls `_print_init_summary(package_name, new_package_path)` to print a summary block showing the created package name, directory path, and reset version (`_RESET_VERSION`), then returns `0`
      - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {module_name}.'` (using the normalized module name) and returns `1`

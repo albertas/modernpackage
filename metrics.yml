@@ -1,14 +1,23 @@
 months:
 - year_month: 2026-07
   total:
-    total_cost_usd: 6.501470900000001
-    total_duration_ms: 746720
-    max_context_pct: 41.027
-    total_lines_of_code: 252
-    total_cache_read_tokens: 6030441
-    total_cache_write_tokens: 377704
+    total_cost_usd: 14.5908268
+    total_duration_ms: 2071525
+    max_context_pct: 67.1455
+    total_lines_of_code: 308
+    total_cache_read_tokens: 14638418
+    total_cache_write_tokens: 851373
     max_tasks: 1
   days:
+  - date: 2026-07-21
+    stats:
+      total_cost_usd: 8.0893559
+      total_duration_ms: 1324805
+      max_context_pct: 67.1455
+      total_lines_of_code: 56
+      total_cache_read_tokens: 8607977
+      total_cache_write_tokens: 473669
+      max_tasks: 1
   - date: 2026-07-04
     stats:
       total_cost_usd: 6.501470900000001

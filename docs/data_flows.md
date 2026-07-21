@@ -54,38 +54,12 @@ In `init_new_package(package_name, ...)`:
 1. Call `normalize_module_name(package_name)` → module_name (for import safety)
 2. Compute `new_package_path = Path.cwd() / module_name` (target directory in current working directory)
 
-### Step 4: Preflight Checks
-
-Before any subprocess is spawned, run all preflight checks in order:
-
-1. **`_verify_required_tools()`**:
-   - For each tool in `_REQUIRED_TOOLS` (git, just, uv)
-   - Call `shutil.which(tool)` to check if on PATH
-   - If any missing: raise `RuntimeError` with actionable per-tool install hints:
-     - Header: `f'required tool(s) not found on PATH: {", ".join(missing)} — install the missing tool(s) before scaffolding:'`
-     - One line per missing tool: `f'\n  - {tool}: {_TOOL_INSTALL_HINTS[tool]}'`
-     - Each tool maps to its canonical install URL (git → git-scm.com, uv → docs.astral.sh/uv, just → github.com/casey/just)
-
-2. **`_verify_target_directory_absent(target_path)`**:
-   - Call `Path.exists()` on the target path
-   - If the path exists (file or directory): raise `RuntimeError` with message "target directory already exists: {path} — choose a different package name or remove the existing directory"
-   - If absent: return (no exception)
-
-3. **`_verify_template_remote_reachable()`**:
-   - Invoke `git ls-remote` with a timeout (`_REMOTE_REACHABILITY_TIMEOUT_SECONDS`) to probe the template repository without cloning
-   - If the remote is reachable (exit code 0): return (no exception)
-   - If the remote is unreachable (non-zero exit code): classify the error via `humanize_git_clone_error()` and raise `RuntimeError` with a friendly + raw message (e.g., "repository unreachable — check your network connection")
-   - If the probe times out: catch `TimeoutExpired` and raise `RuntimeError` with the network-friendly message
-
-**All three checks are synchronous and fail-fast; all must pass before proceeding to the clone. A user sees all preflight validation errors together before any filesystem mutation.**
-
-### Step 4.5: Dry-run Short-Circuit (conditional)
+### Step 4: Dry-run Short-Circuit (conditional)
 
 **If `--dry-run` flag is set:**
 
-1. After preflight checks pass (stdout shows full `[ok]` checklist)
-2. Call `_print_dry_run_plan()` with the normalized module name and all metadata fields (author_name, author_email, description, license, repository_url)
-3. Print to stdout:
+1. Call `_print_dry_run_plan()` with the normalized module name and all metadata fields (author_name, author_email, description, license, repository_url)
+2. Print to stdout:
    - Header: `'Dry run — no changes will be made:'`
    - Target directory line: `f'  clone {_TEMPLATE_REPOSITORY_URL} into {new_package_path}'`
    - Metadata section header: `'  update pyproject.toml metadata:'`
@@ -94,8 +68,8 @@ Before any subprocess is spawned, run all preflight checks in order:
      - If None: `f'    {field_label}: keeps template default'`
    - Just init rename outcome: `f'  run just init: rename modernpackage/ -> {module_name}/'`
    - Just init version outcome: `'  run just init: reset version to 0.0.1'`
-4. Return exit code 0 immediately (short-circuit, skip Steps 5-8)
-5. No directory is created, no clone occurs, no subprocess is spawned beyond preflight
+3. Return exit code 0 immediately (short-circuit, skip Steps 5-8)
+4. No directory is created, no clone occurs, no subprocess is spawned
 
 **If `--dry-run` flag is not set:** skip this step and proceed to Step 5 (Clone).
 
@@ -155,7 +129,7 @@ Spawn subprocess via `Popen(['just', 'init', module_name], cwd=new_package_path,
 - Capture stdout and stderr
 - If returncode != 0: raise `RuntimeError` with message "just init failed with exit code {code}: {stderr}"
 - If FileNotFoundError (just not on PATH): raise `RuntimeError` with install message
-- **Note**: operates on the already-stripped tree (see Step 6.5); renames the stub test and README files using the standard sed rename pass
+- **Note**: operates on the already-stripped tree (see Step 7); renames the stub test and README files using the standard sed rename pass
 
 ### Step 8: Just Check and Summary
 
@@ -186,7 +160,7 @@ In `main()`:
 
 **Final outputs:**
 - Exit code 0: Success
-- Exit code 1: Runtime failure (git, just init, just check, or preflight checks)
+- Exit code 1: Runtime failure (git, just init, or just check)
 - Exit code 2: Argument validation error (invalid name, email, URL, or metadata)
 
 ## Config File Resolution

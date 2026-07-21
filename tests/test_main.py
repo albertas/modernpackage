@@ -3,7 +3,6 @@ import sys
 import tomllib
 from argparse import ArgumentTypeError, Namespace
 from pathlib import Path
-from subprocess import TimeoutExpired
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,7 +12,6 @@ from modernpackage.main import (
     _GIT_CONFIG_USER_EMAIL_KEY,
     _GIT_CONFIG_USER_NAME_KEY,
     _INIT_SUMMARY_HEADER,
-    _REQUIRED_TOOLS,
     _add_backend,
     _add_frontend,
     _append_backend_dependencies,
@@ -21,7 +19,6 @@ from modernpackage.main import (
     _append_frontend_recipes,
     _color_enabled,
     _config_file_default,
-    _format_check_line,
     _format_dry_run_plan,
     _format_init_summary,
     _format_next_commands,
@@ -31,9 +28,6 @@ from modernpackage.main import (
     _remove_project_scripts,
     _strip_scaffolding,
     _user_config_path,
-    _verify_required_tools,
-    _verify_target_directory_absent,
-    _verify_template_remote_reachable,
     _write_package_metadata,
     humanize_git_clone_error,
     init_new_package,
@@ -418,135 +412,6 @@ def test_init_new_package_just_init_failure() -> None:
             init_new_package('mypackage')
 
 
-def test_verify_required_tools_missing_git() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == 'git' else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        with pytest.raises(RuntimeError, match='git'):
-            init_new_package('mypackage')
-    assert popen_mock.call_count == 0
-
-
-def test_verify_required_tools_missing_just() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == 'just' else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        with pytest.raises(RuntimeError, match='just'):
-            init_new_package('mypackage')
-    assert popen_mock.call_count == 0
-
-
-def test_verify_required_tools_missing_uv() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == 'uv' else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        with pytest.raises(RuntimeError, match='uv'):
-            init_new_package('mypackage')
-    assert popen_mock.call_count == 0
-
-
-def test_verify_required_tools_all_present() -> None:
-    with patch(
-        'modernpackage.main.shutil.which', return_value='/usr/bin/tool'
-    ) as which_mock:
-        _verify_required_tools()
-    assert which_mock.call_count == len(_REQUIRED_TOOLS)
-
-
-def test_verify_required_tools_reports_all_missing() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool in {'git', 'uv'} else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        with pytest.raises(RuntimeError) as exc_info:
-            init_new_package('mypackage')
-    error_message = str(exc_info.value)
-    assert 'git' in error_message
-    assert 'uv' in error_message
-    assert 'install' in error_message
-    assert popen_mock.call_count == 0
-
-
-def test_verify_required_tools_hint_points_at_git_install_docs() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == 'git' else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        pytest.raises(RuntimeError) as exc_info,
-    ):
-        _verify_required_tools()
-    message = str(exc_info.value)
-    assert 'git-scm.com/downloads' in message
-    assert 'docs.astral.sh/uv' not in message
-    assert 'github.com/casey/just#installation' not in message
-
-
-def test_verify_required_tools_hint_points_at_uv_install_docs() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == 'uv' else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        pytest.raises(RuntimeError) as exc_info,
-    ):
-        _verify_required_tools()
-    message = str(exc_info.value)
-    assert 'docs.astral.sh/uv' in message
-    assert 'git-scm.com/downloads' not in message
-    assert 'github.com/casey/just#installation' not in message
-
-
-def test_verify_required_tools_hint_points_at_just_install_docs() -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == 'just' else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        pytest.raises(RuntimeError) as exc_info,
-    ):
-        _verify_required_tools()
-    message = str(exc_info.value)
-    assert 'github.com/casey/just#installation' in message
-    assert 'git-scm.com/downloads' not in message
-    assert 'docs.astral.sh/uv' not in message
-
-
-def test_verify_required_tools_lists_all_install_hints_when_all_missing() -> None:
-    with (
-        patch('modernpackage.main.shutil.which', return_value=None),
-        pytest.raises(RuntimeError) as exc_info,
-    ):
-        _verify_required_tools()
-    message = str(exc_info.value)
-    assert 'git-scm.com/downloads' in message
-    assert 'docs.astral.sh/uv' in message
-    assert 'github.com/casey/just#installation' in message
-
-
 def test_main_with_package_name() -> None:
     with (
         patch('modernpackage.main.ArgumentParser') as argparse_mock,
@@ -729,34 +594,6 @@ def test_init_new_package_prints_summary_on_success() -> None:
     assert result == 0
 
 
-def test_run_preflight_checks_prints_full_checklist_on_clean_run(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with (
-        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-        patch('modernpackage.main._strip_scaffolding'),
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        popen_mock.return_value.returncode = 0
-        popen_mock.return_value.communicate.return_value = (b'', b'')
-        init_new_package('mypackage')
-    out = capsys.readouterr().out
-    expected = [
-        'Preflight checks:',
-        '  [ok]   package name valid',
-        '  [ok]   required tools on PATH (git, just, uv)',
-        '  [ok]   target directory available',
-        '  [ok]   template remote reachable',
-    ]
-    # each expected line present and in order
-    indices = [out.index(line) for line in expected]
-    assert all(line in out for line in expected)
-    assert indices == sorted(indices)
-    assert popen_mock.call_count >= 1  # reached scaffolding
-
-
 def test_init_output_has_blank_separators(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -771,13 +608,6 @@ def test_init_output_has_blank_separators(
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
     lines = capsys.readouterr().out.split('\n')
-
-    # blank line between the last preflight line and the progress line
-    last_preflight = max(
-        i for i, line in enumerate(lines) if 'template remote reachable' in line
-    )
-    progress = next(i for i, line in enumerate(lines) if 'Running just check' in line)
-    assert '' in lines[last_preflight + 1 : progress]
 
     # blank line between the passed-line and the summary header
     passed = next(i for i, line in enumerate(lines) if 'just check passed' in line)
@@ -827,64 +657,6 @@ def test_init_new_package_git_clone_network_failure() -> None:
     assert 'check your network' in error_message
     assert 'git clone failed with exit code 1' in error_message
     assert 'Could not resolve host' in error_message
-
-
-def test_init_new_package_aborts_when_remote_unreachable() -> None:
-    with (
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(
-            returncode=2, stderr='fatal: Could not resolve host: github.com'
-        )
-        with pytest.raises(RuntimeError, match='repository unreachable'):
-            init_new_package('mypackage')
-    assert popen_mock.call_count == 0
-
-
-def test_run_preflight_checks_marks_failing_check_and_aborts(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with (
-        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(
-            returncode=2, stderr='fatal: Could not resolve host: github.com'
-        )
-        with pytest.raises(RuntimeError, match='repository unreachable'):
-            init_new_package('mypackage')
-    captured = capsys.readouterr()
-    out = captured.out
-    assert '  [ok]   package name valid' in out
-    assert '  [ok]   required tools on PATH (git, just, uv)' in out
-    assert '  [ok]   target directory available' in out
-    assert '  [FAIL] template remote reachable' in out
-    assert popen_mock.call_count == 0
-
-
-def test_run_preflight_checks_aborts_on_earlier_check_without_later_lines(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    def which(tool: str) -> str | None:
-        return None if tool == 'git' else f'/usr/bin/{tool}'
-
-    with (
-        patch('modernpackage.main.shutil.which', side_effect=which),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        with pytest.raises(RuntimeError, match='git'):
-            init_new_package('mypackage')
-    out = capsys.readouterr().out
-    assert '  [ok]   package name valid' in out
-    assert '  [FAIL] required tools on PATH (git, just, uv)' in out
-    # later checks did not run, so their lines are absent
-    assert 'target directory available' not in out
-    assert 'template remote reachable' not in out
-    assert popen_mock.call_count == 0
 
 
 def test_git_config_default_returns_trimmed_value() -> None:
@@ -1394,98 +1166,6 @@ def test_remove_project_scripts_no_table(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _verify_target_directory_absent preflight check
-# ---------------------------------------------------------------------------
-
-
-def test_init_new_package_aborts_when_target_directory_exists(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    (tmp_path / 'mypackage').mkdir()
-    with (
-        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        with pytest.raises(RuntimeError, match='already exists'):
-            init_new_package('mypackage')
-    assert popen_mock.call_count == 0
-
-
-def test_init_new_package_proceeds_when_target_directory_absent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.chdir(tmp_path)
-    with (
-        patch('modernpackage.main.shutil.which', return_value='/usr/bin/tool'),
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-        patch('modernpackage.main._strip_scaffolding'),
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        popen_mock.return_value.returncode = 0
-        popen_mock.return_value.communicate.return_value = (b'', b'')
-        result = init_new_package('mypackage')
-    assert result == 0
-    assert popen_mock.call_count == 3
-
-
-def test_verify_target_directory_absent_raises_when_exists(tmp_path: Path) -> None:
-    existing = tmp_path / 'existing'
-    existing.mkdir()
-    with pytest.raises(RuntimeError, match='already exists'):
-        _verify_target_directory_absent(existing)
-
-
-def test_verify_target_directory_absent_passes_when_absent(tmp_path: Path) -> None:
-    absent = tmp_path / 'absent'
-    _verify_target_directory_absent(absent)  # must not raise
-
-
-def test_verify_template_remote_reachable_returns_none_when_reachable() -> None:
-    with patch('modernpackage.main.run') as run_mock:
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        _verify_template_remote_reachable()  # must not raise
-
-
-def test_verify_template_remote_reachable_raises_on_resolve_host() -> None:
-    with patch('modernpackage.main.run') as run_mock:
-        run_mock.return_value = MagicMock(
-            returncode=2, stderr='fatal: Could not resolve host: github.com'
-        )
-        with pytest.raises(RuntimeError, match='repository unreachable') as exc_info:
-            _verify_template_remote_reachable()
-    message = str(exc_info.value)
-    assert 'check your network' in message
-    assert 'git ls-remote exit code 2' in message
-    assert 'Could not resolve host' in message
-
-
-def test_verify_template_remote_reachable_raises_on_repo_not_found() -> None:
-    with patch('modernpackage.main.run') as run_mock:
-        run_mock.return_value = MagicMock(
-            returncode=128, stderr='remote: Repository not found'
-        )
-        with pytest.raises(RuntimeError) as exc_info:
-            _verify_template_remote_reachable()
-    message = str(exc_info.value)
-    assert 'template repository not found' in message
-    assert 'git ls-remote exit code 128' in message
-
-
-def test_verify_template_remote_reachable_raises_on_timeout() -> None:
-    with patch('modernpackage.main.run') as run_mock:
-        run_mock.side_effect = TimeoutExpired(cmd='git ls-remote', timeout=10)
-        with pytest.raises(RuntimeError, match='repository unreachable') as exc_info:
-            _verify_template_remote_reachable()
-    message = str(exc_info.value)
-    assert 'check your network' in message
-    assert 'timed out' in message
-
-
-# ---------------------------------------------------------------------------
 # Phase 1: --dry-run flag wiring
 # ---------------------------------------------------------------------------
 
@@ -1893,28 +1573,6 @@ def test_green_noop_when_no_color_set(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv('NO_COLOR', '')
     assert _green('x') == 'x'
     assert _color_enabled() is False
-
-
-def test_check_line_ok_is_green_on_tty(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
-    monkeypatch.delenv('NO_COLOR', raising=False)
-    line = _format_check_line('package name valid', ok=True)
-    assert '\033[32m' in line
-    assert '\033[0m' in line
-
-
-def test_check_line_ok_is_plain_off_tty(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys.stdout, 'isatty', lambda: False)
-    line = _format_check_line('package name valid', ok=True)
-    assert line == '  [ok]   package name valid'
-    assert '\033' not in line
-
-
-def test_check_line_fail_is_never_green(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
-    monkeypatch.delenv('NO_COLOR', raising=False)
-    line = _format_check_line('template remote reachable', ok=False)
-    assert '\033' not in line
 
 
 def test_success_line_words_are_green_on_tty(
