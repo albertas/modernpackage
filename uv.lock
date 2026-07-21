@@ -578,7 +578,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pytest-xdist" },
     { name = "ruff" },
-    { name = "vupi", specifier = ">=0.0.10" },
+    { name = "vupi", specifier = ">=0.0.12" },
 ]
 
 [[package]]
@@ -1238,7 +1238,7 @@ wheels = [
 
 [[package]]
 name = "vupi"
-version = "0.0.10"
+version = "0.0.12"
 source = { registry = "https://gitlab.com/api/v4/projects/niekas%2Fpackages/packages/pypi/simple" }
 dependencies = [
     { name = "claude-agent-sdk" },
@@ -1248,7 +1248,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rich" },
 ]
-sdist = { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/eb2c2f560b624e16a1d136f91820ccf5253d0eef8612673ae8049b7ca3dfe4d7/vupi-0.0.10.tar.gz", hash = "sha256:eb2c2f560b624e16a1d136f91820ccf5253d0eef8612673ae8049b7ca3dfe4d7" }
+sdist = { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/189af05412ae7e560d330caa77ae62f3e883a1a4c9875218c5465adc6793ba85/vupi-0.0.12.tar.gz", hash = "sha256:189af05412ae7e560d330caa77ae62f3e883a1a4c9875218c5465adc6793ba85" }
 wheels = [
-    { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/535138647cf804275935c088382d5f4edb0dc9cff01f1d567d1d907424f8446b/vupi-0.0.10-py3-none-any.whl", hash = "sha256:535138647cf804275935c088382d5f4edb0dc9cff01f1d567d1d907424f8446b" },
+    { url = "https://gitlab.com/api/v4/projects/83381886/packages/pypi/files/a32be3c0cd7fb8ef68582770b2037f5a5ab1e5a5e60bc470be98c225e461f700/vupi-0.0.12-py3-none-any.whl", hash = "sha256:a32be3c0cd7fb8ef68582770b2037f5a5ab1e5a5e60bc470be98c225e461f700" },
 ]

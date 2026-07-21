@@ -1105,6 +1105,14 @@ def _seed_clone(tmp_path: Path) -> Path:
     (tmp_path / 'docs' / 'overview.md').write_text('# docs\n')
     (tmp_path / 'BACKLOG.md').write_text('# backlog\n')
     (tmp_path / 'README.md').write_text('# scaffolder readme\n')
+    (tmp_path / 'errors').mkdir()
+    (tmp_path / 'errors' / 'placeholder.md').write_text('# error\n')
+    (tmp_path / 'issues').mkdir()
+    (tmp_path / 'issues' / 'placeholder.md').write_text('# issue\n')
+    (tmp_path / 'workspace').mkdir()
+    (tmp_path / 'workspace' / 'placeholder.md').write_text('# workspace\n')
+    (tmp_path / 'lifecycle_state.yml').write_text('state: {}\n')
+    (tmp_path / 'metrics.yml').write_text('metrics: {}\n')
     source = Path(__file__).resolve().parent.parent / 'pyproject.toml'
     (tmp_path / 'pyproject.toml').write_text(source.read_text())
     return tmp_path
@@ -1117,6 +1125,15 @@ def test_strip_scaffolding_removes_cli_tests_docs(tmp_path: Path) -> None:
     assert not (tmp_path / 'docs').exists()
     assert not (tmp_path / 'BACKLOG.md').exists()
     assert (tmp_path / 'modernpackage' / '__init__.py').exists()  # marker kept
+
+
+def test_strip_scaffolding_removes_operational_artifacts(tmp_path: Path) -> None:
+    _strip_scaffolding(_seed_clone(tmp_path))
+    assert not (tmp_path / 'errors').exists()
+    assert not (tmp_path / 'issues').exists()
+    assert not (tmp_path / 'workspace').exists()
+    assert not (tmp_path / 'lifecycle_state.yml').exists()
+    assert not (tmp_path / 'metrics.yml').exists()
 
 
 def test_strip_scaffolding_writes_test_main_stub(tmp_path: Path) -> None:

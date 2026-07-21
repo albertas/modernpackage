@@ -262,7 +262,7 @@ When `git clone` fails, the error message is enhanced with a friendly, actionabl
 
 ## After Initialization
 
-Once your new package is created and validated, you can begin development. The initialization process automatically removes the scaffolder's own CLI, tests, and documentation from the generated package, leaving you with a clean, minimal codebase. The process then runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed").
+Once your new package is created and validated, you can begin development. The initialization process automatically removes the scaffolder's own CLI, tests, documentation, and operational artifacts from the generated package, leaving you with a clean, minimal codebase. The process then runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed").
 
 ### Standard Package
 

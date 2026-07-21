@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-07-21 08:08:19
+heart_beat: 2026-07-21 09:46:02
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -33,5 +33,8 @@ phases:
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
 lifecycles_in_progress:
-  - artifact_dir: T68-2026-07-21-add-justfile-action-to-bump-version-increase-patch
-    heart_beat: 2026-07-21 08:08:19
+  - artifact_dir: T69-2026-07-21-exclude-errors-issues-workspace-directories-and-li
+    heart_beat: 2026-07-21 09:47:17
+implementation_semaphore:
+  - artifact_dir: T69-2026-07-21-exclude-errors-issues-workspace-directories-and-li
+    heart_beat: 2026-07-21 09:48:04

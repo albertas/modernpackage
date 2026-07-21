@@ -102,12 +102,14 @@ Call `_write_package_metadata(new_package_path, author_name=..., author_email=..
 
 ### Step 6.5: Strip Scaffolding
 
-Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery from the cloned tree:
+Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery and operational artifacts from the cloned tree:
 1. Delete wholesale paths from `_SCAFFOLDING_PATHS_TO_DELETE`:
    - `modernpackage/main.py` — the self-replicating CLI
    - `tests/test_e2e.py` — end-to-end test for the scaffolder
    - `docs` — scaffolder documentation
    - `BACKLOG.md` — project-metadata file
+   - `errors`, `issues`, `workspace` — scaffolder operational/process artifact directories
+   - `lifecycle_state.yml`, `metrics.yml` — scaffolder operational/process artifact files
    - (tolerate missing paths — no error if not present)
 2. Write `_TEST_MAIN_STUB` to `tests/test_main.py`:
    - Replaces scaffolder test suite with minimal stub
@@ -121,7 +123,7 @@ Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery
    - Leaves surrounding tables (`[dependency-groups]`, `[tool.*]`) intact
    - Tolerates missing file or table — no-op if absent
 
-**Result:** the cloned tree is now clean of scaffolder machinery. The next step (`just init`) will operate on an already-stripped tree, and the single git commit will capture the clean initial state.
+**Result:** the cloned tree is now clean of scaffolder machinery and operational artifacts. The next step (`just init`) will operate on an already-stripped tree, and the single git commit will capture the clean initial state.
 
 ### Step 7: Just Init
 

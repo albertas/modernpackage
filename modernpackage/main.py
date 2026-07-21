@@ -506,6 +506,13 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'BACKLOG.md',
     'backend_template',  # Always removed; re-injected if --backend is set
     'frontend_template',  # Always removed; re-injected if --fullstack is set
+    # Scaffolder operational/process artifacts removed from every generated
+    # package (never part of a scaffolded project's tree).
+    'errors',
+    'issues',
+    'workspace',
+    'lifecycle_state.yml',
+    'metrics.yml',
 )
 
 # Stub tests/test_main.py: pytest needs >=1 collected test (empty collection

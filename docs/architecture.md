@@ -226,10 +226,15 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'BACKLOG.md',
     'backend_template',  # Always removed; re-injected if --backend is set
     'frontend_template',  # Always removed; re-injected if --fullstack is set
+    'errors',           # Scaffolder operational/process artifacts
+    'issues',           # removed from every generated package
+    'workspace',
+    'lifecycle_state.yml',
+    'metrics.yml',
 )
 ```
 
-Used by `_strip_scaffolding()` to remove the scaffolder's own machinery from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The `backend_template` and `frontend_template` entries are always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects backend template files into the clone root after stripping. When `--fullstack` is set, both `_add_backend()` and `_add_frontend()` re-inject their respective templates after stripping. The `tests_e2e` entry is removed to prevent the scaffolder's own end-to-end test directory from leaking into scaffolded packages and causing import errors in the generated package's test suite.
+Used by `_strip_scaffolding()` to remove the scaffolder's own machinery and operational/process artifacts from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The first set of entries (CLI machinery, test suite, documentation, project metadata, and templates) are removed to keep the generated package clean and minimal. The second set (errors, issues, workspace directories and lifecycle state/metrics files) are scaffolder operational/process artifacts that should not be included in generated packages. The `backend_template` and `frontend_template` entries are always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects backend template files into the clone root after stripping. When `--fullstack` is set, both `_add_backend()` and `_add_frontend()` re-inject their respective templates after stripping. The `tests_e2e` entry is removed to prevent the scaffolder's own end-to-end test directory from leaking into scaffolded packages and causing import errors in the generated package's test suite.
 
 **`_BACKEND_TEMPLATE_DIR: Path`**
 
