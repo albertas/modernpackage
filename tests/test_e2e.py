@@ -214,6 +214,35 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
 
 
 @pytest.mark.e2e
+def test_just_bump_increments_patch(tmp_path: Path) -> None:
+    for tool in REQUIRED_TOOLS:
+        if shutil.which(tool) is None:
+            pytest.skip(f'required tool not on PATH: {tool}')
+
+    destination = tmp_path / 'bump_check'
+    clone = _run(['git', 'clone', str(REPO_ROOT), str(destination)], cwd=tmp_path)
+    assert clone.returncode == 0, f'git clone failed:\n{clone.stdout}\n{clone.stderr}'
+
+    init_file = destination / 'modernpackage' / '__init__.py'
+    version_re = re.compile(r"^__version__ = '(\d+)\.(\d+)\.(\d+)'$", re.MULTILINE)
+
+    before = version_re.search(init_file.read_text())
+    assert before is not None, 'starting __version__ not found'
+    start_major, start_minor, start_patch = (int(part) for part in before.groups())
+
+    bump = _run(['just', 'bump'], cwd=destination)
+    assert bump.returncode == 0, f'just bump failed:\n{bump.stdout}\n{bump.stderr}'
+
+    after = version_re.search(init_file.read_text())
+    assert after is not None, 'post-bump __version__ not found'
+    end_major, end_minor, end_patch = (int(part) for part in after.groups())
+
+    assert end_patch == start_patch + 1
+    assert end_major == start_major
+    assert end_minor == start_minor
+
+
+@pytest.mark.e2e
 def test_scaffolded_backend_package_passes_check(tmp_path: Path) -> None:
     for tool in REQUIRED_TOOLS:
         if shutil.which(tool) is None:

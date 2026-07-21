@@ -53,7 +53,14 @@ fix: format fix-lint
 
 check: check-format check-lint check-complexity check-typecheck test audit # deadcode
 
-publish:
+bump:
+  @current=$(sed -n "s/^__version__ = '\(.*\)'/\1/p" modernpackage/__init__.py); \
+  new="${current%.*}.$(( ${current##*.} + 1 ))"; \
+  sed -i "s/^__version__ = .*/__version__ = '${new}'/" modernpackage/__init__.py; \
+  echo "Bumped version: ${current} -> ${new}"
+
+publish: bump
+  git commit -m "Bump version" modernpackage/__init__.py
   git push  # Modernpacakge clones the code from gitlab, so the updated code has to be available both on gitlab and pypi for release
   rm -fr dist/*
   uv build

@@ -1,0 +1,150 @@
+simple_task: false
+phases:
+- name: 1_question
+  done: true
+  metrics:
+    duration_ms: 70312
+    cost_usd: 0.8466075000000001
+    input_tokens: 3144
+    output_tokens: 4296
+    cache_read_tokens: 216729
+    cache_creation_tokens: 61101
+    model: Haiku 4.5, opus 4.8
+    context_used: 64245
+    context_max: 1000000
+  artifacts:
+  - questions.md
+- name: 2_research
+  done: true
+  metrics:
+    duration_ms: 89457
+    cost_usd: 0.489259
+    input_tokens: 3019
+    output_tokens: 5983
+    cache_read_tokens: 233814
+    cache_creation_tokens: 20460
+    model: opus 4.8, Haiku 4.5
+    context_used: 23479
+    context_max: 1000000
+  artifacts:
+  - research.md
+- name: 3_design
+  done: true
+  metrics:
+    duration_ms: 91783
+    cost_usd: 0.410274
+    input_tokens: 3009
+    output_tokens: 6493
+    cache_read_tokens: 89300
+    cache_creation_tokens: 18511
+    model: Haiku 4.5, opus 4.8
+    context_used: 21520
+    context_max: 1000000
+  artifacts:
+  - design.md
+- name: 4_structure
+  done: true
+  metrics:
+    duration_ms: 68104
+    cost_usd: 0.4149225
+    input_tokens: 3013
+    output_tokens: 4252
+    cache_read_tokens: 160003
+    cache_creation_tokens: 21028
+    model: Haiku 4.5, opus 4.8
+    context_used: 24041
+    context_max: 1000000
+  artifacts:
+  - structure.md
+- name: 5_plan
+  done: true
+  metrics:
+    duration_ms: 80235
+    cost_usd: 0.5337095000000001
+    input_tokens: 3142
+    output_tokens: 6371
+    cache_read_tokens: 174759
+    cache_creation_tokens: 26797
+    model: Haiku 4.5, opus 4.8
+    context_used: 29939
+    context_max: 1000000
+  artifacts:
+  - plan.md
+- name: 6_document
+  done: true
+  metrics:
+    duration_ms: 126788
+    cost_usd: 0.24521960000000004
+    input_tokens: 169
+    output_tokens: 9214
+    cache_read_tokens: 1019366
+    cache_creation_tokens: 46235
+    model: Haiku 4.5
+    context_used: 46404
+    context_max: 200000
+- name: 7_implement
+  done: true
+  metrics:
+    duration_ms: 97780
+    cost_usd: 2.4163329999999994
+    input_tokens: 3289
+    output_tokens: 4772
+    cache_read_tokens: 1911552
+    cache_creation_tokens: 124381
+    model: Haiku 4.5, opus 4.8
+    context_used: 127670
+    context_max: 1000000
+    lines_of_code: 59
+  sub_phases:
+  - num: 1
+    title: '`bump` recipe increments patch'
+    done: true
+    metrics:
+      duration_ms: 98076
+      cost_usd: 2.177932
+      input_tokens: 3283
+      output_tokens: 4350
+      cache_read_tokens: 1490084
+      cache_creation_tokens: 122674
+      model: opus 4.8, Haiku 4.5
+      context_used: 125957
+      context_max: 1000000
+      lines_of_code: 28
+  - num: 2
+    title: e2e test locks bump behavior
+    done: true
+    metrics:
+      duration_ms: 221246
+      cost_usd: 3.076791
+      input_tokens: 3426
+      output_tokens: 12810
+      cache_read_tokens: 2574212
+      cache_creation_tokens: 137131
+      model: Haiku 4.5, opus 4.8
+      context_used: 140557
+      context_max: 1000000
+      lines_of_code: 57
+  - num: 3
+    title: '`publish` bumps, commits, and pushes the new version'
+    done: true
+    metrics:
+      duration_ms: 97780
+      cost_usd: 2.4163329999999994
+      input_tokens: 3289
+      output_tokens: 4772
+      cache_read_tokens: 1911552
+      cache_creation_tokens: 124381
+      model: Haiku 4.5, opus 4.8
+      context_used: 127670
+      context_max: 1000000
+      lines_of_code: 59
+cumulative:
+  total_cost: 5.356325099999999
+  total_ms: 624459
+  total_cache_read: 3805523
+  total_cache_write: 318513
+  total_loc: 59
+  total_input_tokens: 18785
+  total_output_tokens: 41381
+  version: 0.0.10
+  completed_at: 2026-07-21 08:08:35.331584

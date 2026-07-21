@@ -48,7 +48,8 @@ After cloning and `cd`-ing into the created package directory, developers use `j
 - **`just typecheck`** — run type checker (mypy in strict mode).
 - **`just audit`** — run security vulnerability scanner (pip-audit).
 - **`just deadcode`** — detect unused code.
-- **`just publish`** — build and publish to PyPI via `uv build` + `uv publish`.
+- **`just bump`** — increment the patch version component in `modernpackage/__init__.py` (e.g., `0.0.9` → `0.0.10`). Used manually for version control or automatically during release via `just publish`.
+- **`just publish`** — bump the patch version, commit the version file to git, push to the remote repository, build the package with `uv build`, and publish to PyPI via `uv publish`. The bumped version is available in both the GitLab repository and PyPI for the release.
 
 Individual check sub-steps are also available:
 

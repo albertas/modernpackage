@@ -31,6 +31,8 @@ __version__ = '0.0.9'
 This constant is:
 - Imported by `main.py` for the `--version` output
 - Read by `hatchling` (build backend) to set the wheel/sdist version dynamically
+- Incremented by the `just bump` recipe during release (via a POSIX shell + sed rewrite of this file)
+- The single source of truth for the package version; all version references flow from this definition
 
 ### `modernpackage/main.py`
 
@@ -1276,7 +1278,9 @@ This ensures all code paths are covered by type hints and comply with strict typ
 
 ### Publishing
 
-`just publish` clears `dist/`, builds via `uv build`, and publishes via `uv publish`.
+`just publish` automates the release workflow: it bumps the patch version component of `__version__` in `modernpackage/__init__.py` via `just bump`, commits the version file to git with the message "Bump version", pushes the commit to the remote repository, clears `dist/`, builds via `uv build`, and publishes via `uv publish`. This ensures that every published package has a unique, incremented version and that the pushed repository contains the released code with the matching version.
+
+The `just bump` recipe can also be invoked standalone to increment the patch version without publishing (e.g., for testing or manual version control). It uses POSIX shell arithmetic and GNU sed to extract the current version, compute the new patch component, and rewrite the version line in place.
 
 ### Dependency Locking
 
@@ -1745,9 +1749,9 @@ Both the `git clone` and `just init` subprocess calls capture stderr and include
 
 If the `Popen` call succeeds but the subprocess exits with a non-zero return code, a `RuntimeError` is raised with the message `'just init failed with exit code {returncode}: {stderr}'`. The decoded stderr output provides visibility into the root cause (e.g., rewrite errors, git failures within the init script). A failed `just init` leaves the cloned directory in an incomplete state, so the error is caught and reported immediately rather than silently continuing.
 
-### Version drift
+### Version Consistency
 
-The source declares `__version__ = '0.0.9'`, but published wheels may differ. See `specification.md` for details.
+The `just publish` recipe ensures version consistency across the repository and PyPI release: it automatically invokes `just bump` to increment the patch version, commits the updated version file to the repository, pushes to the remote, and then builds and publishes to PyPI. This guarantees that the version in the pushed commit matches the version in the published wheel, eliminating manual version management errors.
 
 ### Justfile command surface
 
@@ -1755,5 +1759,7 @@ The `Justfile` provides a comprehensive command surface for all development, tes
 - **`just test`** and **`just test-e2e`** run in parallel across `nproc --ignore=1` workers with full test discovery and coverage measurement
 - **`just check`** enforces the full gate (format, lint, complexity, typecheck, test, audit, deadcode) as the primary quality gate
 - **`just fix`** auto-fixes all correctable violations (format + lint + deadcode)
-- **`just publish`** builds and publishes to PyPI; **`just lock`** upgrades all locked dependencies
+- **`just bump`** increments the patch version in `modernpackage/__init__.py` (e.g., `0.0.9` → `0.0.10`)
+- **`just publish`** runs `just bump`, commits the version file, pushes to the remote repository, then builds and publishes to PyPI
+- **`just lock`** upgrades all locked dependencies
 - **`just init <name>`** replicates the package with a new name (named parameter, default `"modernpackage"`)
