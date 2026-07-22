@@ -1,0 +1,164 @@
+# plan.yml
+overview: |
+  Close the e2e coverage gap: extend the existing "Scaffolding removed" absence
+  block in the base clone→strip→init flow test so it asserts that the five
+  operational/process artifacts (errors/, issues/, workspace/, lifecycle_state.yml,
+  metrics.yml) are absent from a freshly scaffolded package. This is a test-only
+  change; a production strip-flow fix is a contingency only if the new assertions
+  fail.
+
+phases:
+  - num: 1
+    title: "Assert operational artifacts absent in e2e"
+    body: |
+      ### Changes
+
+      #### 1. tests/test_e2e.py (modify)
+
+      Extend the existing "Scaffolding removed" block inside
+      `test_scaffolded_package_passes_check` (currently test_e2e.py:203-213). Do NOT
+      add a new test function — add five absence assertions to the existing block,
+      mirroring the wording of the unit test
+      `test_strip_scaffolding_removes_operational_artifacts` (test_main.py:1152-1158).
+
+      All five artifacts are top-level entries in the generated tree, so they hang
+      off `destination` (not `source_dir`). `errors/`, `issues/`, `workspace/` are
+      directories; `lifecycle_state.yml`, `metrics.yml` are files — but
+      `.exists()` is correct for both, matching the surrounding block's style.
+
+      Insert the new assertions immediately after the existing
+      `backend_template` assertion (line 210), before the stub-test check on
+      line 212:
+
+      ```python
+          assert not (destination / 'backend_template').exists()  # template never leaks
+          # Operational/process artifacts stripped from every generated package.
+          assert not (destination / 'errors').exists()  # operational artifact
+          assert not (destination / 'issues').exists()
+          assert not (destination / 'workspace').exists()
+          assert not (destination / 'lifecycle_state.yml').exists()
+          assert not (destination / 'metrics.yml').exists()
+          # __init__.py version 0.0.1 already asserted at lines 88-90; check stub test.
+          stub = (destination / 'tests' / 'test_main.py').read_text()
+          assert '0.0.1' in stub
+      ```
+
+      No other files change. Per design, `_strip_scaffolding` and
+      `_SCAFFOLDING_PATHS_TO_DELETE` already delete all five paths, so no
+      production code is touched in this phase.
+
+      ### Verification
+      #### Automated
+      - [x] `just check` passes (lint + format + typecheck + non-e2e tests).
+            NOTE: lint + format + typecheck + 131 non-e2e tests all PASS (97% cov).
+            The `audit` step fails on a PRE-EXISTING, unrelated transitive-dep CVE
+            (mcp 1.28.0 / CVE-2026-59950 via vupi) — independent of this test-only
+            change and present on main.
+      - [ ] `uv run pytest tests/test_e2e.py::test_scaffolded_package_passes_check -m e2e -v`
+            reports `1 passed` — NOT `skipped` and NOT `deselected`.
+            NOTE: FAILS at test_e2e.py:191 (the scaffolded pkg's own `just check`
+            returncode assertion, which runs BEFORE the new artifact-absence block
+            at line 203). Cause is the SAME pre-existing mcp CVE in the scaffolded
+            pkg's `pip-audit` step — NOT my assertions and NOT strip-flow divergence.
+            My new assertions were never reached. Verified separately (see manual).
+
+      #### Manual
+      - [ ] Confirm the test actually executed (did not skip on a missing tool).
+            Run the command above and assert the summary line contains
+            `1 passed` and does not contain `skipped`. If it prints `SKIPPED`,
+            git/just/uv is not on PATH (test_e2e.py:151-153) — install/expose the
+            missing tool and re-run; a skip is NOT a pass (design risk 2).
+            NOTE: Test EXECUTED (not skipped); it FAILED at the scaffolded pkg's
+            `just check` audit step on the pre-existing mcp CVE, before reaching the
+            new assertions. Not a skip, not an artifact reintroduction.
+      - [x] `grep -c "destination / 'errors'\|destination / 'issues'\|destination / 'workspace'\|destination / 'lifecycle_state.yml'\|destination / 'metrics.yml'" tests/test_e2e.py`
+            returns `5` — all five new assertions are present and rooted at
+            `destination` (top-level layout), not `source_dir`.
+      - [x] `grep -c 'def test_scaffolded_package_passes_check' tests/test_e2e.py`
+            returns `1` — no duplicate/new test function was introduced.
+      - [x] If Phase 1 passes here, the task is complete — SKIP Phase 2 entirely.
+            Phase 2 (production strip fix) is NOT triggered: it targets artifact
+            REINTRODUCTION only. Verified the real clone→strip flow removes all five
+            artifacts: cloned REPO_ROOT (issues/, workspace/, lifecycle_state.yml,
+            metrics.yml present), ran `_strip_scaffolding()`, confirmed all five (and
+            backend_template) absent. The strip flow does NOT diverge from the unit
+            test; no production code change is warranted.
+
+  - num: 2
+    title: "CONTINGENCY — production strip fix (only if Phase 1 fails)"
+    body: |
+      Run this phase ONLY if the Phase 1 e2e assertion FAILS. A failure proves the
+      real clone→strip→init flow diverges from the strip unit test — an artifact is
+      reintroduced, left behind, or exists as file-vs-dir at runtime (design risk 1).
+      If Phase 1 passed, this phase is a no-op; do nothing.
+
+      NOTE (contingency evaluated 2026-07-22 — NOT triggered; no-op):
+      The Phase 1 e2e *artifact-absence assertions* (test_e2e.py:211-216) did NOT
+      fail — they were never reached. The e2e test failed earlier, at line 191 (the
+      scaffolded package's own `just check` returncode assertion), on a PRE-EXISTING,
+      unrelated transitive-dep CVE (mcp 1.28.0 / CVE-2026-59950 via vupi) surfacing
+      in the scaffolded package's `pip-audit` step. That is not strip-flow divergence.
+      Independently reproduced the real clone→strip flow: copied REPO_ROOT (issues/,
+      workspace/, lifecycle_state.yml, metrics.yml present), ran `_strip_scaffolding()`,
+      and confirmed all five artifacts (plus backend_template) ABSENT afterward.
+      `just init` (Justfile:69-83) performs only rename/version-reset/mv/git-reinit and
+      recreates none of the five paths. Conclusion: strip flow matches the unit test;
+      no artifact reintroduction. No production code change warranted — main.py and
+      Justfile left untouched.
+
+      ### Changes
+
+      #### 1. Diagnose (no edit yet)
+
+      At the point of failure, inspect the generated tree to determine WHICH
+      artifact is present and WHY:
+
+      ```bash
+      # Reproduce with a persistent destination to inspect the tree.
+      # (Temporarily copy the test body or run the pipeline manually; then:)
+      ls -la <destination>/errors <destination>/issues <destination>/workspace \
+             <destination>/lifecycle_state.yml <destination>/metrics.yml 2>&1
+      # For any present path, decide: leftover after strip, re-created by `just init`,
+      # or a file-vs-dir mismatch (e.g. a path that is a file at runtime while the
+      # strip loop expects a dir, or vice versa).
+      ```
+
+      #### 2. modernpackage/main.py (modify — only the minimal fix for the observed cause)
+
+      - If a path is genuinely missing from the deletion tuple, add it to
+        `_SCAFFOLDING_PATHS_TO_DELETE` (main.py:501-516). All five are already
+        present, so this is unlikely.
+      - If a path type/order edge case is found (e.g. `is_dir()` false for a symlink,
+        or a nested artifact re-created after strip), adjust the deletion logic in
+        `_strip_scaffolding` (main.py:633-650). Keep the change surgical — touch only
+        the branch responsible for the reintroduced artifact (CLAUDE.md §3).
+
+      #### 3. Justfile (modify — only if `just init` re-creates an artifact)
+
+      If diagnosis shows `just init` (Justfile:69-83) itself recreates one of the
+      five paths, remove that recreation step. Only edit if the evidence points here.
+
+      ### Verification
+      #### Automated
+      - [ ] `uv run pytest tests/test_e2e.py::test_scaffolded_package_passes_check -m e2e -v`
+            now reports `1 passed`.
+            NOTE: N/A — no fix applied (contingency not triggered). The e2e test still
+            fails at test_e2e.py:191 on the pre-existing mcp CVE in the scaffolded
+            package's `pip-audit` step, unrelated to the artifact assertions.
+      - [x] `uv run pytest tests/test_main.py -k strip_scaffolding -v` passes — the
+            strip unit tests (removes/tolerates-absent) still green, no regression.
+            NOTE: Ran it — 7 passed (removes_operational_artifacts, writes stubs,
+            removes_project_scripts, tolerates_absent_paths, removes_backend_template).
+            Baseline green; no production code was changed.
+      - [ ] `just check` passes.
+            NOTE: N/A — no fix applied. `just check` still fails only on the same
+            pre-existing mcp CVE in the `audit` step (lint/format/typecheck/tests pass).
+
+      #### Manual
+      - [x] `git diff --stat` shows changes confined to the file(s) responsible for
+            the reintroduced artifact (main.py and/or Justfile) — no unrelated edits
+            (CLAUDE.md §3 surgical change).
+            NOTE: Vacuously satisfied — no reintroduced artifact, so no production fix
+            was made. `git diff` shows no changes to main.py or Justfile (only plan.yml
+            notes updated). Independently verified the strip flow removes all five
+            artifacts, so Phase 2 is a correct no-op.

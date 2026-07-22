@@ -1,0 +1,120 @@
+# research.yml
+scope: |
+  The package instantiation pipeline in modernpackage/main.py (clone → metadata
+  → strip → just init), the Justfile `init` recipe, the e2e tests in
+  tests/test_e2e.py + tests_e2e/, the strip unit tests in tests/test_main.py,
+  and the repository's .gitignore / git-tracking state for the operational
+  artifact directories and yml files.
+findings:
+  - question: "Trace the package instantiation pipeline in main.py end to end: what steps run in what order (clone, metadata write, scaffolding strip, `just init`), and what determines the final file tree of a generated package?"
+    answer: |
+      Orchestrated by `init_new_package` (main.py:941-1057). Order:
+      1. Compute module_name / target path (main.py:954-955).
+      2. Dry-run short-circuit: print plan, return 0 (main.py:957-969).
+      3. `git clone _TEMPLATE_REPOSITORY_URL` into target (main.py:971-984).
+         URL is 'https://github.com/albertas/modernpackage' (main.py:57).
+         Errors humanized via `humanize_git_clone_error` (main.py:60-66, 980-984).
+      4. `_write_package_metadata` — targeted str.replace in cloned
+         pyproject.toml (main.py:986-993, 428-476).
+      5. `_strip_scaffolding` — delete scaffolder files, write stubs
+         (main.py:995, 633-650).
+      6. Optional template injection when backend/fullstack flag set:
+         `_inject_templates` copies backend (+frontend) and runs `git add -A`
+         (main.py:997-998, 884-909).
+      7. `just init module_name` via Popen (main.py:1000-1019); FileNotFoundError
+         → RuntimeError guidance (main.py:1008-1013).
+      8. `_compile_and_sync_package` runs `just compile` then `just sync`
+         (main.py:1023, 912-938).
+      9. `just check` streamed live (main.py:1035-1057).
+      Final tree = clone contents, minus `_strip_scaffolding` deletions, plus the
+      written stubs (tests/test_main.py, README.md) and pyproject edits, plus any
+      injected backend/frontend templates, then renamed/version-reset by
+      `just init` (Justfile:69-83).
+  - question: "What is the complete list of paths that the scaffolding-removal logic deletes, and how does it distinguish directories from files and handle paths that are absent from the clone?"
+    answer: |
+      List is `_SCAFFOLDING_PATHS_TO_DELETE` (main.py:501-516), deleted:
+        modernpackage/main.py, tests/test_e2e.py, tests_e2e, docs, BACKLOG.md,
+        backend_template, frontend_template, errors, issues, workspace,
+        lifecycle_state.yml, metrics.yml.
+      `_strip_scaffolding` loops the tuple (main.py:642-647): if `target.is_dir()`
+      → `shutil.rmtree(target, ignore_errors=True)`, else
+      `target.unlink(missing_ok=True)`. So dir/file is decided at runtime by
+      `is_dir()`; absent paths are tolerated — `is_dir()` is False for a missing
+      path and `unlink(missing_ok=True)` no-ops (main.py:644-647).
+      After deletion it always writes tests/test_main.py stub (main.py:648,
+      523-529), README.md stub (main.py:649, 533-537), and removes
+      [project.scripts] via `_remove_project_scripts` (main.py:650, 610-630).
+      backend_template/frontend_template are always removed and re-injected only
+      when flags set (main.py:507-508, 897-909, 867-881).
+      Absence-tolerance is unit-tested: `test_strip_scaffolding_tolerates_absent_paths`
+      (tests/test_main.py:1186-1193).
+  - question: "Where do the `workspace/`, `errors/`, and `issues/` directories and the `lifecycle_state.yml` and `metrics.yml` files come from in the repository, and how are they treated by the `.gitignore` rules — would they appear in a fresh clone of the repo?"
+    answer: |
+      Current working tree: workspace/ (tracked, many files), issues/ (tracked,
+      one file issues/no_internet_connection_message), lifecycle_state.yml
+      (tracked), metrics.yml (tracked). errors/ does NOT currently exist in the
+      tree and is not tracked (`ls errors` → No such file; `git ls-files errors/`
+      empty).
+      None of these appear in .gitignore (full file reviewed; it is a standard
+      Python .gitignore, no entries for workspace/errors/issues/lifecycle_state.yml/
+      metrics.yml). `git check-ignore workspace errors issues lifecycle_state.yml
+      metrics.yml` returns exit 1 (none ignored).
+      Confirmed tracked top-level entries include: workspace, issues,
+      lifecycle_state.yml, metrics.yml (from `git ls-files`).
+      Therefore a fresh clone WOULD include workspace/, issues/,
+      lifecycle_state.yml, and metrics.yml (they are committed and un-ignored).
+      errors/ would NOT appear (it is neither present nor tracked at this HEAD).
+      These are scaffolder operational/process artifacts — main.py:509-510
+      comments call them "Scaffolder operational/process artifacts removed from
+      every generated package".
+  - question: "How do the end-to-end tests verify the contents of a newly scaffolded package? Which tests perform a full clone → strip → init flow, and what file-presence and file-absence assertions do they currently make?"
+    answer: |
+      Full clone→(metadata)→strip→init flow tests in tests/test_e2e.py (each
+      `git clone REPO_ROOT`, `_write_package_metadata`, `_strip_scaffolding`,
+      `just init`):
+        - test_scaffolded_package_passes_check (test_e2e.py:149-213)
+        - test_scaffolded_backend_package_passes_check (245-301, adds _add_backend)
+        - test_scaffolded_package_has_no_backend_or_frontend (304-379)
+        - test_scaffolded_fullstack_package_passes_check (382-478)
+        - test_fullstack_package_runs_end_to_end (481-608)
+      test_just_bump_increments_patch (216-243) clones only, no strip/init.
+      Presence assertions: source_dir & __init__.py with 0.0.1 (test_e2e.py:180-188);
+      pyproject metadata Test Author/email/description/license (193-197); stub
+      test_main.py has 0.0.1 (212-213); backend app.py/health.py, migrations/env.py,
+      alembic.ini, Containerfile, .dockerignore, compose.yml (279-301); frontend
+      dir/package.json/App.test.tsx, frontend recipes (458-471).
+      Absence assertions (no-extras / base): main.py, tests/test_e2e.py, docs,
+      BACKLOG.md, backend_template, [project.scripts], modernpackage.main:main
+      (test_e2e.py:204-210); backend_template, frontend_template, frontend,
+      migrations, tests_e2e; alembic.ini, compose.yml, Containerfile,
+      .dockerignore; dependency & recipe tokens; import tokens (305-379).
+      NO e2e test currently asserts presence or absence of errors/, issues/,
+      workspace/, lifecycle_state.yml, or metrics.yml (verified by grep over
+      tests/ and tests_e2e/).
+      Those removals ARE covered by unit tests in tests/test_main.py:
+      `_seed_clone` seeds errors/issues/workspace/lifecycle_state.yml/metrics.yml
+      (test_main.py:1130-1137); `test_strip_scaffolding_removes_operational_artifacts`
+      asserts all five gone (test_main.py:1152-1158).
+      tests_e2e/ (_scaffold.py, test_backend_e2e.py, test_fullstack_feature_e2e.py)
+      call `main._strip_scaffolding` (_scaffold.py:184,408) but make no
+      presence/absence assertions on those artifacts.
+  - question: "How does the `just init` recipe interact with the working tree (git init, git add, commit) relative to when the scaffolding-removal step runs, and could any removed files be reintroduced afterward?"
+    answer: |
+      `_strip_scaffolding` runs in main.py BEFORE `just init` (main.py:995 vs
+      1000-1007); the module docstring notes strip runs "before `just init`"
+      (main.py:635-641). `init` recipe steps (Justfile:69-83), in order:
+        1. `git grep -l 'modernpackage' | xargs sed ...` rename (Justfile:71-76)
+        2. sed version reset to 0.0.1 in modernpackage/__init__.py (Justfile:77)
+        3. `mv modernpackage {{package_name}}` (Justfile:78)
+        4. `rm -fr .git/ .venv` — discards the clone's git history (Justfile:79)
+        5. `git init -b main .` (Justfile:80)
+        6. `git add .` (Justfile:81)
+        7. `git commit -m "Initial ..."` (Justfile:82)
+      Removed files cannot be reintroduced: they were deleted from the working
+      tree by `_strip_scaffolding` before `git grep` runs, and step 4 deletes the
+      clone's `.git` so no prior history/index can restore them. Steps 5-7 create
+      a fresh repo whose `git add .`/commit only capture current working-tree
+      files (already stripped). `git grep` (step 1) operates on tracked files
+      only and cannot re-create deleted files. Injected backend/frontend files are
+      staged with `git add -A` before init (main.py:830-848, 884-894) so the
+      rename sed sees them; strip runs before injection so it does not remove them.

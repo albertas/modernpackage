@@ -1402,9 +1402,19 @@ Validates the core no-flag scaffolding workflow:
 
 1. **Skipping gracefully** if required tools are missing: checks `git`, `just`, and `uv` are on `PATH`; skips the test with a diagnostic message if any are missing
 2. **Cloning the local template** from the repo root into a temporary directory (intentionally **not** the GitHub URL, so local template regressions are caught)
-3. **Running `just init <package_name>`** to replicate the package (rename all "modernpackage" occurrences, reset version to `0.0.1`, reinitialize git)
-4. **Verifying the result** by checking that the renamed `__init__.py` file exists and contains the pinned version `0.0.1`
-5. **Validating all quality gates** by running `just check` against the scaffolded package and asserting exit code 0 (passes format, lint, complexity, typecheck, unit tests, security audit, dead code detection)
+3. **Writing metadata** to the cloned package's `pyproject.toml` (author name/email, description, license, repository URL) before stripping
+4. **Stripping scaffolding** via `_strip_scaffolding()` to remove scaffolder machinery (`main.py`, tests, docs, entry points) and operational artifacts (`errors/`, `issues/`, `workspace/`, `lifecycle_state.yml`, `metrics.yml`)
+5. **Running `just init <package_name>`** to replicate the package (rename all "modernpackage" occurrences, reset version to `0.0.1`, reinitialize git)
+6. **Verifying the result** by checking that the renamed `__init__.py` file exists and contains the pinned version `0.0.1`, and that all scaffolding has been removed:
+   - Scaffolder CLI (`modernpackage/main.py`) is absent
+   - Scaffolder tests (`tests/test_e2e.py`, `tests_e2e/`) are absent
+   - Documentation (`docs/`) is absent
+   - Project metadata (`BACKLOG.md`) is absent
+   - Entry points are removed from `pyproject.toml`
+   - Template remnants (`backend_template`, `frontend_template`) are absent
+   - **Operational/process artifacts** (`errors/`, `issues/`, `workspace/` directories and `lifecycle_state.yml`, `metrics.yml` files) are absent — verifying that the scaffolder's own vupi lifecycle state does not leak into generated packages
+7. **Validating metadata** by checking that the supplied metadata values are correctly written to the generated `pyproject.toml`
+8. **Validating all quality gates** by running `just check` against the scaffolded package and asserting exit code 0 (passes format, lint, complexity, typecheck, unit tests, security audit, dead code detection)
 
 #### Backend Scaffold: `test_scaffolded_backend_package_passes_check`
 

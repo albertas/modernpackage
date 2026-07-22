@@ -208,6 +208,12 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
     assert '[project.scripts]' not in pyproject  # no dangling entry point
     assert 'modernpackage.main:main' not in pyproject
     assert not (destination / 'backend_template').exists()  # template never leaks
+    # Operational/process artifacts stripped from every generated package.
+    assert not (destination / 'errors').exists()  # operational artifact
+    assert not (destination / 'issues').exists()
+    assert not (destination / 'workspace').exists()
+    assert not (destination / 'lifecycle_state.yml').exists()
+    assert not (destination / 'metrics.yml').exists()
     # __init__.py version 0.0.1 already asserted at lines 88-90; check stub test.
     stub = (destination / 'tests' / 'test_main.py').read_text()
     assert '0.0.1' in stub

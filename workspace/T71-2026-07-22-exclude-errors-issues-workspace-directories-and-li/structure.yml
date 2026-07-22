@@ -1,0 +1,67 @@
+# structure.yml
+approach: |
+  Test-only change per the design: extend the existing scaffolding-absence block
+  in the base e2e flow test to assert the five operational/process artifacts are
+  gone from a freshly scaffolded package. Run the e2e test to confirm it passes;
+  only if it FAILS does a production strip-flow fix come into scope (Phase 2 is
+  contingency).
+
+phases:
+  - num: 1
+    name: "Assert operational artifacts absent in e2e"
+    delivers: |
+      The base clone→strip→init e2e inspection test asserts that errors/,
+      issues/, workspace/ directories and lifecycle_state.yml, metrics.yml files
+      are absent from the generated package — closing the e2e coverage gap
+      (design desired_end_state). This crosses the full pipeline: the assertions
+      run against a real generated tree produced by the actual strip + just init
+      flow.
+    files: ["tests/test_e2e.py"]
+    key_changes:
+      - "Extend the 'Scaffolding removed' block in test_scaffolded_package_passes_check (test_e2e.py:203-210) with 5 assertions — modified test, no new function"
+      - "assert not (destination / 'errors').exists()  # operational artifact"
+      - "assert not (destination / 'issues').exists()"
+      - "assert not (destination / 'workspace').exists()"
+      - "assert not (destination / 'lifecycle_state.yml').exists()"
+      - "assert not (destination / 'metrics.yml').exists()"
+    verify: |
+      Run the single test unskipped (requires git/just/uv on PATH — do NOT let it
+      silently skip, per design risk 2):
+        just test  # full suite green, OR:
+        uv run pytest tests/test_e2e.py::test_scaffolded_package_passes_check -m e2e -v
+      Check: test reports PASSED (not skipped/deselected). If pytest prints
+      "1 passed" the assertions held against a real scaffolded tree. If it prints
+      SKIPPED, install/expose the missing tool and re-run — a skip is not a pass.
+      Also confirm the 5 new `destination /` paths match the top-level layout
+      (errors/issues/workspace are dirs, the two yml are files).
+
+  - num: 2
+    name: "CONTINGENCY — production strip fix (only if Phase 1 fails)"
+    delivers: |
+      Runs ONLY if the Phase 1 e2e assertion FAILS, which would prove the real
+      clone→strip→init flow diverges from the strip unit test (design risk 1 —
+      an artifact is reintroduced or exists as file-vs-dir at runtime). Fixes the
+      strip flow so the five artifacts are genuinely absent post-generation. Skip
+      this phase entirely if Phase 1 passes (design: "No production-code change
+      assumed").
+    files: ["modernpackage/main.py", "Justfile"]
+    key_changes:
+      - "Diagnose which artifact reappears: inspect the generated tree at failure to see whether the path is a leftover, re-created by just init, or a file-vs-dir mismatch"
+      - "_strip_scaffolding(target: Path) -> None — adjust deletion logic if a path type/order edge case is found (main.py:633-650)"
+      - "_SCAFFOLDING_PATHS_TO_DELETE — extend only if a path is genuinely missing from the tuple (main.py:501-516)"
+    verify: |
+      Re-run Phase 1 command; the same e2e test must now PASS. Also re-run the
+      strip unit tests to confirm no regression:
+        uv run pytest tests/test_main.py -k strip_scaffolding -v
+      Both green. Confirm the diff traces only to the reintroduced artifact
+      (CLAUDE.md §3 surgical change).
+
+testing_checkpoints: |
+  After Phase 1: `test_scaffolded_package_passes_check` executes (not skips) and
+  PASSES with 5 new absence assertions; the e2e coverage gap from
+  design.yml is closed. Expected outcome per research — strip already deletes all
+  five artifacts and the unit test confirms it, so the e2e should be green as-is.
+
+  After Phase 2 (only reached if Phase 1 failed): the production strip flow is
+  corrected, the e2e test passes, and `tests/test_main.py` strip unit tests still
+  pass. If Phase 1 passed, Phase 2 is a no-op and the task is done at Phase 1.

@@ -1,0 +1,12 @@
+# questions.yml
+context: |
+  Focus on the package instantiation pipeline in `modernpackage/main.py` (the
+  clone → metadata → strip → `just init` sequence), the `init` recipe in the
+  Justfile, the end-to-end tests in `tests/test_e2e.py` and `tests_e2e/`, and the
+  repository's version-control ignore rules.
+questions:
+  - "Trace the package instantiation pipeline in main.py end to end: what steps run in what order (clone, metadata write, scaffolding strip, `just init`), and what determines the final file tree of a generated package?"
+  - "What is the complete list of paths that the scaffolding-removal logic deletes, and how does it distinguish directories from files and handle paths that are absent from the clone?"
+  - "Where do the `workspace/`, `errors/`, and `issues/` directories and the `lifecycle_state.yml` and `metrics.yml` files come from in the repository, and how are they treated by the `.gitignore` rules — would they appear in a fresh clone of the repo?"
+  - "How do the end-to-end tests verify the contents of a newly scaffolded package? Which tests perform a full clone → strip → init flow, and what file-presence and file-absence assertions do they currently make?"
+  - "How does the `just init` recipe interact with the working tree (git init, git add, commit) relative to when the scaffolding-removal step runs, and could any removed files be reintroduced afterward?"

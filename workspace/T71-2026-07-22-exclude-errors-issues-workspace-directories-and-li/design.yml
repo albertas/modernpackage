@@ -1,0 +1,76 @@
+# design.yml
+current_state: |
+  The scaffolding-removal logic in `_strip_scaffolding` (main.py:633-650) already
+  deletes the operational/process artifacts. `_SCAFFOLDING_PATHS_TO_DELETE`
+  (main.py:501-516) includes `errors`, `issues`, `workspace`, `lifecycle_state.yml`,
+  and `metrics.yml`; the loop removes each via `shutil.rmtree(..., ignore_errors=True)`
+  (dirs) or `unlink(missing_ok=True)` (files), tolerating absent paths (main.py:642-647).
+  `_strip_scaffolding` runs BEFORE `just init` (main.py:995 vs 1000-1007), and
+  `just init` step 4 `rm -fr .git/` (Justfile:79) discards the clone's history, so
+  removed files cannot be reintroduced (research finding 5).
+
+  These artifacts ARE committed and un-ignored in the template repo, so a fresh
+  clone includes `workspace/`, `issues/`, `lifecycle_state.yml`, `metrics.yml`
+  (`errors/` is not currently tracked at HEAD); none appear in `.gitignore`
+  (research finding 3). Their removal is covered by a UNIT test —
+  `test_strip_scaffolding_removes_operational_artifacts` (test_main.py:1152-1158),
+  seeded by `_seed_clone` (test_main.py:1130-1137).
+
+  Gap: NO end-to-end test asserts the presence or absence of `errors/`, `issues/`,
+  `workspace/`, `lifecycle_state.yml`, or `metrics.yml` in a freshly scaffolded
+  package (verified by grep, research finding 4). The e2e flow test
+  `test_scaffolded_package_passes_check` (test_e2e.py:149-213) runs the full
+  clone → metadata → strip → init sequence and already has a "Scaffolding removed"
+  absence block (test_e2e.py:203-210) but omits these five artifacts.
+
+desired_end_state: |
+  The e2e test that inspects a freshly scaffolded package asserts that all five
+  operational/process artifacts are ABSENT from the generated package:
+  `errors/`, `issues/`, `workspace/` directories and `lifecycle_state.yml`,
+  `metrics.yml` files.
+
+  Verify: `just test` (or the e2e marker) passes with the new assertions. Because
+  `_strip_scaffolding` already deletes these paths, the extended test should pass
+  as-is; if it fails, that reveals a real gap in the strip flow (see risks).
+
+patterns: |
+  - Follow the existing absence-assertion block in
+    `test_scaffolded_package_passes_check` (test_e2e.py:203-210): plain
+    `assert not (destination / '<path>').exists()` with a short trailing comment.
+    Add the five new assertions to this same block (top-level paths use
+    `destination`, e.g. `destination / 'workspace'`, `destination / 'metrics.yml'`).
+  - Mirror the naming/intent of the unit test
+    `test_strip_scaffolding_removes_operational_artifacts` (test_main.py:1152-1158)
+    which already asserts these same five artifacts gone — reuse its wording so
+    unit and e2e coverage stay consistent.
+  - Do NOT introduce a new test function; extend the existing single flow test to
+    keep the surgical-change footprint minimal (CLAUDE.md §3). The base
+    `test_scaffolded_package_passes_check` is the canonical no-extras inspection.
+
+decisions:
+  - "Which e2e test to extend: `test_scaffolded_package_passes_check` (test_e2e.py:149-213) — it is the base clone→strip→init inspection test and already owns the scaffolding-absence block; the backend/fullstack variants would duplicate coverage."
+  - "Assertion style: reuse the existing `assert not (destination / X).exists()` pattern rather than a parametrized loop — matches surrounding code and stays readable."
+  - "Assert all five artifacts including `errors/`: even though `errors/` is not tracked at current HEAD, asserting its absence is a correct, future-proof regression guard and mirrors `_SCAFFOLDING_PATHS_TO_DELETE` and the unit test."
+  - "No production-code change assumed: research shows the strip list is already complete, so this is a test-only change unless the e2e run proves otherwise."
+
+not_doing: |
+  - Not modifying `_strip_scaffolding` or `_SCAFFOLDING_PATHS_TO_DELETE` — they
+    already cover the five artifacts.
+  - Not adding `.gitignore` entries — the artifacts are intentionally tracked in
+    the template repo and stripped per-generation, not ignored.
+  - Not touching the backend/fullstack e2e variants or the `tests_e2e/` scaffold
+    helpers.
+  - Not adding new unit tests — coverage already exists at test_main.py:1152-1158.
+
+risks: |
+  - The task states these artifacts are "currently still observed in newly created
+    packages," which CONTRADICTS the research (strip already deletes them, unit
+    test confirms). If the extended e2e assertion FAILS, it means the real flow
+    diverges from the unit test — likely something reintroduces the files after
+    strip (e.g. an unforeseen `just init` interaction, or a path that exists as a
+    file vs dir at runtime). In that case a production-code fix is in scope after
+    all. Structure/implement phases should run the e2e test to confirm which
+    scenario holds before assuming test-only.
+  - e2e tests require external tools on PATH (git/just/uv) and are skipped
+    otherwise (test_e2e.py:151-153); ensure the test actually executes when
+    verifying, not silently skips.
