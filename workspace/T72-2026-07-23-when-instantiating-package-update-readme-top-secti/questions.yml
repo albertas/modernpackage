@@ -1,0 +1,14 @@
+# questions.yml
+context: |
+  Focus on the package scaffolding and initialization flow in
+  modernpackage/main.py and the `init` recipe in the Justfile. Relevant areas
+  include how documentation files are written into a cloned package, how the
+  "modernpackage" token is substituted during initialization, the distinction
+  between the distribution name and the Python module name, and the existing
+  tests covering these behaviors.
+questions:
+  - "How is the generated package's README.md produced during scaffolding, and what is its initial content and structure?"
+  - "How does the `init` recipe in the Justfile locate and replace the `modernpackage` token across files, and at what point in the flow does this run relative to when file stubs are written?"
+  - "How does the scaffolder distinguish between the distribution/package name and the normalized Python module name, and which form is passed into the `init` step?"
+  - "Which files written by the scaffolder intentionally retain the literal `modernpackage` token so that the initialization rename step rewrites them, and how is this coordinated (for example via git staging)?"
+  - "What existing tests (unit or end-to-end) verify the contents of a scaffolded package's README.md or the token-replacement behavior of initialization?"

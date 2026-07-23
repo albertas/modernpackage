@@ -1,0 +1,6 @@
+# task.yml
+task: |
+  When scaffolding a new package, the generated README's top section should
+  reflect the newly created package's name instead of the literal
+  "modernpackage" placeholder. This makes the initialized package's
+  documentation immediately correct for the user without manual editing.

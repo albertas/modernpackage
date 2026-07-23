@@ -1,0 +1,166 @@
+# plan.yml
+overview: |
+  Scaffolding writes the user's distribution name directly into the generated
+  README H1: `_README_STUB` becomes a `.format()` template and `_strip_scaffolding`
+  gains a required `package_name` parameter, so a package created as `my-package`
+  gets a README beginning `# my-package` with no `modernpackage` token.
+phases:
+  - num: 1
+    title: "Write distribution name into README stub"
+    body: |
+      ### Changes
+
+      #### 1. modernpackage/main.py (modify)
+
+      Convert the README stub constant into a named-placeholder `.format()`
+      template and update the preceding doc-comment (main.py:533-539). Rename
+      `_README_STUB` -> `_README_STUB_TEMPLATE`.
+
+      ```python
+      # Minimal generic README (pyproject.toml:7 requires `readme = "README.md"`).
+      # The distribution name is written directly into the H1 during
+      # _strip_scaffolding, so `just init`'s rename sed no longer touches README.md.
+      _README_STUB_TEMPLATE: str = """\
+      # {package_name}
+
+      A Python package.
+      """
+      ```
+
+      Add a required `package_name: str` parameter to `_strip_scaffolding`
+      (main.py:644) and interpolate it into the README write (main.py:663). Update
+      the docstring to note the README carries the final distribution name (not the
+      token).
+
+      ```python
+      def _strip_scaffolding(package_path: Path, package_name: str) -> None:
+          """Remove the scaffolder's own CLI, tests, docs, and entry points from a clone.
+
+          ... (existing text) ... Stubs retain the literal `modernpackage` token so
+          the rename sed rewrites their imports, EXCEPT README.md, whose H1 is
+          written directly as the distribution `package_name` (the rename sed no
+          longer matches it). ...
+          """
+          ...
+          (package_path / 'tests' / 'test_main.py').write_text(_TEST_MAIN_STUB)
+          (package_path / 'README.md').write_text(
+              _README_STUB_TEMPLATE.format(package_name=package_name)
+          )
+          (package_path / 'lifecycle_state.yml').write_text(_LIFECYCLE_STATE_STUB)
+          _remove_project_scripts(package_path / 'pyproject.toml')
+      ```
+
+      Update the sole production call site (main.py:1010) to pass the distribution
+      name (`package_name` is the parameter of `init_new_package`, main.py:957, in
+      scope here — NOT `module_name`):
+
+      ```python
+      _strip_scaffolding(new_package_path, package_name)
+      ```
+
+      #### 2. tests/test_main.py (modify)
+
+      Pass a distribution name to all 6 `_strip_scaffolding(...)` call sites
+      (lines 1144, 1153, 1161, 1168, 1176, 1197). Use `'my-package'` consistently:
+
+      ```python
+      _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
+      # and at line 1197:
+      _strip_scaffolding(tmp_path, 'my-package')  # must not raise
+      ```
+
+      Tighten `test_strip_scaffolding_writes_readme_stub` (test_main.py:1175-1179)
+      to assert the H1 equals the passed distribution name and the token is absent:
+
+      ```python
+      def test_strip_scaffolding_writes_readme_stub(tmp_path: Path) -> None:
+          _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
+          readme = (tmp_path / 'README.md').read_text()
+          assert readme.startswith('# my-package\n')  # H1 is the distribution name
+          assert 'modernpackage' not in readme  # token gone from README
+          assert 'scaffolder readme' not in readme  # original replaced
+      ```
+
+      #### 3. tests/test_e2e.py (modify)
+
+      DEVIATION FROM STRUCTURE: the structure listed only the 6 test_main.py call
+      sites, but `tests/test_e2e.py:171` also calls `_strip_scaffolding(destination)`.
+      Because the new parameter is required and `just check` runs mypy (which
+      validates call arguments), this 7th call site MUST be updated in Phase 1 or
+      `just check` fails. Pass the in-scope distribution name (`package_name`,
+      which is `'scaffold-check.pkg'` here, test_e2e.py:155):
+
+      ```python
+      main._strip_scaffolding(destination, package_name)  # noqa: SLF001
+      ```
+
+      ### Verification
+      #### Automated
+      - [x] `just check` passes (ruff format+lint, mypy — proves all 7 call sites
+            type-check — and the full pytest suite). NOTE: format/lint/complexity/
+            mypy and all 132 pytest tests pass; the `audit` step fails on a
+            pre-existing, unrelated dependency vuln (mcp CVE-2026-59950), not
+            touched by this phase.
+      - [x] `just test -k strip_scaffolding` passes (readme, test_main stub,
+            absent-paths, and remaining strip tests). 8 passed (coverage-gate fail
+            is expected under `-k` subset filtering).
+
+      #### Manual
+      - [x] Scripted strip against a tmp clone writes the distribution name as the
+            README H1 with no token. Run and expect final line `OK`:
+        ```
+        python -c "import tempfile,pathlib; from modernpackage.main import _strip_scaffolding; d=pathlib.Path(tempfile.mkdtemp()); (d/'tests').mkdir(); (d/'pyproject.toml').write_text('readme=\"README.md\"'); _strip_scaffolding(d,'my-package'); t=(d/'README.md').read_text(); assert t.startswith('# my-package'), t; assert 'modernpackage' not in t; print('OK')"
+        ```
+      - [x] `grep -q '_README_STUB_TEMPLATE' modernpackage/main.py` succeeds and
+            `grep -q '# modernpackage' modernpackage/main.py` no longer matches the
+            README stub (the `_TEST_MAIN_STUB` `from modernpackage import` line is a
+            distinct match and is intentionally retained).
+
+  - num: 2
+    title: "End-to-end scaffold verification (no code change)"
+    body: |
+      Confirm the real clone + strip + `just init module_name` flow leaves a README
+      titled with the distribution name and that `just init`'s rename sed no longer
+      touches README.md. Verification-only; the required-param update to
+      test_e2e.py:171 already landed in Phase 1.
+
+      ### Changes
+
+      #### 1. tests/test_e2e.py (modify — optional assertion)
+
+      Optionally extend `test_scaffolded_package_passes_check`
+      (test_e2e.py:150-191) to assert README content after `just init`. The
+      in-scope distribution name is `package_name = 'scaffold-check.pkg'`
+      (test_e2e.py:155). Add near the existing post-`just init` assertions
+      (after line ~184) only if it does not materially slow the e2e gate;
+      otherwise rely on the Phase 1 unit assertion.
+
+      ```python
+      readme = (destination / 'README.md').read_text()
+      assert readme.startswith(f'# {package_name}\n')  # distribution name survives
+      assert 'modernpackage' not in readme
+      ```
+
+      Assumption: this assertion is cheap (a single file read on an already-built
+      tree) and is included; the e2e test is already the slow gate, so one extra
+      read is negligible.
+
+      ### Verification
+      #### Automated
+      - [ ] `just test -m e2e` passes (requires git/just/uv/node on PATH),
+            including `test_scaffolded_package_passes_check`. NOTE: the new README
+            assertions (README H1 == distribution name, token absent) PASS —
+            execution reaches the later `just check` call. The test then fails at
+            the scaffolded package's `just check`/`sync` on a pre-existing
+            environmental limitation: the private GitLab uv index returns 401
+            (no credentials in this env), so `hatchling` cannot be resolved. This
+            is unrelated to this phase's change (same class as the Phase 1 audit
+            note). The substantive README behavior was confirmed via the manual
+            item below.
+      #### Manual
+      - [x] After a real clone + strip + `just init my_package` for
+            `package_name='my-package'` in a tmp dir, `head -1 README.md` prints
+            `# my-package` and `grep -c modernpackage README.md` prints `0`.
+            (Ran the clone+strip+init path directly, which does not need the
+            private index; the full scaffolder run's later `just check` is blocked
+            by the same 401 env limitation noted above.)

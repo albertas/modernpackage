@@ -303,7 +303,7 @@ def test_init_new_package() -> None:
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
     assert popen_mock.call_count == 5
-    strip_mock.assert_called_once_with(Path.cwd() / 'mypackage')
+    strip_mock.assert_called_once_with(Path.cwd() / 'mypackage', 'mypackage')
 
 
 def test_init_new_package_normalizes_name() -> None:
@@ -374,7 +374,7 @@ def test_init_new_package_strips_before_just_init() -> None:
         popen_mock.side_effect = popen_side_effect
         init_new_package('mypackage')
     assert calls.index('metadata') < calls.index('strip') < calls.index('init')
-    strip_mock.assert_called_once_with(Path.cwd() / 'mypackage')
+    strip_mock.assert_called_once_with(Path.cwd() / 'mypackage', 'mypackage')
 
 
 def test_init_new_package_git_clone_failure() -> None:
@@ -1141,7 +1141,7 @@ def _seed_clone(tmp_path: Path) -> Path:
 
 
 def test_strip_scaffolding_removes_cli_tests_docs(tmp_path: Path) -> None:
-    _strip_scaffolding(_seed_clone(tmp_path))
+    _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
     assert not (tmp_path / 'modernpackage' / 'main.py').exists()
     assert not (tmp_path / 'tests' / 'test_e2e.py').exists()
     assert not (tmp_path / 'docs').exists()
@@ -1150,7 +1150,7 @@ def test_strip_scaffolding_removes_cli_tests_docs(tmp_path: Path) -> None:
 
 
 def test_strip_scaffolding_removes_operational_artifacts(tmp_path: Path) -> None:
-    _strip_scaffolding(_seed_clone(tmp_path))
+    _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
     assert not (tmp_path / 'errors').exists()
     assert not (tmp_path / 'issues').exists()
     assert not (tmp_path / 'workspace').exists()
@@ -1158,14 +1158,14 @@ def test_strip_scaffolding_removes_operational_artifacts(tmp_path: Path) -> None
 
 
 def test_strip_scaffolding_seeds_lifecycle_state(tmp_path: Path) -> None:
-    _strip_scaffolding(_seed_clone(tmp_path))
+    _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
     lifecycle = (tmp_path / 'lifecycle_state.yml').read_text()
     assert lifecycle == 'code_quality_is_good: true\n'
     assert 'state: {}' not in lifecycle  # scaffolder's own content replaced
 
 
 def test_strip_scaffolding_writes_test_main_stub(tmp_path: Path) -> None:
-    _strip_scaffolding(_seed_clone(tmp_path))
+    _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
     stub = (tmp_path / 'tests' / 'test_main.py').read_text()
     assert 'modernpackage' in stub  # token preserved for rename sed
     assert '0.0.1' in stub
@@ -1173,14 +1173,15 @@ def test_strip_scaffolding_writes_test_main_stub(tmp_path: Path) -> None:
 
 
 def test_strip_scaffolding_writes_readme_stub(tmp_path: Path) -> None:
-    _strip_scaffolding(_seed_clone(tmp_path))
+    _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
     readme = (tmp_path / 'README.md').read_text()
-    assert readme  # non-empty
+    assert readme.startswith('# my-package\n')  # H1 is the distribution name
+    assert 'modernpackage' not in readme  # token gone from README
     assert 'scaffolder readme' not in readme  # original replaced
 
 
 def test_strip_scaffolding_removes_project_scripts(tmp_path: Path) -> None:
-    _strip_scaffolding(_seed_clone(tmp_path))
+    _strip_scaffolding(_seed_clone(tmp_path), 'my-package')
     pyproject = (tmp_path / 'pyproject.toml').read_text()
     assert '[project.scripts]' not in pyproject
     assert 'modernpackage.main:main' not in pyproject
@@ -1194,7 +1195,7 @@ def test_strip_scaffolding_tolerates_absent_paths(tmp_path: Path) -> None:
     (tmp_path / 'tests').mkdir()
     source = Path(__file__).resolve().parent.parent / 'pyproject.toml'
     (tmp_path / 'pyproject.toml').write_text(source.read_text())
-    _strip_scaffolding(tmp_path)  # must not raise
+    _strip_scaffolding(tmp_path, 'my-package')  # must not raise
     assert (tmp_path / 'tests' / 'test_main.py').exists()
     assert (tmp_path / 'README.md').exists()
 
@@ -1420,7 +1421,7 @@ def test_strip_scaffolding_removes_backend_template(tmp_path: Path) -> None:
     clone = _seed_clone(tmp_path)
     (clone / 'backend_template').mkdir()
     (clone / 'backend_template' / 'marker.py').write_text('# x\n')
-    _strip_scaffolding(clone)
+    _strip_scaffolding(clone, 'my-package')
     assert not (clone / 'backend_template').exists()
 
 

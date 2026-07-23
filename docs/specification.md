@@ -66,13 +66,13 @@ init_new_package(name)
   1. Resolves target path: `Path.cwd() / package_name`.
   2. Spawns `subprocess.Popen`: `git clone https://github.com/albertas/modernpackage <cwd>/<name>` to target path.
   3. Calls `_write_package_metadata()` to update cloned pyproject.toml with user metadata.
-  4. Calls `_strip_scaffolding()` to remove scaffolder machinery:
+  4. Calls `_strip_scaffolding(new_package_path, package_name)` to remove scaffolder machinery:
      - Deletes `modernpackage/main.py` (self-replicating CLI)
      - Deletes `tests/test_e2e.py` (scaffolder end-to-end test)
      - Deletes `docs/` directory (scaffolder documentation)
      - Deletes `BACKLOG.md` (project-metadata file)
      - Overwrites `tests/test_main.py` with minimal stub test
-     - Overwrites `README.md` with generic template
+     - Overwrites `README.md` with generic template (H1 interpolated with the user's chosen distribution name)
      - Removes `[project.scripts]` table from pyproject.toml (entry points)
   5. Spawns `subprocess.Popen`: `just init <name>` with `cwd=<new_package_path>`.
   6. Spawns `subprocess.Popen`: `just compile` with `cwd=<new_package_path>` to regenerate `uv.lock`.
@@ -80,7 +80,7 @@ init_new_package(name)
   8. Spawns `subprocess.Popen`: `just check` to validate the scaffolded package.
   9. Returns exit code 0 on success, 1 on failure.
 - **`just init` recipe** transforms the already-stripped cloned repository:
-  - **Rename**: `git grep -l 'modernpackage' | xargs sed -i` (Linux) or `sed -i ''` (Darwin) to replace all occurrences of token "modernpackage" with the new package name (including renamed stub test and README).
+  - **Rename**: `git grep -l 'modernpackage' | xargs sed -i` (Linux) or `sed -i ''` (Darwin) to replace all occurrences of token "modernpackage" with the new package name (affecting stub test and other remaining token references; README is already written with the distribution name and is not matched by this search).
   - **Version reset**: `sed` to replace the version string to `0.0.1`.
   - **Directory rename**: `mv modernpackage <name>` to rename the package directory.
   - **Git reinitialization**: `rm -fr .git/ .venv`, then `git init -b main`, `git add .`, `git commit` with message "Initial modern <name> package setup" (commits the clean, stripped tree).

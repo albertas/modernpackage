@@ -1,5 +1,5 @@
 code_quality_is_good: true
-heart_beat: 2026-07-22 09:06:04
+heart_beat: 2026-07-23 08:34:44
 phases:
   - [x] 1_question
       in:  <task input> (ticket / issue / description)
@@ -32,3 +32,9 @@ phases:
       depends_on: 8_review — runs only on review restart when review_findings.yml has >=1 open finding
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
+lifecycles_in_progress:
+  - artifact_dir: T72-2026-07-23-when-instantiating-package-update-readme-top-secti
+    heart_beat: 2026-07-23 08:34:44
+implementation_semaphore:
+  - artifact_dir: T72-2026-07-23-when-instantiating-package-update-readme-top-secti
+    heart_beat: 2026-07-23 08:34:50

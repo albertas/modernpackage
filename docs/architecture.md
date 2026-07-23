@@ -338,18 +338,18 @@ def test_version() -> None:
 
 Replaces the scaffolder's full test suite after cloning. Serves two purposes: (1) pytest requires ≥1 collected test (empty collection exits non-zero); (2) importing the package keeps `--cov-fail-under=95.0` satisfied (after `main.py` is deleted, the only package code is the `__version__` line, executed on import). Written with the literal `modernpackage` token so that `just init`'s rename sed rewrites the import to the new module name.
 
-**`_README_STUB: str`**
+**`_README_STUB_TEMPLATE: str`**
 
-Minimal generic README written to generated packages:
+Minimal generic README template written to generated packages with the user's chosen distribution name:
 ```python
-_README_STUB: str = """\
-# modernpackage
+_README_STUB_TEMPLATE: str = """\
+# {package_name}
 
 A Python package.
 """
 ```
 
-Replaces the scaffolder's detailed README (which documents the scaffolder, not the generated package). Required by `pyproject.toml:7` which specifies `readme = "README.md"`. Written with the literal `modernpackage` token so that `just init`'s rename sed rewrites the heading to the new module name.
+Replaces the scaffolder's detailed README (which documents the scaffolder, not the generated package). Required by `pyproject.toml:7` which specifies `readme = "README.md"`. The template uses a named `{package_name}` placeholder, which is interpolated directly into the README during `_strip_scaffolding` with the user's chosen distribution name (e.g., `my-package`). This ensures the README H1 reflects the actual package name without relying on sed-based token replacement.
 
 **`_ANSI_GREEN: str`**
 
@@ -870,13 +870,14 @@ A private helper that removes the `[project.scripts]` table from a cloned packag
   - Gracefully handles missing files (unit tests seed minimal trees where `pyproject.toml` may not exist) and absent tables (clone-shape-agnostic)
   - Deletion is surgical: only the `[project.scripts]` header, its entries, and the trailing blank line are removed; neighboring tables remain untouched
 
-#### `_strip_scaffolding(package_path: Path) -> None`
+#### `_strip_scaffolding(package_path: Path, package_name: str) -> None`
 
 A private helper that removes the scaffolder's own CLI, tests, documentation, and entry points from a cloned package tree.
 
 - **Purpose**: Called from `init_new_package()` after `_write_package_metadata()` and before the `just init` subprocess, to remove the scaffolder's own machinery from the clone. Run before rename and git commit so the initial commit captures a clean tree.
 - **Parameters**:
   - `package_path: Path` — the root directory of the cloned package (e.g., `Path.cwd() / 'my_package'`)
+  - `package_name: str` — the distribution name chosen by the user (e.g., `'my-package'`), written directly into the README H1
 - **Returns**: `None` (mutates the filesystem in place)
 - **Behavior**:
   1. Iterates over paths in `_SCAFFOLDING_PATHS_TO_DELETE`
@@ -885,14 +886,14 @@ A private helper that removes the scaffolder's own CLI, tests, documentation, an
      - If it is a file: removes it via `Path.unlink(missing_ok=True)`
      - Tolerates missing paths (no error if the path does not exist)
   3. Writes `_TEST_MAIN_STUB` to `tests/test_main.py` (overwriting any existing test suite)
-  4. Writes `_README_STUB` to `README.md` (overwriting the scaffolder's detailed README)
+  4. Writes `_README_STUB_TEMPLATE.format(package_name=package_name)` to `README.md` (overwriting the scaffolder's detailed README with the user's chosen distribution name as the H1)
   5. Calls `_remove_project_scripts(package_path / 'pyproject.toml')` to delete the console-script entry points
 - **Assumptions**:
   - The clone root and `tests/` directory exist (guaranteed by `git clone`)
   - Deleted paths may be absent (graceful degradation for variant template shapes)
 - **Design rationale**:
   - Deletes wholesale (no attempt to preserve or modify individual files) to ensure a clean slate
-  - Stubs written with the literal `modernpackage` token are renamed by `just init`'s sed pass, preserving the string-rename contract
+  - The test stub is written with the literal `modernpackage` token and is renamed by `just init`'s sed pass. The README is written with the user's chosen distribution name directly, bypassing the sed pass for that file.
   - Runs **before** `just init` so the single git commit captures the clean tree without scaffolding
   - Tolerates absent paths so the function is shape-agnostic (works if the template evolves, adds, or removes files)
   - Raises `RuntimeError` on errors (e.g., permission denied), funnel through `main()` exception handler
@@ -900,9 +901,9 @@ A private helper that removes the scaffolder's own CLI, tests, documentation, an
 Examples:
 ```python
 # Strips a cloned package in place
-_strip_scaffolding(Path('/tmp/my_package'))
+_strip_scaffolding(Path('/tmp/my_package'), 'my-package')
 # Deletes: modernpackage/main.py, tests/test_e2e.py, docs/, BACKLOG.md, backend_template/
-# Writes: tests/test_main.py (stub), README.md (stub)
+# Writes: tests/test_main.py (stub), README.md (stub with H1: # my-package)
 # Modifies: pyproject.toml (removes [project.scripts])
 # After this call, just init can safely run with no scaffolding in the tree
 ```

@@ -1,0 +1,94 @@
+# design.yml
+current_state: |
+  When scaffolding a new package, the generated README.md is a fixed stub whose
+  top section is the literal placeholder token, not the user's chosen name.
+
+  - `_README_STUB` (main.py:535-539) = `# modernpackage\n\nA Python package.\n`
+    — a single H1 equal to the token `modernpackage` plus a generic body.
+  - It is written by `_strip_scaffolding` (main.py:663), overwriting whatever
+    README.md the clone contained (research finding 1).
+  - `just init module_name` then runs `git grep -l 'modernpackage'` |
+    `xargs sed 's/modernpackage/<module_name>/g'` (Justfile:59-64), which DOES
+    rewrite the README H1 — but to the normalized MODULE name (underscores),
+    because the init step is passed `module_name`, not the distribution name
+    (main.py:1017; research finding 3).
+  - Net effect today: a package created as `my-package` gets a README titled
+    `# my_package` (module form), never the distribution name the user typed.
+  - `_strip_scaffolding(package_path)` currently takes only the clone path
+    (main.py:644); it has no access to the package name.
+  - Two distinct names exist: the distribution name `package_name` (PEP 508,
+    may contain `.`/`-`/`_`, validated main.py:165-178) and the import-safe
+    `module_name = normalize_module_name(package_name)` (main.py:181-189, 969).
+    The human-facing init summary already uses `package_name` (main.py:769-781,
+    1063-1065; research finding 3).
+
+desired_end_state: |
+  A newly scaffolded package's README top section reflects the user's chosen
+  package (distribution) name with no manual editing.
+
+  After `init_new_package` completes for `package_name = "my-package"`, the
+  generated README.md begins with `# my-package` and contains no `modernpackage`
+  token. Verify via:
+  - Updated unit test on `_strip_scaffolding`: asserts the README H1 equals the
+    passed package name and that `modernpackage` is absent from the README.
+  - `just check` passes.
+
+patterns: |
+  Follow (good patterns already in the codebase):
+  - Module-level stub constants written during strip: `_README_STUB`,
+    `_TEST_MAIN_STUB`, `_LIFECYCLE_STATE_STUB` (main.py:525-548). Keep the README
+    stub as a module-level constant; make it a `.format(...)` template so the
+    name is interpolated at write time (mirrors how `_BACKEND_RECIPES` etc. are
+    plain constants — a named-placeholder template is the minimal extension).
+  - Passing the caller-known name into a helper: `init_new_package` already
+    hands `module_name` to `just init` (main.py:1017) and threads
+    author/description metadata into `_write_package_metadata`
+    (main.py:1001-1008). Add `package_name` to `_strip_scaffolding` the same way,
+    supplied from the `package_name` param in scope at main.py:1010.
+  - Human-facing name = distribution name: the init summary uses `package_name`
+    (main.py:769-781, 1063-1065). A README title is likewise human-facing, so it
+    uses `package_name`, staying consistent with that precedent.
+  - Keep the doc-comment discipline above each stub (main.py:520-534) accurate:
+    update the README stub comment to state the name is written directly (no
+    longer renamed by the `just init` sed).
+
+  Avoid:
+  - Do NOT keep the `modernpackage` token in the README and rely on the
+    `just init` sed (Justfile:59-64) to rename it — that path substitutes the
+    MODULE name (underscores), which is exactly the current wrong behavior. Write
+    the distribution name directly so the sed no longer touches the README.
+  - Do NOT add a default value for the new `package_name` parameter of
+    `_strip_scaffolding`: a `'modernpackage'` default would silently re-embed the
+    token and reintroduce the bug. Make the argument required and update call
+    sites explicitly.
+
+decisions:
+  - "Name form written to README: the distribution name `package_name` (as typed, e.g. `my-package`), not the normalized `module_name` (`my_package`). Rationale: the README title is human-facing documentation, matching the init-summary precedent (main.py:769-781). Alternative (module_name) is what the current sed produces and is the behavior being corrected."
+  - "Mechanism: write the name directly into the README during `_strip_scaffolding`, dropping the `modernpackage` token from the README stub entirely so `just init`'s rename sed (Justfile:59-64) no longer rewrites it. Alternative rejected: token + sed yields the module form."
+  - "Signature: add a required `package_name: str` parameter to `_strip_scaffolding` (main.py:644); pass `package_name` at the sole production call site (main.py:1010). No default value (avoids re-embedding the token)."
+  - "Stub shape: convert `_README_STUB` into a `.format()` template with a named `{package_name}` placeholder (e.g. `_README_STUB_TEMPLATE`). Body text `A Python package.` is unchanged — scope is only the top-section name."
+  - "Test updates: all `_strip_scaffolding(...)` call sites in tests/test_main.py (1144, 1153, 1161, 1168, 1176, 1197) must pass a package name. `test_strip_scaffolding_writes_readme_stub` (1175-1179) is tightened to assert the H1 equals the passed name and `modernpackage` is absent."
+
+not_doing: |
+  - Not injecting the `description` metadata into the README body; only the
+    top-section name changes (`A Python package.` stays).
+  - Not changing the `_TEST_MAIN_STUB` token-retention mechanism (main.py:525-531)
+    — its import must still be renamed to the module name by `just init`.
+  - Not changing where `module_name` is used elsewhere (module dir rename,
+    imports, `just init` argument).
+  - Not altering the Justfile `init` recipe or its sed logic.
+  - Not touching backend/frontend injected templates (main.py:882-924); their
+    token rename is unrelated to the README title.
+
+risks: |
+  - Signature change ripples to ~6 `_strip_scaffolding` call sites in
+    tests/test_main.py; all must be updated or the suite fails to collect/run.
+    Low risk — they are mechanical edits and `just check` catches misses.
+  - `.format()` on the README template: the body contains no `{`/`}`, so
+    interpolation is safe; a package name is inserted as plain markdown text and
+    needs no escaping.
+  - Dropping the token from the README means `just init`'s `git grep` simply no
+    longer matches README.md — harmless; the README is already overwritten as a
+    tracked path so no staging concern (research finding 4).
+  - No existing e2e test asserts README content (research finding 5), so current
+    behavior is not locked; the main coverage is the unit stub test being updated.

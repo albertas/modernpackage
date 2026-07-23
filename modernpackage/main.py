@@ -531,9 +531,10 @@ def test_version() -> None:
 """
 
 # Minimal generic README (pyproject.toml:7 requires `readme = "README.md"`).
-# The `modernpackage` token is renamed by `just init` to the new module name.
-_README_STUB: str = """\
-# modernpackage
+# The distribution name is written directly into the H1 during
+# _strip_scaffolding, so `just init`'s rename sed no longer touches README.md.
+_README_STUB_TEMPLATE: str = """\
+# {package_name}
 
 A Python package.
 """
@@ -641,16 +642,18 @@ def _remove_project_scripts(pyproject_path: Path) -> None:
     pyproject_path.write_text(''.join(lines))
 
 
-def _strip_scaffolding(package_path: Path) -> None:
+def _strip_scaffolding(package_path: Path, package_name: str) -> None:
     """Remove the scaffolder's own CLI, tests, docs, and entry points from a clone.
 
     Mutates the cloned tree in place. Run before `just init` so the rename sed
     (Justfile:61-66) and the single git commit (Justfile:72) capture an already-
     clean tree. Deletes tolerate absent paths; the stub writes assume the clone
     root and tests/ exist (always true for a real clone). Stubs retain the
-    literal `modernpackage` token so the rename sed rewrites their imports. The
-    scaffolder's own `lifecycle_state.yml` is deleted and then re-seeded with a
-    fresh `code_quality_is_good: true` stub so the generated package's lifecycle
+    literal `modernpackage` token so the rename sed rewrites their imports,
+    EXCEPT README.md, whose H1 is written directly as the distribution
+    `package_name` (the rename sed no longer matches it). The scaffolder's own
+    `lifecycle_state.yml` is deleted and then re-seeded with a fresh
+    `code_quality_is_good: true` stub so the generated package's lifecycle
     starts from a good-quality baseline instead of inheriting scaffolder state.
     """
     for relative_path in _SCAFFOLDING_PATHS_TO_DELETE:
@@ -660,7 +663,9 @@ def _strip_scaffolding(package_path: Path) -> None:
         else:
             target.unlink(missing_ok=True)
     (package_path / 'tests' / 'test_main.py').write_text(_TEST_MAIN_STUB)
-    (package_path / 'README.md').write_text(_README_STUB)
+    (package_path / 'README.md').write_text(
+        _README_STUB_TEMPLATE.format(package_name=package_name)
+    )
     (package_path / 'lifecycle_state.yml').write_text(_LIFECYCLE_STATE_STUB)
     _remove_project_scripts(package_path / 'pyproject.toml')
 
@@ -1007,7 +1012,7 @@ def init_new_package(  # noqa: PLR0913
         repository_url=repository_url,
     )
 
-    _strip_scaffolding(new_package_path)
+    _strip_scaffolding(new_package_path, package_name)
 
     if backend or fullstack:
         _inject_templates(new_package_path, fullstack=fullstack)

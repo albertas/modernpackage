@@ -168,7 +168,7 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
         repository_url='https://example.org/repo',
     )
 
-    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._strip_scaffolding(destination, package_name)  # noqa: SLF001
 
     init = _run(
         ['just', 'init', module_name],
@@ -186,6 +186,10 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
     init_file = source_dir / '__init__.py'
     assert init_file.exists()
     assert '0.0.1' in init_file.read_text()
+
+    readme = (destination / 'README.md').read_text()
+    assert readme.startswith(f'# {package_name}\n')  # distribution name survives
+    assert 'modernpackage' not in readme
 
     check = _run(['just', 'check'], cwd=destination)
     assert check.returncode == 0, f'just check failed:\n{check.stdout}\n{check.stderr}'
@@ -273,7 +277,7 @@ def test_scaffolded_backend_package_passes_check(tmp_path: Path) -> None:
         package_license='Apache-2.0',
         repository_url='https://example.org/repo',
     )
-    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._strip_scaffolding(destination, package_name)  # noqa: SLF001
     main._add_backend(destination)  # noqa: SLF001
     stage = _run(['git', 'add', '-A'], cwd=destination)
     assert stage.returncode == 0, f'git add failed:\n{stage.stderr}'
@@ -332,7 +336,7 @@ def test_scaffolded_package_has_no_backend_or_frontend(tmp_path: Path) -> None:
         package_license='Apache-2.0',
         repository_url='https://example.org/repo',
     )
-    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._strip_scaffolding(destination, package_name)  # noqa: SLF001
 
     init = _run(
         ['just', 'init', module_name],
@@ -423,7 +427,7 @@ def test_scaffolded_fullstack_package_passes_check(tmp_path: Path) -> None:
         package_license='Apache-2.0',
         repository_url='https://example.org/repo',
     )
-    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._strip_scaffolding(destination, package_name)  # noqa: SLF001
     # Production fullstack injection path: backend + frontend, then `git add -A`
     # internally (no manual staging needed, unlike the backend test).
     main._inject_templates(destination, fullstack=True)  # noqa: SLF001
@@ -526,7 +530,7 @@ def test_fullstack_package_runs_end_to_end(tmp_path: Path) -> None:
         package_license='Apache-2.0',
         repository_url='https://example.org/repo',
     )
-    main._strip_scaffolding(destination)  # noqa: SLF001
+    main._strip_scaffolding(destination, package_name)  # noqa: SLF001
     main._inject_templates(destination, fullstack=True)  # noqa: SLF001
 
     init = _run(

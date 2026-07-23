@@ -1,0 +1,125 @@
+# research.yml
+scope: |
+  Package scaffolding/initialization flow in modernpackage/main.py (README stub
+  writing, scaffolding strip, token substitution, distribution-vs-module naming),
+  the `init` recipe in the Justfile, and the unit + e2e tests covering these.
+findings:
+  - question: "How is the generated package's README.md produced during scaffolding, and what is its initial content and structure?"
+    answer: |
+      The README is a fixed stub, not derived from the cloned repo's README.md
+      (that 27KB scaffolder README is overwritten).
+      - Constant `_README_STUB` (modernpackage/main.py:535-539) holds the literal
+        content:
+            # modernpackage
+
+            A Python package.
+        i.e. a single H1 heading equal to the token `modernpackage`, one blank
+        line, and one sentence body.
+      - It is written during `_strip_scaffolding` (main.py:663):
+        `(package_path / 'README.md').write_text(_README_STUB)` — this overwrites
+        whatever README.md the clone contained.
+      - Rationale comment (main.py:533-534): pyproject.toml requires
+        `readme = "README.md"`, and the `modernpackage` token in the H1 is later
+        renamed by `just init`.
+      - `_strip_scaffolding` runs inside `init_new_package` at main.py:1010,
+        after clone + `_write_package_metadata`, before template injection and
+        `just init`.
+  - question: "How does the `init` recipe in the Justfile locate and replace the `modernpackage` token across files, and at what point in the flow does this run relative to when file stubs are written?"
+    answer: |
+      The `init` recipe is Justfile:57-75 (`init package_name="modernpackage"`).
+      Token location + replacement (Justfile:59-64):
+        - `git grep -l 'modernpackage'` lists every TRACKED file containing the
+          token (untracked files are invisible to git grep).
+        - Piped to `xargs sed -i 's/modernpackage/{{package_name}}/g'` on Linux
+          (Justfile:60-61) or `sed -i '' -e ...` on Darwin (Justfile:62-64).
+      Other steps in the recipe, in order:
+        - reset version to 0.0.1 via sed on modernpackage/__init__.py
+          (Justfile:65).
+        - `mv modernpackage {{package_name}}` renames the module dir
+          (Justfile:66).
+        - `rm -fr .git/ .venv` (Justfile:67), then fresh `git init -b main`,
+          `git add .`, and a single commit "Initial modern {{package_name}}
+          package setup" (Justfile:68-71).
+      Relative timing (init_new_package, main.py:1015-1034): `just init` is
+      spawned via Popen AFTER stubs are written (`_strip_scaffolding`,
+      main.py:1010) and after optional template injection (main.py:1012-1013).
+      Because the sed only touches files git already tracks, stubs written by
+      the scaffolder are seen by `git grep` since they overwrite files already
+      tracked in the clone; injected (copied) files must be staged first — see
+      next finding.
+  - question: "How does the scaffolder distinguish between the distribution/package name and the normalized Python module name, and which form is passed into the `init` step?"
+    answer: |
+      Two distinct names:
+        - Distribution/package name: the user-supplied `package_name`, validated
+          as a PEP 508 / PyPI name by `validate_package_name` (main.py:165-178)
+          against `_PACKAGE_NAME_RE` (main.py:71-74); may contain `.` `-` `_`.
+        - Module name: `normalize_module_name(value)` (main.py:181-189) replaces
+          `.` and `-` with `_` to make it import-safe; `_` and case preserved.
+      In `init_new_package` (main.py:969): `module_name =
+      normalize_module_name(package_name)`, and the target dir is
+      `Path.cwd() / module_name` (main.py:970).
+      The MODULE name (not the distribution name) is passed to the init step:
+      `Popen(['just', 'init', module_name], ...)` (main.py:1017). The Justfile
+      then substitutes `modernpackage` -> module_name and `mv modernpackage
+      module_name` (Justfile:61/64/66).
+      Note: the distribution name is still preserved separately — e.g. the
+      package summary prints `package_name` while next-steps print `module_name`
+      (main.py:1063-1065; `_format_init_summary` main.py:769-781 uses
+      package_name). `validate_package_name` also rejects names whose normalized
+      module form collides with a stdlib module (main.py:171-177).
+  - question: "Which files written by the scaffolder intentionally retain the literal `modernpackage` token so that the initialization rename step rewrites them, and how is this coordinated (for example via git staging)?"
+    answer: |
+      Files deliberately keeping the `modernpackage` token so `just init`'s sed
+      rewrites them:
+        - tests/test_main.py stub — `_TEST_MAIN_STUB` (main.py:525-531) keeps
+          `from modernpackage import __version__`; written at main.py:662.
+          Comment at main.py:522-524 states the token is retained for the rename
+          sed.
+        - README.md stub — `_README_STUB` (main.py:535-539), H1 `# modernpackage`;
+          written at main.py:663. Comment main.py:534.
+        - Injected backend template files (`_add_backend`, main.py:912-924):
+          copied files "carry the literal `modernpackage` token so `just init`'s
+          rename sed rewrites their imports" (docstring main.py:918-920).
+        - Injected frontend template files (`_add_frontend`, main.py:882-896):
+          e.g. package.json name carries the token (docstring main.py:889-891).
+      Coordination via git staging:
+        - The clone's own tracked files (README/test_main stubs overwrite tracked
+          paths) are already visible to `git grep`.
+        - Copied template files are UNTRACKED until staged, and the rename sed
+          only rewrites tracked files. `_stage_injected_files` (main.py:845-863)
+          runs `git add -A` in the clone; called by `_inject_templates`
+          (main.py:899-909, line 909) after `_add_backend`/`_add_frontend`.
+          Docstrings at main.py:846-850 and 890-891 explain this is required so
+          `just init`'s `git grep` (Justfile:60) sees the injected files.
+        - `just init` itself later does `rm -fr .git/` then re-inits git and
+          commits the fully-renamed tree (Justfile:67-71).
+  - question: "What existing tests (unit or end-to-end) verify the contents of a scaffolded package's README.md or the token-replacement behavior of initialization?"
+    answer: |
+      README stub (unit, tests/test_main.py):
+        - `test_strip_scaffolding_writes_readme_stub` (test_main.py:1175-1179):
+          after `_strip_scaffolding`, asserts README.md is non-empty and the
+          original scaffolder README content ('scaffolder readme', seeded at
+          test_main.py:1129) is gone. It does NOT assert the exact stub text /
+          heading or the `modernpackage` token presence.
+        - `test_strip_scaffolding_tolerates_absent_paths`
+          (test_main.py:1192-1200) asserts README.md exists after strip when
+          only tests/ + pyproject.toml pre-exist.
+      test_main stub token retention (unit): `test_strip_scaffolding_writes_
+      test_main_stub` (test_main.py:1167-1172) asserts `'modernpackage' in stub`
+      (token preserved for rename) and version/test-func present. This is the
+      closest unit-level check of token preservation for a stub.
+      Token-replacement / `just init` behavior (e2e, tests/test_e2e.py, marked
+      e2e, require git/just/uv/node on PATH):
+        - `test_scaffolded_package_passes_check` (test_e2e.py:150-191+): runs the
+          real clone + `_strip_scaffolding` + `just init module_name` flow;
+          asserts renamed module dir exists (test_e2e.py:180-184), version reset
+          to 0.0.1, and `just check` passes. Does NOT assert README content.
+        - Backend e2e (test_e2e.py ~281-293): asserts `'modernpackage' not in
+          source.read_text()` for injected sources after `just init` (token fully
+          renamed).
+        - Frontend/fullstack e2e (test_e2e.py ~471-475): asserts `'modernpackage'
+          not in package_json` and app test after `just init` (staged frontend
+          files were renamed).
+      No test asserts the exact `_README_STUB` string ("# modernpackage\n\nA
+      Python package.\n") or that the README's `modernpackage` token is renamed
+      by `just init`.

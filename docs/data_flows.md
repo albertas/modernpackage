@@ -102,7 +102,7 @@ Call `_write_package_metadata(new_package_path, author_name=..., author_email=..
 
 ### Step 6.5: Strip Scaffolding
 
-Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery and operational artifacts from the cloned tree:
+Call `_strip_scaffolding(new_package_path, package_name)` to remove the scaffolder's machinery and operational artifacts from the cloned tree:
 1. Delete wholesale paths from `_SCAFFOLDING_PATHS_TO_DELETE`:
    - `modernpackage/main.py` — the self-replicating CLI
    - `tests/test_e2e.py` — end-to-end test for the scaffolder
@@ -115,9 +115,9 @@ Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery
    - Replaces scaffolder test suite with minimal stub
    - Imports package version to satisfy coverage requirements
    - Uses literal `modernpackage` token so `just init`'s rename sed updates it
-3. Write `_README_STUB` to `README.md`:
+3. Write `_README_STUB_TEMPLATE.format(package_name=package_name)` to `README.md`:
    - Replaces scaffolder README with generic template
-   - Uses literal `modernpackage` token so `just init`'s rename sed updates it
+   - Interpolates the user's chosen distribution name directly into the H1, bypassing `just init`'s rename sed for this file
 4. Write `_LIFECYCLE_STATE_STUB` to `lifecycle_state.yml`:
    - Replaces the scaffolder's stripped state file with a fresh `code_quality_is_good: true` stub
    - Seeds the generated package's own lifecycle loop from a good-quality baseline (no scaffolder phases/semaphores)
@@ -134,7 +134,7 @@ Spawn subprocess via `Popen(['just', 'init', module_name], cwd=new_package_path,
 - Capture stdout and stderr
 - If returncode != 0: raise `RuntimeError` with message "just init failed with exit code {code}: {stderr}"
 - If FileNotFoundError (just not on PATH): raise `RuntimeError` with install message
-- **Note**: operates on the already-stripped tree (see Step 6.5); renames the stub test and README files using the standard sed rename pass
+- **Note**: operates on the already-stripped tree (see Step 6.5); renames the stub test file using the standard sed rename pass (README is already written with the distribution name and is not renamed)
 
 ### Step 7.5: Just Compile
 

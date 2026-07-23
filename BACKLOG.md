@@ -3,6 +3,7 @@
 - Have end to end test to test capabilities.
 
 # Done
+- [x] [T72] When instantiating package, update README top section with package name (replace modernpackage with the actual package name).
 - [x] [T71] Exclude errors, issues, workspace directories and lifecycle_state.yml, metrics.yml files when instantiating a package. Check in end to end test that these are not present in the newly created package (now I still see workspace, metrics.yml and lifecycle_state.yml present).
 - [x] [T70] Run compile, sync targets on the package before running check during package instantiation.
 - [x] [T69] Exclude errors, issues, workspace directories and lifecycle_state.yml, metrics.yml files when instantiating a package.

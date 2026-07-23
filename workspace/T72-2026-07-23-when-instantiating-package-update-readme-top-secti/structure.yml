@@ -1,0 +1,70 @@
+# structure.yml
+approach: |
+  Convert `_README_STUB` into a named-placeholder `.format()` template and thread
+  the user's distribution `package_name` from the scaffolding call site into
+  `_strip_scaffolding`, which writes the name directly into the README H1 —
+  removing the `modernpackage` token from the README entirely. This is one small
+  vertical slice touching a single production module plus its unit tests; the
+  design cannot be meaningfully split into independent slices, so it is one phase
+  with a second phase reserved for e2e verification of end-to-end behavior.
+
+phases:
+  - num: 1
+    name: "Write distribution name into README stub"
+    delivers: |
+      A scaffolded package's README top section shows the user's chosen
+      distribution name (as typed, e.g. `# my-package`) with no `modernpackage`
+      token, end-to-end from the `init_new_package` call path through
+      `_strip_scaffolding` to the written README.md.
+    files:
+      - "modernpackage/main.py"
+      - "tests/test_main.py"
+    key_changes:
+      - "_README_STUB: str -> _README_STUB_TEMPLATE: str  (main.py:535-539) — rename constant to a `.format()` template with `# {package_name}` H1; body `A Python package.` unchanged"
+      - "Update the doc-comment above the stub (main.py:533-534) to state the name is written directly, no longer renamed by `just init`'s sed"
+      - "_strip_scaffolding(package_path: Path) -> None  ->  _strip_scaffolding(package_path: Path, package_name: str) -> None  (main.py:644) — new required param, no default; update docstring to note README carries the final name (not the token)"
+      - "README write (main.py:663): write_text(_README_STUB_TEMPLATE.format(package_name=package_name))"
+      - "Production call site (main.py:1010): _strip_scaffolding(new_package_path, package_name)  — package_name is the distribution name in scope, NOT module_name"
+      - "tests/test_main.py: pass a package name to all 6 _strip_scaffolding(...) call sites (lines ~1144, 1153, 1161, 1168, 1176, 1197)"
+      - "test_strip_scaffolding_writes_readme_stub (tests/test_main.py:1175-1179): tighten to assert README H1 equals the passed distribution name (e.g. `# my-package`) and that `modernpackage` is absent from README.md"
+    verify: |
+      Automated: `just check` passes (ruff format+lint, mypy, and the full
+      pytest suite — proves the 6 updated call sites collect, and the tightened
+      readme-stub test asserts the H1 == passed name and token absence).
+      Targeted run: `just test -k strip_scaffolding` — the readme, test_main, and
+      absent-paths strip tests all pass.
+      Agent-executable manual check: run a scripted `_strip_scaffolding` against a
+      tmp clone with `package_name="my-package"`, then assert README.md startswith
+      `# my-package` and `"modernpackage" not in README.md`. Example one-liner:
+      `python -c "import tempfile,pathlib; from modernpackage.main import _strip_scaffolding; d=pathlib.Path(tempfile.mkdtemp()); (d/'tests').mkdir(); (d/'pyproject.toml').write_text('readme=\"README.md\"'); _strip_scaffolding(d,'my-package'); t=(d/'README.md').read_text(); assert t.startswith('# my-package'), t; assert 'modernpackage' not in t; print('OK')"`
+      (adjust seeded files to satisfy strip preconditions; expect `OK`).
+
+  - num: 2
+    name: "End-to-end scaffold verification (no code change)"
+    delivers: |
+      Confirmation that the real clone + strip + `just init module_name` flow
+      leaves a README titled with the distribution name and that `just init`'s
+      rename sed no longer touches README.md. Verification-only; no production
+      change unless a gap is found.
+    files:
+      - "tests/test_e2e.py"
+    key_changes:
+      - "Optional: extend test_scaffolded_package_passes_check (test_e2e.py:150-191) to assert README.md content after `just init` — H1 == distribution name and `modernpackage` absent. Add only if it does not slow the e2e gate materially; otherwise rely on the Phase 1 unit assertion (design: no e2e currently locks README content)."
+    verify: |
+      Automated: `just test -m e2e` (requires git/just/uv on PATH) passes,
+      including test_scaffolded_package_passes_check.
+      Agent-executable manual check: from a tmp dir run the scaffolder for
+      `package_name="my-package"` to completion, then
+      `head -1 my_package/README.md` equals `# my-package` and
+      `grep -c modernpackage my_package/README.md` returns 0.
+
+testing_checkpoints: |
+  After Phase 1: `just check` is green. `_strip_scaffolding` requires a
+  `package_name` argument; a package scaffolded as `my-package` produces
+  `README.md` beginning `# my-package` with no `modernpackage` token. The
+  README no longer relies on `just init`'s sed for its title. All existing
+  strip/token-retention tests (test_main stub still keeps the token) still pass.
+  After Phase 2: the full clone→strip→`just init` flow is confirmed end-to-end;
+  the distribution name survives into the final committed README and `just init`
+  simply no longer matches README.md. If Phase 2 is skipped, Phase 1 remains
+  independently valuable and fully verified at the unit level.
