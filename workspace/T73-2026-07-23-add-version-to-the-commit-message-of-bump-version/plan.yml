@@ -1,0 +1,48 @@
+# plan.yml
+overview: |
+  The `bump` recipe in the Justfile increments the patch version in
+  modernpackage/__init__.py. The `publish` recipe (which depends on `bump`)
+  then commits with a static message `git commit -m "Bump version"`. The goal
+  is to embed the freshly-bumped version number in that commit message.
+
+  Because `bump` and `publish` run in separate shells, the `new` variable from
+  `bump` is not visible in `publish`. The simplest fix is to re-read the
+  current version from modernpackage/__init__.py inside the `publish` recipe
+  (using the same sed extraction already used in `bump`) and interpolate it
+  into the commit message, e.g. `Bump version to 1.2.3`.
+
+phases:
+  - num: 1
+    title: Add version to the Bump version commit message
+    body: |
+      Edit the `publish` recipe in `/home/niekas/ai/modernpackage/Justfile`.
+
+      Change the commit line so it reads the current version from
+      `modernpackage/__init__.py` and includes it in the message. Mirror the
+      extraction already used by the `bump` recipe:
+
+          publish: bump
+            @version=$(sed -n "s/^__version__ = '\(.*\)'/\1/p" modernpackage/__init__.py); \
+            git commit -m "Bump version to ${version}" modernpackage/__init__.py
+            git push
+            ...
+
+      Notes:
+      - Reuse the exact sed pattern from the `bump` recipe for consistency.
+      - Keep the rest of the `publish` recipe (git push, rm dist, uv build,
+        uv publish) unchanged.
+      - Match the existing Justfile style (leading `@` to suppress echo where
+        appropriate, `\` line continuations for a single shell invocation).
+
+      Verify:
+      - [x] Read the updated `publish` recipe and confirm the commit message
+            interpolates the version string.
+      - [x] Run `just --dry-run publish` (or inspect via `just --evaluate` /
+            manual read) to confirm the recipe parses without Justfile syntax
+            errors. (`just --show publish` prints the recipe cleanly.)
+      - [x] Confirm the version-extraction sed expression matches the format of
+            the `__version__` line in `modernpackage/__init__.py`. (sed yields
+            `0.0.12`.)
+      - [x] Run `just check` to confirm no project checks are broken.
+            (format/lint/complexity/typecheck/132 tests pass; only the `audit`
+            step fails on a pre-existing `mcp` CVE unrelated to this change.)

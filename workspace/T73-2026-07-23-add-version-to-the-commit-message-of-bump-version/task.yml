@@ -1,0 +1,6 @@
+# task.yml
+task: |
+  Include the newly-bumped version number in the "Bump version" git commit
+  message produced by the `publish` recipe in the Justfile (e.g. "Bump version
+  to 1.2.3"). This makes each release commit self-describing about which
+  version it publishes.

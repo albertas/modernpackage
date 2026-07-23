@@ -60,7 +60,8 @@ bump:
   echo "Bumped version: ${current} -> ${new}"
 
 publish: bump
-  git commit -m "Bump version" modernpackage/__init__.py
+  @version=$(sed -n "s/^__version__ = '\(.*\)'/\1/p" modernpackage/__init__.py); \
+  git commit -m "Bump version to ${version}" modernpackage/__init__.py
   git push  # Modernpacakge clones the code from gitlab, so the updated code has to be available both on gitlab and pypi for release
   rm -fr dist/*
   uv build
