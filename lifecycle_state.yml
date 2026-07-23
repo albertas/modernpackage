@@ -32,9 +32,3 @@ phases:
       depends_on: 8_review — runs only on review restart when review_findings.yml has >=1 open finding
       in:  review_findings.yml (from 8_review)
       out: code edits; flips review_findings.yml resolved:true (no artifact-dir file)
-lifecycles_in_progress:
-  - artifact_dir: T71-2026-07-22-exclude-errors-issues-workspace-directories-and-li
-    heart_beat: 2026-07-22 09:06:04
-implementation_semaphore:
-  - artifact_dir: T71-2026-07-22-exclude-errors-issues-workspace-directories-and-li
-    heart_beat: 2026-07-22 09:06:42

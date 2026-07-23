@@ -511,6 +511,8 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'errors',
     'issues',
     'workspace',
+    # Deleted here to drop the scaffolder's phases/semaphores, then re-seeded by
+    # _strip_scaffolding with a fresh `code_quality_is_good: true` stub.
     'lifecycle_state.yml',
     'metrics.yml',
 )
@@ -534,6 +536,15 @@ _README_STUB: str = """\
 # modernpackage
 
 A Python package.
+"""
+
+# Fresh lifecycle_state.yml seeded into a generated package. The scaffolder's own
+# copy (with its dev phases and runtime semaphores) is stripped via
+# _SCAFFOLDING_PATHS_TO_DELETE; this clean stub replaces it so the new package's
+# own lifecycle loop starts from a good-quality baseline (`code_quality_is_good:
+# true`) rather than inheriting the scaffolder's process state.
+_LIFECYCLE_STATE_STUB: str = """\
+code_quality_is_good: true
 """
 
 # Top-level template tree copied into a generated package by `_add_backend`.
@@ -637,7 +648,10 @@ def _strip_scaffolding(package_path: Path) -> None:
     (Justfile:61-66) and the single git commit (Justfile:72) capture an already-
     clean tree. Deletes tolerate absent paths; the stub writes assume the clone
     root and tests/ exist (always true for a real clone). Stubs retain the
-    literal `modernpackage` token so the rename sed rewrites their imports.
+    literal `modernpackage` token so the rename sed rewrites their imports. The
+    scaffolder's own `lifecycle_state.yml` is deleted and then re-seeded with a
+    fresh `code_quality_is_good: true` stub so the generated package's lifecycle
+    starts from a good-quality baseline instead of inheriting scaffolder state.
     """
     for relative_path in _SCAFFOLDING_PATHS_TO_DELETE:
         target = package_path / relative_path
@@ -647,6 +661,7 @@ def _strip_scaffolding(package_path: Path) -> None:
             target.unlink(missing_ok=True)
     (package_path / 'tests' / 'test_main.py').write_text(_TEST_MAIN_STUB)
     (package_path / 'README.md').write_text(_README_STUB)
+    (package_path / 'lifecycle_state.yml').write_text(_LIFECYCLE_STATE_STUB)
     _remove_project_scripts(package_path / 'pyproject.toml')
 
 

@@ -212,8 +212,12 @@ def test_scaffolded_package_passes_check(tmp_path: Path) -> None:
     assert not (destination / 'errors').exists()  # operational artifact
     assert not (destination / 'issues').exists()
     assert not (destination / 'workspace').exists()
-    assert not (destination / 'lifecycle_state.yml').exists()
     assert not (destination / 'metrics.yml').exists()
+    # lifecycle_state.yml is re-seeded fresh with the good-quality baseline
+    # (scaffolder's own phases/semaphores dropped).
+    assert (destination / 'lifecycle_state.yml').read_text() == (
+        'code_quality_is_good: true\n'
+    )
     # __init__.py version 0.0.1 already asserted at lines 88-90; check stub test.
     stub = (destination / 'tests' / 'test_main.py').read_text()
     assert '0.0.1' in stub

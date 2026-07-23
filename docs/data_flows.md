@@ -109,7 +109,7 @@ Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery
    - `docs` — scaffolder documentation
    - `BACKLOG.md` — project-metadata file
    - `errors`, `issues`, `workspace` — scaffolder operational/process artifact directories
-   - `lifecycle_state.yml`, `metrics.yml` — scaffolder operational/process artifact files
+   - `lifecycle_state.yml`, `metrics.yml` — scaffolder operational/process artifact files (`lifecycle_state.yml` is re-seeded fresh below)
    - (tolerate missing paths — no error if not present)
 2. Write `_TEST_MAIN_STUB` to `tests/test_main.py`:
    - Replaces scaffolder test suite with minimal stub
@@ -118,7 +118,10 @@ Call `_strip_scaffolding(new_package_path)` to remove the scaffolder's machinery
 3. Write `_README_STUB` to `README.md`:
    - Replaces scaffolder README with generic template
    - Uses literal `modernpackage` token so `just init`'s rename sed updates it
-4. Call `_remove_project_scripts(new_package_path / 'pyproject.toml')`:
+4. Write `_LIFECYCLE_STATE_STUB` to `lifecycle_state.yml`:
+   - Replaces the scaffolder's stripped state file with a fresh `code_quality_is_good: true` stub
+   - Seeds the generated package's own lifecycle loop from a good-quality baseline (no scaffolder phases/semaphores)
+5. Call `_remove_project_scripts(new_package_path / 'pyproject.toml')`:
    - Removes `[project.scripts]` table to avoid dangling entry points
    - Leaves surrounding tables (`[dependency-groups]`, `[tool.*]`) intact
    - Tolerates missing file or table — no-op if absent

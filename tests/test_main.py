@@ -1154,8 +1154,14 @@ def test_strip_scaffolding_removes_operational_artifacts(tmp_path: Path) -> None
     assert not (tmp_path / 'errors').exists()
     assert not (tmp_path / 'issues').exists()
     assert not (tmp_path / 'workspace').exists()
-    assert not (tmp_path / 'lifecycle_state.yml').exists()
     assert not (tmp_path / 'metrics.yml').exists()
+
+
+def test_strip_scaffolding_seeds_lifecycle_state(tmp_path: Path) -> None:
+    _strip_scaffolding(_seed_clone(tmp_path))
+    lifecycle = (tmp_path / 'lifecycle_state.yml').read_text()
+    assert lifecycle == 'code_quality_is_good: true\n'
+    assert 'state: {}' not in lifecycle  # scaffolder's own content replaced
 
 
 def test_strip_scaffolding_writes_test_main_stub(tmp_path: Path) -> None:

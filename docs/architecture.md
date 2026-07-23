@@ -229,12 +229,12 @@ _SCAFFOLDING_PATHS_TO_DELETE: tuple[str, ...] = (
     'errors',           # Scaffolder operational/process artifacts
     'issues',           # removed from every generated package
     'workspace',
-    'lifecycle_state.yml',
+    'lifecycle_state.yml',  # deleted, then re-seeded with a fresh good-quality stub
     'metrics.yml',
 )
 ```
 
-Used by `_strip_scaffolding()` to remove the scaffolder's own machinery and operational/process artifacts from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The first set of entries (CLI machinery, test suite, documentation, project metadata, and templates) are removed to keep the generated package clean and minimal. The second set (errors, issues, workspace directories and lifecycle state/metrics files) are scaffolder operational/process artifacts that should not be included in generated packages. The `backend_template` and `frontend_template` entries are always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects backend template files into the clone root after stripping. When `--fullstack` is set, both `_add_backend()` and `_add_frontend()` re-inject their respective templates after stripping. The `tests_e2e` entry is removed to prevent the scaffolder's own end-to-end test directory from leaking into scaffolded packages and causing import errors in the generated package's test suite.
+Used by `_strip_scaffolding()` to remove the scaffolder's own machinery and operational/process artifacts from the cloned tree. Entries are looped over without error if a path does not exist (graceful degradation for variant template shapes). Paths are relative to the clone root. The first set of entries (CLI machinery, test suite, documentation, project metadata, and templates) are removed to keep the generated package clean and minimal. The second set (errors, issues, workspace directories and lifecycle state/metrics files) are scaffolder operational/process artifacts that should not be included in generated packages; `lifecycle_state.yml` is deleted here to drop the scaffolder's phases/semaphores and then re-seeded by `_strip_scaffolding()` with a fresh `code_quality_is_good: true` stub so the generated package's own lifecycle starts from a good-quality baseline. The `backend_template` and `frontend_template` entries are always deleted (even in the base clone), ensuring the no-flag output is byte-for-byte identical to today. When `--backend` is set, `_add_backend()` re-injects backend template files into the clone root after stripping. When `--fullstack` is set, both `_add_backend()` and `_add_frontend()` re-inject their respective templates after stripping. The `tests_e2e` entry is removed to prevent the scaffolder's own end-to-end test directory from leaking into scaffolded packages and causing import errors in the generated package's test suite.
 
 **`_BACKEND_TEMPLATE_DIR: Path`**
 
@@ -1403,7 +1403,7 @@ Validates the core no-flag scaffolding workflow:
 1. **Skipping gracefully** if required tools are missing: checks `git`, `just`, and `uv` are on `PATH`; skips the test with a diagnostic message if any are missing
 2. **Cloning the local template** from the repo root into a temporary directory (intentionally **not** the GitHub URL, so local template regressions are caught)
 3. **Writing metadata** to the cloned package's `pyproject.toml` (author name/email, description, license, repository URL) before stripping
-4. **Stripping scaffolding** via `_strip_scaffolding()` to remove scaffolder machinery (`main.py`, tests, docs, entry points) and operational artifacts (`errors/`, `issues/`, `workspace/`, `lifecycle_state.yml`, `metrics.yml`)
+4. **Stripping scaffolding** via `_strip_scaffolding()` to remove scaffolder machinery (`main.py`, tests, docs, entry points) and operational artifacts (`errors/`, `issues/`, `workspace/`, `metrics.yml`), and to re-seed `lifecycle_state.yml` with a fresh `code_quality_is_good: true` stub
 5. **Running `just init <package_name>`** to replicate the package (rename all "modernpackage" occurrences, reset version to `0.0.1`, reinitialize git)
 6. **Verifying the result** by checking that the renamed `__init__.py` file exists and contains the pinned version `0.0.1`, and that all scaffolding has been removed:
    - Scaffolder CLI (`modernpackage/main.py`) is absent
@@ -1412,7 +1412,7 @@ Validates the core no-flag scaffolding workflow:
    - Project metadata (`BACKLOG.md`) is absent
    - Entry points are removed from `pyproject.toml`
    - Template remnants (`backend_template`, `frontend_template`) are absent
-   - **Operational/process artifacts** (`errors/`, `issues/`, `workspace/` directories and `lifecycle_state.yml`, `metrics.yml` files) are absent — verifying that the scaffolder's own vupi lifecycle state does not leak into generated packages
+   - **Operational/process artifacts** (`errors/`, `issues/`, `workspace/` directories and `metrics.yml` file) are absent — verifying that the scaffolder's own vupi lifecycle state does not leak into generated packages; `lifecycle_state.yml` is instead re-seeded with a fresh `code_quality_is_good: true` stub
 7. **Validating metadata** by checking that the supplied metadata values are correctly written to the generated `pyproject.toml`
 8. **Validating all quality gates** by running `just check` against the scaffolded package and asserting exit code 0 (passes format, lint, complexity, typecheck, unit tests, security audit, dead code detection)
 
