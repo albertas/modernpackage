@@ -156,26 +156,21 @@ Spawn subprocess via `Popen(['just', 'sync'], cwd=new_package_path, ...)`:
   - Return exit code 1 (short-circuit; skip check)
 - **Purpose**: ensures the package's dependencies are installed before the comprehensive quality gate runs, so import statements in tests work correctly
 
-### Step 8: Just Check and Summary
+### Step 8: Print Summary and Exit
 
-Spawn subprocess via `Popen(['just', 'check'], cwd=new_package_path, ...)`:
-- Does not capture stdout/stderr; inherits parent streams so progress is visible to user
-- Communicate (wait for process to finish)
-- At this point, the generated package contains only the stripped tree: no scaffolder CLI, no end-to-end tests, no scaffolder documentation — only a minimal stub test and generic README; dependencies are locked and synced
-- If returncode == 0:
-  - Print "just check passed — {module_name} scaffold is valid." to stdout
-  - Call `_print_init_summary(package_name, new_package_path)` to output a multi-line summary block to stdout:
-    ```
-    Created package:
-      package name: <package_name>
-      path: <created_path>
-      version: 0.0.1
-    ```
-    (where the version is the constant `_RESET_VERSION`)
-  - Return exit code 0
-- If returncode != 0:
-  - Print "just check failed with exit code {code} — review the output in {module_name}." to stderr
-  - Return exit code 1
+At this point, the generated package contains only the stripped tree: no scaffolder CLI, no end-to-end tests, no scaffolder documentation — only a minimal stub test and generic README; dependencies are locked and synced.
+
+Print the output summary:
+- Call `_print_init_summary(package_name, new_package_path)` to output a multi-line summary block to stdout:
+  ```
+  Created package:
+    package name: <package_name>
+    path: <created_path>
+    version: 0.0.1
+  ```
+  (where the version is the constant `_RESET_VERSION`)
+- Call `_print_next_commands(module_name)` to print the next-steps hint
+- Return exit code 0
 
 ### Step 9: Error Handling and Exit
 
@@ -185,7 +180,7 @@ In `main()`:
 
 **Final outputs:**
 - Exit code 0: Success
-- Exit code 1: Runtime failure (git, just init, just compile, just sync, or just check)
+- Exit code 1: Runtime failure (git clone, just init, just compile, or just sync)
 - Exit code 2: Argument validation error (invalid name, email, URL, or metadata)
 
 ## Config File Resolution

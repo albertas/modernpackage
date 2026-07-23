@@ -1,0 +1,92 @@
+# plan.yml
+overview: |
+  In `modernpackage/main.py`, `init_new_package` scaffolds a package and then runs
+  `just check` automatically (the `Popen(['just', 'check'], ...)` block at the end of
+  the function), branching on its exit code to print either a "check passed" summary
+  or a "check failed" error. This task removes the automatic `just check` run. Instead
+  the function always prints the init summary followed by the next-steps hint, which
+  already tells the user to `cd {module_name} && just check` (via `_format_next_commands`).
+  The compile+sync step (`_compile_and_sync_package`) is left untouched — the task only
+  concerns `just check`. Tests in `tests/test_main.py` that assert on the automatic
+  check are updated accordingly.
+
+phases:
+  - num: 1
+    title: Stop running `just check` automatically; print the command instead
+    body: |
+      **Source change — `modernpackage/main.py`, `init_new_package`:**
+
+      - Remove the trailing `just check` execution block: the `print(flush=True)` /
+        `print('Running just check in {module_name}…')` header, the
+        `pipe = Popen(['just', 'check'], ...)` call, its `pipe.communicate()`, and the
+        `if pipe.returncode == 0: ... else: ...` branch that prints "just check passed"
+        / "just check failed".
+      - Replace it with the unconditional success path: print the init summary and the
+        next-steps hint, then return 0. Reuse the existing helpers:
+        `_print_init_summary(package_name, new_package_path)`, a blank `print()`
+        separator, and `_print_next_commands(module_name)`.
+      - Keep the `_compile_and_sync_package(...)` call and its early `return 1` on
+        failure unchanged (out of scope for this task).
+      - `_format_next_commands` / `_print_next_commands` already emit
+        `cd {module_name} && just check`; leave them as-is (that IS the printed command).
+      - Remove any now-unused imports/symbols that only your deletion orphaned
+        (e.g. `_green` only if nothing else references it — verify before removing).
+
+      **Test changes — `tests/test_main.py`:**
+
+      - `test_init_new_package_reports_check_passed`: the automatic check no longer
+        runs, so "just check passed" is no longer printed. Remove this test (its intent
+        is gone) or repurpose it to assert the next-steps command is printed.
+      - `test_init_new_package_prints_summary_on_success`: drop the
+        `assert any('just check passed' ...)` line; keep the summary + next-command
+        assertions; update `assert popen_mock.call_count == 5` to `4` (clone, just init,
+        just compile, just sync — no `just check`).
+      - `test_init_output_has_blank_separators`: it locates the summary via the
+        "just check passed" line, which no longer exists. Re-anchor the blank-separator
+        check on lines that still print (e.g. between the last compile/sync output and
+        `_INIT_SUMMARY_HEADER`, or between the summary and `_NEXT_COMMANDS_HEADER`).
+      - `test_init_new_package_reports_check_failed`: the check-failed path is removed;
+        delete this test.
+      - `test_init_new_package_no_flags_injects_nothing` (expected_popen_calls = 5):
+        change to `4` and update the comment to drop `just check`.
+      - `test_init_new_package_backend_stages_then_inits` and
+        `test_init_new_package_fullstack_stages_then_inits` (expected_popen_calls = 6):
+        change to `5` and update the comment to drop `just check`.
+      - The `_green` / "just check passed — … valid" line test (~line 1633): remove it
+        if the corresponding source line is deleted and `_green` no longer applies.
+      - `test_format_next_commands_contains_cd_and_just_check`: unchanged (still valid).
+      - Check `tests/test_e2e.py` for assertions on the automatic `just check` run /
+        "just check passed" output and adjust to expect the printed next-step command.
+
+      **Deviations (recorded during implementation):**
+
+      - `_green`/`_color_enabled`/`_ANSI_GREEN`/`_ANSI_RESET` were removed from
+        `main.py` (orphaned by deleting the success line), plus their tests
+        (`test_green_wraps_when_tty`, `test_green_noop_when_not_tty`,
+        `test_green_noop_when_no_color_set`, `test_success_line_words_are_green_on_tty`),
+        the `_green`/`_color_enabled` imports, and the now-unused `import sys`.
+      - Two tests not enumerated in the plan were also updated: `test_init_new_package`
+        (call_count 5 -> 4) and `test_init_new_package_runs_just_check` (renamed to
+        `test_init_new_package_runs_compile_and_sync`; dropped the `just check` call
+        assertion and added an assertion that `['just','check']` is never spawned).
+      - `test_init_new_package_reports_check_passed` was removed (its intent is gone).
+      - `test_init_output_has_blank_separators` re-anchored on the blank line between
+        `_INIT_SUMMARY_HEADER` and `_NEXT_COMMANDS_HEADER`.
+      - `tests/test_e2e.py` needs no change: its `just check` runs are executed by the
+        test itself against the scaffolded package, not assertions on the removed
+        automatic run.
+
+      **Verification:**
+
+      - [x] Run `just check` in the modernpackage repo (the parent project) — ruff
+            format/lint, mypy, and pytest all pass. (NOTE: `just audit` fails on a
+            pre-existing external CVE in the `mcp` transitive dep, PYSEC-2026-3483,
+            unrelated to this change; `deadcode` is commented out of the check chain.)
+      - [x] Confirm `just test` passes with the updated test expectations.
+            (126 passed, 97.24% coverage.)
+      - [x] Manually confirm (or via test) that `init_new_package` no longer spawns a
+            `['just', 'check']` subprocess and that the printed output contains
+            `cd <module_name> && just check`. (No `['just','check']` Popen remains in
+            source; `test_init_new_package_runs_compile_and_sync` asserts this, and
+            `test_init_new_package_prints_summary_on_success` asserts the printed
+            command.)

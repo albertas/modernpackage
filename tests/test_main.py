@@ -1,5 +1,4 @@
 import inspect
-import sys
 import tomllib
 from argparse import ArgumentTypeError, Namespace
 from pathlib import Path
@@ -12,18 +11,17 @@ from modernpackage.main import (
     _GIT_CONFIG_USER_EMAIL_KEY,
     _GIT_CONFIG_USER_NAME_KEY,
     _INIT_SUMMARY_HEADER,
+    _NEXT_COMMANDS_HEADER,
     _add_backend,
     _add_frontend,
     _append_backend_dependencies,
     _append_backend_recipes,
     _append_frontend_recipes,
-    _color_enabled,
     _config_file_default,
     _format_dry_run_plan,
     _format_init_summary,
     _format_next_commands,
     _git_config_default,
-    _green,
     _load_config_file,
     _remove_project_scripts,
     _strip_scaffolding,
@@ -302,7 +300,7 @@ def test_init_new_package() -> None:
         popen_mock.return_value.returncode = 0
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage')
-    assert popen_mock.call_count == 5
+    assert popen_mock.call_count == 4
     strip_mock.assert_called_once_with(Path.cwd() / 'mypackage', 'mypackage')
 
 
@@ -326,7 +324,7 @@ def test_init_new_package_normalizes_name() -> None:
     assert init_call.kwargs['cwd'] == Path.cwd() / 'my_cool_package'
 
 
-def test_init_new_package_runs_just_check() -> None:
+def test_init_new_package_runs_compile_and_sync() -> None:
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
@@ -346,9 +344,9 @@ def test_init_new_package_runs_just_check() -> None:
     assert sync_call.args[0] == ['just', 'sync']
     assert sync_call.kwargs['cwd'] == package_path
 
-    check_call = popen_mock.call_args_list[4]
-    assert check_call.args[0] == ['just', 'check']
-    assert check_call.kwargs['cwd'] == package_path
+    # `just check` is no longer spawned automatically; only 4 subprocesses run.
+    assert popen_mock.call_count == 4
+    assert ['just', 'check'] not in [call.args[0] for call in popen_mock.call_args_list]
 
 
 def test_init_new_package_strips_before_just_init() -> None:
@@ -552,22 +550,6 @@ def test_humanize_git_clone_error_unknown_returns_none() -> None:
     assert message is None
 
 
-def test_init_new_package_reports_check_passed() -> None:
-    with (
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-        patch('modernpackage.main.print') as print_mock,
-        patch('modernpackage.main._strip_scaffolding'),
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        popen_mock.return_value.returncode = 0
-        popen_mock.return_value.communicate.return_value = (b'', b'')
-        result = init_new_package('mypackage')
-    printed_calls = [str(call) for call in print_mock.call_args_list]
-    assert any('just check passed' in call for call in printed_calls)
-    assert result == 0
-
-
 def test_format_init_summary_contains_all_fields(tmp_path: Path) -> None:
     demo_path = tmp_path / 'demo_pkg'
     summary = _format_init_summary('demo-pkg', demo_path)
@@ -595,12 +577,11 @@ def test_init_new_package_prints_summary_on_success() -> None:
         popen_mock.return_value.communicate.return_value = (b'', b'')
         result = init_new_package('mypackage')
     printed_calls = [str(call) for call in print_mock.call_args_list]
-    assert any('just check passed' in call for call in printed_calls)
     assert any('mypackage' in call for call in printed_calls)
     assert any(str(Path.cwd() / 'mypackage') in call for call in printed_calls)
     assert any('0.0.1' in call for call in printed_calls)
     assert any('cd mypackage && just check' in call for call in printed_calls)
-    assert popen_mock.call_count == 5
+    assert popen_mock.call_count == 4
     assert result == 0
 
 
@@ -619,47 +600,12 @@ def test_init_output_has_blank_separators(
         init_new_package('mypackage')
     lines = capsys.readouterr().out.split('\n')
 
-    # blank line between the passed-line and the summary header
-    passed = next(i for i, line in enumerate(lines) if 'just check passed' in line)
+    # blank line between the summary block and the next-steps header
     summary = next(i for i, line in enumerate(lines) if line == _INIT_SUMMARY_HEADER)
-    assert '' in lines[passed + 1 : summary]
-
-
-def test_init_new_package_reports_check_failed() -> None:
-    git_clone_mock = MagicMock()
-    git_clone_mock.returncode = 0
-    git_clone_mock.communicate.return_value = (b'', b'')
-    just_init_mock = MagicMock()
-    just_init_mock.returncode = 0
-    just_init_mock.communicate.return_value = (b'', b'')
-    just_compile_mock = MagicMock()
-    just_compile_mock.returncode = 0
-    just_compile_mock.communicate.return_value = (b'', b'')
-    just_sync_mock = MagicMock()
-    just_sync_mock.returncode = 0
-    just_sync_mock.communicate.return_value = (b'', b'')
-    just_check_mock = MagicMock()
-    just_check_mock.returncode = 1
-    just_check_mock.communicate.return_value = (b'', b'')
-    with (
-        patch('modernpackage.main.Popen') as popen_mock,
-        patch('modernpackage.main.run') as run_mock,
-        patch('modernpackage.main.print') as print_mock,
-        patch('modernpackage.main._strip_scaffolding'),
-    ):
-        run_mock.return_value = MagicMock(returncode=0, stderr='')
-        popen_mock.side_effect = [
-            git_clone_mock,
-            just_init_mock,
-            just_compile_mock,
-            just_sync_mock,
-            just_check_mock,
-        ]
-        result = init_new_package('mypackage')  # must not raise
-    printed_calls = [str(call) for call in print_mock.call_args_list]
-    assert any('just check failed' in call for call in printed_calls)
-    assert any('1' in call for call in printed_calls)
-    assert result == 1
+    next_steps = next(
+        i for i, line in enumerate(lines) if line == _NEXT_COMMANDS_HEADER
+    )
+    assert '' in lines[summary + 1 : next_steps]
 
 
 def test_init_new_package_git_clone_network_failure() -> None:
@@ -1363,7 +1309,7 @@ def test_init_new_package_invokes_add_backend_when_flag_set() -> None:
 
 
 def test_init_new_package_no_flags_injects_nothing() -> None:
-    expected_popen_calls = 5  # clone, just init, just compile, just sync, just check
+    expected_popen_calls = 4  # clone, just init, just compile, just sync
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
@@ -1426,9 +1372,7 @@ def test_strip_scaffolding_removes_backend_template(tmp_path: Path) -> None:
 
 
 def test_init_new_package_backend_stages_then_inits() -> None:
-    expected_popen_calls = (
-        6  # clone, git add, just init, just compile, just sync, just check
-    )
+    expected_popen_calls = 5  # clone, git add, just init, just compile, just sync
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
@@ -1571,9 +1515,7 @@ def test_init_new_package_invokes_add_frontend_when_fullstack() -> None:
 
 
 def test_init_new_package_fullstack_stages_then_inits() -> None:
-    expected_popen_calls = (
-        6  # clone, git add, just init, just compile, just sync, just check
-    )
+    expected_popen_calls = 5  # clone, git add, just init, just compile, just sync
     with (
         patch('modernpackage.main.Popen') as popen_mock,
         patch('modernpackage.main.run') as run_mock,
@@ -1604,32 +1546,3 @@ def test_init_new_package_backend_only_does_not_add_frontend() -> None:
         popen_mock.return_value.communicate.return_value = (b'', b'')
         init_new_package('mypackage', backend=True)
     add_frontend_mock.assert_not_called()
-
-
-def test_green_wraps_when_tty(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
-    monkeypatch.delenv('NO_COLOR', raising=False)
-    assert _green('x') == '\033[32mx\033[0m'
-
-
-def test_green_noop_when_not_tty(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys.stdout, 'isatty', lambda: False)
-    monkeypatch.delenv('NO_COLOR', raising=False)
-    assert _green('x') == 'x'
-
-
-def test_green_noop_when_no_color_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
-    monkeypatch.setenv('NO_COLOR', '')
-    assert _green('x') == 'x'
-    assert _color_enabled() is False
-
-
-def test_success_line_words_are_green_on_tty(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(sys.stdout, 'isatty', lambda: True)
-    monkeypatch.delenv('NO_COLOR', raising=False)
-    line = f'just check {_green("passed")} — demo scaffold is {_green("valid")}.'
-    assert '\033[32mpassed\033[0m' in line
-    assert '\033[32mvalid\033[0m' in line

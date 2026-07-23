@@ -1154,12 +1154,10 @@ Orchestrates the package initialization flow by cloning, rewriting, and validati
      - Spawns the subprocess and waits for completion via `communicate()`
        - **If `returncode != 0`**: prints error message to stderr and raises `RuntimeError` with message `'sync failed with exit code {returncode}: {decoded stderr}'`
        - **If `returncode == 0`**: continues to Step 8
-   - **Step 8: Validate** — **If Step 7 succeeds**: runs `just check` (cwd: the cloned directory) via `Popen` and reports the outcome using the module name
-     - Does not capture stdout/stderr; inherits parent streams so check progress is visible to the user
-     - Spawns the subprocess and waits for completion via `communicate()`
-     - **If `returncode == 0`**: prints a success message to stdout: `'just check passed — {module_name} scaffold is valid.'` (using the normalized module name), then calls `_print_init_summary(package_name, new_package_path)` to print a summary block showing the created package name, directory path, and reset version (`_RESET_VERSION`), then returns `0`
-     - **If `returncode != 0`**: prints a failure message to stderr: `'just check failed with exit code {returncode} — review the output in {module_name}.'` (using the normalized module name) and returns `1`
-     - Does not raise an error on non-zero exit code; `just check` failure is reported but does not block the function; the failure is propagated via the return code instead
+   - **Step 8: Print Summary and Exit** — **If Step 7 succeeds**: prints a summary block and next-steps hint to stdout, then returns exit code 0
+     - Calls `_print_init_summary(package_name, new_package_path)` to print a summary block showing the created package name, directory path, and reset version (`_RESET_VERSION`)
+     - Calls `_print_next_commands(module_name)` to print the next-steps hint: `'cd {module_name} && just check'`
+     - Returns exit code 0
 
 Error messages include the decoded stderr output, providing visibility into the root cause of subprocess failures (e.g., network errors, missing commands, permission issues). The `git clone` error path is enhanced with pattern-matched, human-readable explanations of common failure modes. The `just init` missing-command error path is caught at the point of spawning the subprocess, before any execution attempts, and provides a clear, actionable installation instruction.
 

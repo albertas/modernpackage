@@ -12,7 +12,7 @@ modernpackage <your-package-name>     # or `mp <your-package-name>`
                                        # clones the template and removes scaffolder machinery
                                        # runs just compile to regenerate the lockfile
                                        # runs just sync to install dependencies
-                                       # validates the package with just check and prints result summary
+                                       # prints the next steps hint
 
 # With the optional --backend flag, generates a FastAPI async service:
 modernpackage <your-service-name> --backend    # includes app, async DB, migrations, containers
@@ -20,14 +20,11 @@ modernpackage <your-service-name> --backend    # includes app, async DB, migrati
 # Example: Success summary (on success)
 modernpackage my-package
 
-# Output (on a TTY; passed and valid render in green):
+# Output (on a TTY):
 # Running just compile in my_package…
 # (uv lock output — regenerating lockfile)
 # Running just sync in my_package…
 # (uv sync output — installing dependencies)
-# Running just check in my_package (this can take a while)…
-# (just check output)
-# just check passed — my_package scaffold is valid.
 #
 # Created package:
 #   package name: my-package
@@ -261,13 +258,13 @@ All values are TOML-escaped to safely handle special characters (quotes and back
 
 ### Exit Codes
 
-`modernpackage` returns exit code 0 on success (package initialized with all quality gates passing, or version displayed) and exit code 1 on failure (git clone, just init, or just check failed). This allows shell scripts and CI/CD pipelines to detect failures, including validation failures where the scaffolded package does not meet quality standards.
+`modernpackage` returns exit code 0 on success (package initialized, or version displayed) and exit code 1 on failure (git clone, just init, just compile, or just sync failed). This allows shell scripts and CI/CD pipelines to detect failures during package initialization.
 
 When `git clone` fails, the error message is enhanced with a friendly, actionable explanation of common failure modes (e.g., "repository unreachable — check your network connection" for network errors). The raw stderr is included for diagnostics. Unknown errors fall back to the raw error output.
 
 ## After Initialization
 
-Once your new package is created and validated, you can begin development. The initialization process automatically removes the scaffolder's own CLI, tests, documentation, and operational artifacts from the generated package, leaving you with a clean, minimal codebase. The process then runs `just check` on the newly scaffolded package and reports whether all quality gates passed (you'll see "just check passed" or "just check failed").
+Once your new package is created, you can begin development. The initialization process automatically removes the scaffolder's own CLI, tests, documentation, and operational artifacts from the generated package, leaving you with a clean, minimal codebase ready for your code. To validate the scaffolded package, run `just check` in the created directory.
 
 ### Standard Package
 

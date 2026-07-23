@@ -1,0 +1,6 @@
+# task.yml
+task: |
+  After scaffolding a new package, `init_new_package` currently runs `just check`
+  automatically in the generated project, which is slow and can fail. Change it so
+  that instead of running `just check`, the CLI prints a next-step command telling
+  the user to cd into the new project directory and run `just check` themselves.

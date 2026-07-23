@@ -2,6 +2,9 @@ lifecycle:
   @uv sync
   @count=0; while uv run lifecycle --max-tasks 1 --prior-tasks "$count"; do count=$((count + 1)); done
 
+tmux:
+  tmux new -s modernpackage
+
 vision:
   uv run vision
 
@@ -65,7 +68,10 @@ publish: bump
   git push  # Modernpacakge clones the code from gitlab, so the updated code has to be available both on gitlab and pypi for release
   rm -fr dist/*
   uv build
-  uv publish
+  uv publish \
+  --publish-url https://gitlab.com/api/v4/projects/niekas%2Fpackages/packages/pypi \
+  --token "$UV_INDEX_GITLAB_PASSWORD"
+
 
 init package_name="modernpackage":
   @echo "Initializing {{package_name}}..."

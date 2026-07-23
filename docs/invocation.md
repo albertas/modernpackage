@@ -15,10 +15,10 @@ Both route to `modernpackage.main:main()`, so they are functionally identical.
 ### Exit Codes
 
 `modernpackage` returns exit codes as follows:
-- **Exit code 0**: successful operation (version printed, package initialized with all quality gates passing, or no arguments provided)
-- **Exit code 1**: failure in package initialization (git clone, just init, just compile, just sync, or just check failed)
+- **Exit code 0**: successful operation (version printed, package initialized, or no arguments provided)
+- **Exit code 1**: failure in package initialization (git clone, just init, just compile, or just sync failed)
 
-The exit code is reflected in the process exit status, allowing shell scripts and CI/CD pipelines to detect failures. Importantly, failures at any stage of package initialization (git clone, just init, dependency compilation/sync, or the validation step `just check`) result in exit code 1, allowing automated tools to detect failures.
+The exit code is reflected in the process exit status, allowing shell scripts and CI/CD pipelines to detect failures. Failures at any stage of package initialization (git clone, just init, dependency compilation/sync) result in exit code 1, allowing automated tools to detect initialization failures.
 
 ### No arguments (no-op)
 
@@ -353,30 +353,23 @@ The created directory contains:
 - All occurrences of "modernpackage" renamed to the derived module name (e.g., "my_cool_package")
 - Version reset to `0.0.1`
 - Git repository reinitialized
-- Quality validation run via `just check` to verify the scaffolded package passes all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection)
+- Dependencies compiled via `just compile` (lockfile regenerated)
+- Dependencies installed via `just sync` (virtual environment populated)
 
-After all steps complete, the outcome of `just check` is reported and the exit code reflects the result:
-- **If `just check` passes** (all quality gates succeed), a success message followed by a summary block and next steps hint are printed to stdout and exit code 0 is returned:
-  ```
-  just check passed — <module_name> scaffold is valid.
-  Created package:
-    package name: <package_name>
-    path: <created_path>
-    version: 0.0.1
-  Next steps:
-    cd <module_name> && just check
-  ```
-  Exit code: 0
-  (where `<module_name>` is the normalized directory name with underscores, `<package_name>` is the validated distribution name, and `<created_path>` is the absolute path to the created directory)
-  
-- **If `just check` fails** (any quality gate fails), a message is printed to stderr and exit code 1 is returned:
-  ```
-  just check failed with exit code <code> — review the output in <module_name>.
-  ```
-  Exit code: 1
-  (where `<module_name>` is the normalized directory name with underscores)
+After all steps complete successfully, a summary block and next steps hint are printed to stdout and exit code 0 is returned:
+```
+Created package:
+  package name: <package_name>
+  path: <created_path>
+  version: 0.0.1
 
-The package directory is created in both cases; validation failure is reported but does not prevent the package from being created (allowing the user to review and fix issues in the newly created directory). However, the exit code now reflects the validation outcome, allowing CI/CD pipelines and automated tools to detect when the scaffolded package does not meet quality standards.
+Next steps:
+  cd <module_name> && just check
+```
+Exit code: 0
+(where `<module_name>` is the normalized directory name with underscores, `<package_name>` is the validated distribution name, and `<created_path>` is the absolute path to the created directory)
+
+To validate the scaffolded package against all quality gates (formatting, linting, complexity, type checking, tests, security audit, dead code detection), run `just check` in the created directory.
 
 #### Failure path
 
