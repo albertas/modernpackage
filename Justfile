@@ -5,6 +5,10 @@ lifecycle:
 tmux:
   tmux new -s modernpackage
 
+# Start `just lifecycle` in the server tmux session named after this directory and attach to it
+do:
+  @./scripts/do.sh
+
 vision:
   uv run vision
 
